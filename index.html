@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DFMC Game Jam 06 — Floor 1</title>
+<style>
+  :root { --ink:#e8e8ef; --panel:#1b1c25; --bg:#101018; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:13px/1.5 ui-monospace,Menlo,Consolas,monospace; }
+  main { display:flex; gap:16px; padding:16px; align-items:flex-start; flex-wrap:wrap; }
+  svg { background:#0d0d12; border:1px solid #2a2b36; border-radius:4px; display:block; }
+  aside { width:260px; display:flex; flex-direction:column; gap:12px; }
+  .panel { background:var(--panel); border:1px solid #2a2b36; border-radius:4px; padding:10px; }
+  h1 { font-size:14px; margin:0 0 6px; letter-spacing:.08em; text-transform:uppercase; color:#8f92a8; }
+  #turn { font-size:15px; font-weight:bold; }
+  #round { color:#8f92a8; }
+  .row { display:flex; align-items:center; gap:6px; padding:3px 4px; border-radius:3px; }
+  .row.active { background:#2b2d3c; outline:1px solid #ffd75e; }
+  .row.dead { opacity:.35; text-decoration:line-through; }
+  .glyph { width:16px; height:16px; border-radius:3px; color:#101018; text-align:center;
+           font-weight:bold; line-height:16px; flex:none; }
+  .nm { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar { width:52px; height:6px; background:#33354a; border-radius:3px; overflow:hidden; flex:none; }
+  .bar i { display:block; height:100%; background:#7fe08a; }
+  .hp { width:44px; text-align:right; color:#8f92a8; font-size:11px; }
+  #log div { color:#a9acc4; }
+  #log div:last-child { color:var(--ink); }
+  label { color:#8f92a8; }
+  input { width:80px; background:#0d0d12; color:var(--ink); border:1px solid #3a3c4d;
+          border-radius:3px; padding:3px 5px; font:inherit; }
+  button { background:#2b2d3c; color:var(--ink); border:1px solid #3a3c4d; border-radius:3px;
+           padding:4px 8px; font:inherit; cursor:pointer; }
+  button:hover { background:#3a3c4d; }
+  kbd { background:#2b2d3c; border:1px solid #3a3c4d; border-radius:3px; padding:0 4px; }
+  .docs { color:#8f92a8; text-decoration:none; border-bottom:1px dotted #4a4c60; }
+  .docs:hover { color:var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <svg id="stage"></svg>
+  <aside>
+    <div class="panel">
+      <div id="round">Round 1</div>
+      <div id="turn">—</div>
+    </div>
+    <div class="panel">
+      <h1>Party</h1>
+      <div id="party"></div>
+      <div id="foes" style="margin-top:6px;color:#8f92a8"></div>
+    </div>
+    <div class="panel">
+      <h1>Log</h1>
+      <div id="log"></div>
+    </div>
+    <div class="panel">
+      <h1>Floor</h1>
+      <label>seed <input id="seed" value="7"></label>
+      <div style="margin-top:6px;display:flex;gap:6px">
+        <button id="regen">Regenerate</button>
+        <button id="reroll">Random</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h1>Controls</h1>
+      <div style="color:#a9acc4">
+        <kbd>arrows</kbd>/<kbd>wasd</kbd> move &middot; <kbd>qezc</kbd> diagonals<br>
+        <kbd>numpad</kbd> all 8 &middot; <kbd>space</kbd> wait<br>
+        click an adjacent tile to move or attack<br>
+        walk into a foe to hit it &middot; reach <span style="color:#c9a227">▮</span> to clear
+      </div>
+    </div>
+    <div class="panel">
+      <a class="docs" href="docs/">Design docs &amp; numbers bible →</a>
+    </div>
+  </aside>
+</main>
+<script src="data/balance.js"></script>
+<script src="src/mapgen.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
