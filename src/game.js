@@ -112,14 +112,18 @@
   }
 
   // Cosmetic only. `fx` names on operations key into this table.
+  // `sheet` keys into window.FXSHEETS (data/fxsheets.js): an 8-frame sprite
+  // strip that REPLACES the particles+ring when present. `scale` is the
+  // rendered size in tiles. If fxsheets.js is missing the particle values
+  // below still work, so the game never depends on the art loading.
   const FX = {
-    strike: { cls: 'p-bone',  n: 8,  spread: 22, dur: .45 },
-    sweep:  { cls: 'p-bone',  n: 12, spread: 38, dur: .55, ring: 'var(--bone)' },
-    hex:    { cls: 'p-shell', n: 9,  spread: 18, dur: .70 },
-    bolt:   { cls: 'p-gold',  n: 10, spread: 26, dur: .50 },
-    burn:   { cls: 'p-blood', n: 16, spread: 32, dur: .60, ring: 'var(--gold)' },
+    strike: { cls: 'p-bone',  n: 8,  spread: 22, dur: .45, sheet: 'strike', scale: 1.7 },
+    sweep:  { cls: 'p-bone',  n: 12, spread: 38, dur: .55, ring: 'var(--bone)', sheet: 'sweep', scale: 3.0 },
+    hex:    { cls: 'p-shell', n: 9,  spread: 18, dur: .70, sheet: 'hex',   scale: 1.8 },
+    bolt:   { cls: 'p-gold',  n: 10, spread: 26, dur: .50, sheet: 'bolt',  scale: 1.9 },
+    burn:   { cls: 'p-blood', n: 16, spread: 32, dur: .60, ring: 'var(--gold)', sheet: 'burn', scale: 2.4 },
     // paying VITAE is a cost, not an impact: no ring, or IMMOLATIO draws two
-    selfburn: { cls: 'p-blood', n: 10, spread: 20, dur: .50 },
+    selfburn: { cls: 'p-blood', n: 10, spread: 20, dur: .50, sheet: 'selfburn', scale: 1.6 },
     foe:    { cls: 'p-blood', n: 8,  spread: 22, dur: .45 },
     spike:  { cls: 'p-blood', n: 12, spread: 26, dur: .50 },
     pickup: { cls: 'p-gold',  n: 6,  spread: 16, dur: .50 },
@@ -800,6 +804,22 @@
       const pos = tilePos(b.c, b.r);
       const cx = pos.cx, cy = pos.top + pos.size / 2;
       const k = pos.size / T;                    // scale particles with the map
+
+      // Sprite strip takes over the whole burst when its art is available.
+      const art = b.sheet && window.FXSHEETS && window.FXSHEETS[b.sheet];
+      if (art) {
+        const px = Math.round(pos.size * (b.scale || 1.7));
+        const el = document.createElement('div');
+        el.className = 'fxsheet';
+        el.style.left = cx + 'px'; el.style.top = cy + 'px';
+        el.style.width = px + 'px'; el.style.height = px + 'px';
+        el.style.backgroundImage = 'url(' + art + ')';
+        el.style.setProperty('--dur', b.dur + 's');
+        el.addEventListener('animationend', () => el.remove());
+        floatsEl.appendChild(el);
+        return;                                  // art replaces particles+ring
+      }
+
       if (b.ring) {
         const el = document.createElement('div');
         el.className = 'ring';

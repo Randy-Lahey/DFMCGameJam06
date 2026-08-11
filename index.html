@@ -104,6 +104,22 @@
   .p-blood{background:var(--blood)}
   .p-cyan {background:var(--cyan)}
 
+  /* Sprite-strip FX. 8 frames horizontal; steps(8,jump-none) walks
+     background-position through them. Transparency is baked into the
+     strip PNGs (luminance-keyed alpha) — do NOT use mix-blend-mode here:
+     #floaters is a stacking context, which isolates blending, so blend
+     modes composite against nothing and the art renders opaque. */
+  .fxsheet{
+    position:absolute;pointer-events:none;
+    transform:translate(-50%,-50%);
+    background-repeat:no-repeat;background-size:800% 100%;
+    animation:fxplay var(--dur,.5s) steps(8,jump-none) forwards;
+  }
+  @keyframes fxplay{
+    from{background-position-x:0%;opacity:1}
+    to  {background-position-x:100%;opacity:1}
+  }
+
   .ring{
     position:absolute;pointer-events:none;border:1px solid var(--bone);
     border-radius:50%;transform:translate(-50%,-50%);
@@ -386,7 +402,7 @@
     #hint.open{animation:none}
     .overlay.open,.dialog,.winbox{animation:none}
     .float{animation-duration:.6s}
-    .p,.ring{animation-duration:.25s}
+    .p,.ring,.fxsheet{animation-duration:.25s}
     #confirm.ready{animation:none}
   }
 </style>
@@ -456,9 +472,10 @@
   </div>
 </div>
 
-<script src="data/floor01.js?v=efbc545a"></script>
-<script src="data/balance.js?v=efbc545a"></script>
-<script src="src/sprites.js?v=efbc545a"></script>
-<script src="src/game.js?v=efbc545a"></script>
+<script src="data/floor01.js?v=1cc60384"></script>
+<script src="data/balance.js?v=1cc60384"></script>
+<script src="data/fxsheets.js?v=1cc60384"></script>
+<script src="src/sprites.js?v=1cc60384"></script>
+<script src="src/game.js?v=1cc60384"></script>
 </body>
 </html>
