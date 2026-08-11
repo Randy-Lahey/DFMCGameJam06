@@ -1,7 +1,8 @@
 // data/balance.js — THE NUMBERS BIBLE. Single source of truth.
 //
-// The game reads this at runtime. The docs site (docs/numbers.html) renders it
-// live. Change a number here and both update. Nothing is duplicated anywhere —
+// The game reads this at runtime. The docs site at
+// https://randy-lahey.github.io/jam06/#numbers loads THIS file over HTTP and renders
+// it live. Change a number here and both update. Nothing is duplicated anywhere —
 // if you find yourself typing a number into src/*.js, it belongs in here instead.
 //
 // Plain .js rather than .json so it works when you open index.html straight off
@@ -61,7 +62,8 @@ const BALANCE = {
   },
 };
 
-// One-line rationale per knob. The docs site shows these next to the values.
+// One-line rationale per knob. The docs site (randy-lahey.github.io/jam06/#numbers)
+// shows these next to the values.
 // If a number has no note, that's a sign nobody knows why it's that number.
 const NOTES = {
   'map.cols': 'Floor is cols x rows rooms. 3x3 = ~9 rooms, a 2-4 minute floor.',

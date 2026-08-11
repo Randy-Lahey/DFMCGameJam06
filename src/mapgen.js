@@ -10,7 +10,8 @@ const WALL = 0, CORRIDOR = 1, ROOM = 2, STAIRS = 3;
 // plus a few extra edges so the floor isn't a pure tree.
 //
 // There are NO default numbers in this file on purpose. Every knob comes from
-// data/balance.js so there is exactly one place to tune shape. See docs/numbers.md.
+// data/balance.js so there is exactly one place to tune shape.
+// See https://randy-lahey.github.io/jam06/#numbers.
 
 // ---- seeded rng ------------------------------------------------------------
 function mulberry32(seed) {

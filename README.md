@@ -4,7 +4,7 @@ A one-floor turn-based dungeon crawl in the shape of Pokémon Mystery Dungeon / 
 Plain HTML + SVG + vanilla JS. No engine, no build step, no dependencies.
 
 - **Play:** https://randy-lahey.github.io/DFMCGameJam06/
-- **Design docs & numbers bible:** https://randy-lahey.github.io/DFMCGameJam06/docs/
+- **Design docs & numbers bible:** https://randy-lahey.github.io/jam06/ (separate site, deliberately not linked from the game)
 
 Locally: open `index.html` in a browser. That's it.
 
@@ -15,16 +15,15 @@ index.html          the game — also the GitHub Pages root, so / is playable
 src/mapgen.js       dungeon shape. Pure, no DOM, runs in node.
 src/game.js         turn scheduler, actions, AI, SVG rendering, input
 data/balance.js     THE NUMBERS BIBLE — single source of truth
-docs/               GitHub Pages design site (GDD, live numbers, dev log)
 tools/              test + build scripts
 ```
 
 ## The one rule
 
-**Every number lives in `data/balance.js`.** The game reads it at runtime; the docs site
-renders it live at `/docs/#numbers`. There is no second copy, so the numbers bible cannot
-drift from the build. If you're about to type a number into `src/*.js`, it belongs in
-`data/balance.js` instead.
+**Every number lives in `data/balance.js`.** The game reads it at runtime, and the docs site
+loads *this same file* over HTTP and renders it live. There is no second copy, so the numbers
+bible cannot drift from the build. If you're about to type a number into `src/*.js`, it
+belongs in `data/balance.js` instead.
 
 It's a `.js` file rather than `.json` so the game still runs off `file://` — `fetch` is
 blocked there, a `<script>` tag isn't.
@@ -49,15 +48,32 @@ bash tools/build-itch.sh
 ```
 
 Produces `build/dfmc-jam06.zip` containing `index.html`, `src/`, `data/` — upload as an
-HTML5 project with "This file will be played in the browser" ticked. The docs and tools are
-excluded.
+HTML5 project with "This file will be played in the browser" ticked.
 
 ## GitHub Pages setup (one-time, manual)
 
 Settings → Pages → Source: **Deploy from a branch** → Branch: **main**, folder: **/ (root)** → Save.
 
-Root serves the game; `/docs/` serves the design site. `.nojekyll` is committed so GitHub
-doesn't run Jekyll over the game files.
+Root serves the game at https://randy-lahey.github.io/DFMCGameJam06/. **Do not set the folder
+to `/docs`** — there is no `docs/` folder in this repo any more, so that setting would take the
+game offline rather than serve anything. `.nojekyll` is committed so GitHub doesn't run Jekyll
+over the game files.
+
+`dev` is the working branch, `main` is what Pages publishes. Merge dev → main to ship.
+
+### The one cross-repo dependency
+
+The design docs live in a **separate** repo, `Randy-Lahey/Randy-Lahey.github.io`, published at
+https://randy-lahey.github.io/jam06/. That site loads `data/balance.js` straight from this
+repo's Pages site:
+
+```html
+<script src="https://randy-lahey.github.io/DFMCGameJam06/data/balance.js"></script>
+```
+
+Same origin, different repo — so there is still exactly one copy of the numbers bible and it
+cannot drift. **Renaming this repo, making it private, or turning Pages off breaks the Numbers
+page over there.** If you rename it, update that one `<script src>` in the docs repo.
 
 ## Architecture, briefly
 
@@ -70,4 +86,4 @@ slot in beside it with the same contract; the input layer never changes.
 
 Rendering is stateless — `draw()` rebuilds the actor layer from `state` each turn.
 
-Full detail in [docs/gdd.md](docs/gdd.md).
+Full detail in the [GDD](https://randy-lahey.github.io/jam06/#gdd).
