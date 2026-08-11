@@ -536,7 +536,28 @@
   // ------------------------------------------------------------- render
 
   const stage = document.getElementById('stage');
-  stage.setAttribute('viewBox', `0 0 ${F.cols * T} ${F.rows * T}`);
+
+  // Camera. Guarantees tiles render at >= MIN_TILE_PX on screen so they are
+  // tappable. When the whole floor fits at that size (desktop), the camera
+  // shows everything and never moves. When it doesn't (phones), the viewBox
+  // crops to what fits, centred on the circle, clamped to the floor edges.
+  // `cam` is read back by tileFromEvent, so pointer math always matches.
+  const MIN_TILE_PX = 44;
+  let cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
+
+  function updateCamera() {
+    const box = stage.getBoundingClientRect();
+    if (!box.width || !box.height) return;                    // pre-layout: keep full floor
+    const fitC = Math.max(3, Math.floor(box.width / MIN_TILE_PX));
+    const fitR = Math.max(3, Math.floor(box.height / MIN_TILE_PX));
+    const w = Math.min(F.cols, fitC) * T;
+    const h = Math.min(F.rows, fitR) * T;
+    const x = Math.max(0, Math.min((state.circle.c + .5) * T - w / 2, F.cols * T - w));
+    const y = Math.max(0, Math.min((state.circle.r + .5) * T - h / 2, F.rows * T - h));
+    cam = { x, y, w, h };
+    stage.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+  }
+  updateCamera();
 
   function plate(c, r, inset) {
     const x = c * T + inset, y = r * T + inset, s = T - inset * 2;
@@ -914,6 +935,7 @@
   }
 
   function draw() {
+    updateCamera();
     stage.innerHTML = backdrop() + floorLayer() + propLayer() + aimLayer()
                     + dropLayer() + foeLayer() + circleLayer();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
@@ -993,10 +1015,10 @@
   function tileFromEvent(e) {
     const box = stage.getBoundingClientRect();
     // The viewBox is letterboxed by preserveAspectRatio="xMidYMid meet".
-    const vw = F.cols * T, vh = F.rows * T;
-    const scale = Math.min(box.width / vw, box.height / vh);
-    const ox = (box.width - vw * scale) / 2, oy = (box.height - vh * scale) / 2;
-    const x = (e.clientX - box.left - ox) / scale, y = (e.clientY - box.top - oy) / scale;
+    const scale = Math.min(box.width / cam.w, box.height / cam.h);
+    const ox = (box.width - cam.w * scale) / 2, oy = (box.height - cam.h * scale) / 2;
+    const x = cam.x + (e.clientX - box.left - ox) / scale;
+    const y = cam.y + (e.clientY - box.top - oy) / scale;
     return { c: Math.floor(x / T), r: Math.floor(y / T) };
   }
 
