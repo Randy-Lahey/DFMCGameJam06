@@ -12,6 +12,7 @@ em dashes in the source comments. Without `newline=''` the writer translates
 breaking any byte-for-byte comparison across machines. Both are pinned so the
 output is identical on every platform.
 """
+import hashlib
 import re
 import pathlib
 import sys
@@ -21,13 +22,29 @@ SCRIPTS = ['data/floor01.js', 'data/balance.js', 'src/sprites.js', 'src/game.js'
 
 html = (ROOT / 'index.html').read_text(encoding='utf-8')
 
+# --- cache-bust: stamp every script tag with a hash of the script bytes.
+# GitHub Pages serves JS with a 10-minute cache header and mobile browsers
+# resurrect tabs without refetching, so players kept seeing stale sprites.
+# The stamp changes exactly when any script changes, forcing a refetch; the
+# query string is ignored on file:// so local play is unaffected.
+stamp = hashlib.md5(
+    b''.join((ROOT / f).read_bytes() for f in SCRIPTS)).hexdigest()[:8]
+tag_re = re.compile(r'<script src="((?:data|src)/[a-z0-9]+\.js)(?:\?v=[0-9a-f]+)?"></script>')
+stamped = tag_re.sub(lambda m: '<script src="{}?v={}"></script>'.format(m.group(1), stamp), html)
+if stamped != html:
+    (ROOT / 'index.html').write_text(stamped, encoding='utf-8', newline='')
+    print("stamped index.html scripts ?v={}".format(stamp))
+html = stamped
+
 block = "\n".join(
     "<script>\n{}\n</script>".format((ROOT / f).read_text(encoding='utf-8'))
     for f in SCRIPTS
 )
 
 pattern = re.compile(
-    r'\s*'.join(re.escape('<script src="{}"></script>'.format(f)) for f in SCRIPTS)
+    r'\s*'.join(
+        re.escape('<script src="{}?v={}"></script>'.format(f, stamp)) for f in SCRIPTS
+    )
 )
 
 html, n = pattern.subn(lambda m: block, html)
