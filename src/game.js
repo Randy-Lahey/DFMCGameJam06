@@ -370,7 +370,7 @@
     }
     if (!liveFoes().length && !state.over) {
       state.over = 'CLEARED';
-      log('FLOOR 01 IS QUIET. ALL ENEMIES SEVERED.', 'good');
+      log('FLOOR 01 IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.', 'good');
     }
   }
 
@@ -396,7 +396,14 @@
     const p = propAt(state.circle.c, state.circle.r);
     if (!p) return null;
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
-    if (p.kind === 'stairs') return { prop: p, text: 'LEAVE THE FLOOR' };
+    if (p.kind === 'stairs') {
+      const left = liveFoes().length;
+      // Sealed is a STATE, not a keybind. E still opens the act round here —
+      // stealing that key at the exit while enemies close would be cruel.
+      if (left) return { prop: p, locked: true,
+                         text: 'DESCENT SEALED \u00b7 ' + left + ' ENEM' + (left > 1 ? 'IES' : 'Y') + ' LEFT' };
+      return { prop: p, text: 'LEAVE THE FLOOR' };
+    }
     return null;
   }
 
@@ -430,7 +437,11 @@
     }
     if (p.kind === 'spikes') triggerSpikes(p.label);
     if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. PRESS E.', 'good');
-    if (p.kind === 'stairs') log('THE ' + p.label + ' OPENS BELOW. PRESS E.', 'good');
+    if (p.kind === 'stairs') {
+      const left = liveFoes().length;
+      if (left) log('THE ' + p.label + ' IS SEALED. ' + left + ' STILL STAND.', 'bad');
+      else log('THE ' + p.label + ' OPENS BELOW. PRESS E.', 'good');
+    }
   }
 
   // ---------------------------------------------------------- act round
@@ -471,8 +482,8 @@
   function openAct() {
     if (blocked() || state.mode === 'act') return;
     const it = interactable();
-    if (it && it.prop.kind === 'chest') { openCache(it.prop); return; }
-    if (it && it.prop.kind === 'stairs') { state.modal = 'exit'; return; }
+    if (it && !it.locked && it.prop.kind === 'chest') { openCache(it.prop); return; }
+    if (it && !it.locked && it.prop.kind === 'stairs') { state.modal = 'exit'; return; }
     state.mode = 'act';
   }
 
@@ -551,7 +562,9 @@
 
   const propLayer = () => F.props.map(p => {
     if (p.hidden && !state.revealed.has(key(p.c, p.r))) return '';
-    const spr = (p.kind === 'chest' && p.opened) ? 'chestOpen' : p.kind;
+    let spr = p.kind;
+    if (p.kind === 'chest' && p.opened) spr = 'chestOpen';
+    if (p.kind === 'stairs' && liveFoes().length) spr = 'stairsSealed';
     return `<g transform="translate(${p.c * T},${p.r * T})">${S[spr]()}</g>`;
   }).join('');
 
@@ -808,9 +821,11 @@
     const it = aim ? null : interactable();
     hintEl.classList.toggle('open', !!(aim || it));
     hintEl.classList.toggle('aim', !!aim);
+    hintEl.classList.toggle('locked', !!(it && it.locked));
     if (!aim && !it) return;
     hintEl.innerHTML = aim
       ? `<span class="k">\u2316</span> ${aim.member.name} \u00b7 ${aim.op.name}`
+      : it.locked ? it.text
       : `<span class="k">E</span> ${it.text}`;
     const t = tokenRect();
     const w = hintEl.offsetWidth;
@@ -876,10 +891,11 @@
     winEl.classList.toggle('open', state.over === 'WIN');
 
     if (state.modal === 'exit') {
-      const left = liveFoes().length;
-      document.getElementById('dlg-note').textContent = left
-        ? left + ' ENEMIES STILL STAND. LOOT LEFT BEHIND IS LOST.'
-        : 'THE FLOOR IS QUIET.';
+      const onFloor = state.drops.length;
+      document.getElementById('dlg-note').textContent = onFloor
+        ? 'THE FLOOR IS QUIET. ' + onFloor + ' DROP' + (onFloor > 1 ? 'S' : '')
+          + ' STILL LYING THERE.'
+        : 'THE FLOOR IS QUIET. NOTHING LEFT BEHIND.';
     }
 
     if (state.over === 'WIN') {
@@ -931,7 +947,7 @@
     const prompt = document.getElementById('prompt');
     if (state.over === 'WIN') prompt.textContent = 'FLOOR 01 COMPLETE.';
     else if (state.over === 'SEVERED') prompt.textContent = 'THE WORK ENDS.';
-    else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET. STAIRS OPEN.';
+    else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
       prompt.textContent = state.pending.member.name + ' \u2014 CLICK AN ENEMY \u00b7 '
                          + 'ENTER HITS THE NEAREST \u00b7 ESC CANCELS';

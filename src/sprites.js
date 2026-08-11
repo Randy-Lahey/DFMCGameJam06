@@ -69,6 +69,19 @@
       <rect x="29" y="35" width="6" height="8" fill="var(--gold)"/>
     </g>`;
 
+  // Stairs with the seal still on them: the way down, struck through.
+  const stairsSealed = () => `
+    <g>
+      <g opacity=".3">
+        <path d="M16 44 L26 44 L26 36 L36 36 L36 28 L48 28"
+              fill="none" stroke="var(--cyan)" stroke-width="2.4"/>
+      </g>
+      <path d="M14 22 L50 50 M50 22 L14 50" stroke="var(--blood)"
+            stroke-width="2" opacity=".85"/>
+      <rect x="12" y="20" width="40" height="32" fill="none"
+            stroke="var(--blood)" stroke-width="1" opacity=".45"/>
+    </g>`;
+
   const chestOpen = () => `
     <g opacity=".55">
       <path d="M14 34 L50 34 L50 50 L14 50 Z" fill="var(--void)"
@@ -164,5 +177,5 @@
     </g>`;
 
   window.SPRITES = { hero, calx, cinis, party, testa, siliqva,
-                     stairs, chest, chestOpen, spikes, argent, flux, databank };
+                     stairs, stairsSealed, chest, chestOpen, spikes, argent, flux, databank };
 })();
