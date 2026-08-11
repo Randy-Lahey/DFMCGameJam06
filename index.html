@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>DAEMONWARE — FLOOR 01</title>
 <style>
   :root{
@@ -278,8 +278,6 @@
   }
   .chip:hover .cnote{opacity:.8}
   .chip.aiming .cnote{opacity:.85;color:var(--gold)}
-  .chip.commit-chip .cnote{opacity:.4}
-  #fan.stuck .chip.commit-chip .cnote{opacity:.9}
   .chip.locked{opacity:.3;cursor:not-allowed;border-left-color:var(--bone)}
   .chip.locked:hover{background:rgba(231,226,210,.05)}
   .chip.locked .cc{color:var(--blood)}
@@ -293,22 +291,6 @@
      you simply cannot pay for */
   .chip.untargetable .cc{color:var(--bone);opacity:.7}
 
-  /* ---- the COMMIT group: always a way forward, right on the token ---- */
-  .grp.commit{min-width:96px;border-left:1px solid var(--edge);padding-left:8px}
-  .grp.commit .grp-name{color:var(--bone);border-bottom-color:rgba(231,226,210,.35)}
-  .chip.commit-chip{border-left-color:var(--bone);grid-template-columns:13px 1fr auto}
-  .chip.commit-chip .hk{color:var(--bone)}
-  .chip.commit-chip .cc{color:var(--bone);opacity:.55}
-
-  /* nothing left to do -> the only live control pulses */
-  #fan.stuck .grp.commit .grp-name{color:var(--gold);border-bottom-color:var(--gold)}
-  #fan.stuck .chip.commit-chip{
-    border-left-color:var(--gold);background:rgba(227,179,71,.18);
-    animation:nudge 1.15s ease-in-out infinite;
-  }
-  #fan.stuck .chip.commit-chip .cn,
-  #fan.stuck .chip.commit-chip .hk,
-  #fan.stuck .chip.commit-chip .cc{color:var(--gold);opacity:1}
   @keyframes nudge{
     0%,100%{box-shadow:inset 0 0 0 1px rgba(227,179,71,.25)}
     50%    {box-shadow:inset 0 0 0 1px rgba(227,179,71,.9)}
@@ -358,14 +340,54 @@
   #log .line.good{border-color:var(--gold);color:var(--gold)}
   #log .line.bad{border-color:var(--blood);color:var(--blood)}
 
+  /* ---- COMMIT ROUND: bottom-centre of the map, just above the nameplates ---- */
+  #confirm{
+    position:absolute;left:50%;bottom:10px;z-index:5;
+    transform:translateX(-50%) translateY(8px);
+    min-height:44px;padding:0 22px;
+    font:inherit;letter-spacing:.24em;font-size:10.5px;
+    color:var(--bone);background:rgba(4,5,10,.92);
+    border:1px solid var(--edge);cursor:pointer;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    opacity:0;pointer-events:none;
+    transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1),
+               color .2s ease, border-color .2s ease, background .2s ease;
+  }
+  #confirm.open{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+  #confirm.ready{
+    color:var(--gold);border-color:var(--gold);background:rgba(227,179,71,.14);
+    animation:nudge 1.15s ease-in-out infinite;
+  }
+
+  /* touch devices need no keyboard legend */
+  @media (pointer:coarse){ .keys{display:none} }
+
+  /* landscape phones: reclaim vertical space for the map */
+  @media (max-height:480px){
+    #app{grid-template-rows:34px 1fr auto}
+    .brand{font-size:11px}
+    .turn .val{font-size:16px}
+    #hud{grid-template-columns:1fr 220px}
+    .hud-side{border-top:0;border-left:1px solid var(--edge);padding:6px 10px;gap:4px}
+    #roster{padding:6px 10px;gap:6px}
+    .unit{padding:5px 8px}
+    .keys{display:none}
+  }
+
+  /* notched devices: keep the HUD and header out of the hardware insets */
+  header{padding-left:max(16px, env(safe-area-inset-left));
+         padding-right:max(16px, env(safe-area-inset-right))}
+  #hud{padding-bottom:env(safe-area-inset-bottom);
+       padding-left:env(safe-area-inset-left);
+       padding-right:env(safe-area-inset-right)}
+
   @media (prefers-reduced-motion:reduce){
     #fan,.grp,.chip,.vitae i,.pneuma i,.unit,#hint{transition-duration:.01ms!important}
     #hint.open{animation:none}
     .overlay.open,.dialog,.winbox{animation:none}
     .float{animation-duration:.6s}
     .p,.ring{animation-duration:.25s}
-    #fan.stuck .chip.commit-chip{animation:none;
-      box-shadow:inset 0 0 0 1px rgba(227,179,71,.9)}
+    #confirm.ready{animation:none}
   }
 </style>
 </head>
@@ -383,6 +405,7 @@
       <div id="floaters"></div>
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
+      <button id="confirm"></button>
     </div>
 
     <aside>

@@ -58,6 +58,7 @@
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
     modal: null,                   // null | 'exit'
     mode: 'move',                  // 'move' | 'act'
+    sel: null,                     // member whose op menu is open (nameplate tap)
     acted: [],                     // member names done this act round (any order)
     aiming: null,                  // member name currently picking a target
     pending: null,                 // { op, member } while aiming
@@ -349,6 +350,7 @@
     for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
     state.turn++;
     state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
+    state.sel = null;
     checkEnd();
   }
 
@@ -448,17 +450,16 @@
   // Any member who has not acted may act, in any order. The round resolves
   // when every living member has committed or the player commits early.
 
-  function maybeResolve() {
-    if (pendingMembers().length === 0) { resolveRound(null); return true; }
-    return false;
-  }
-
+  // The round no longer auto-resolves when the last member commits: the
+  // player reviews and presses COMMIT (button or SPACE). The menu advances
+  // to the next member who can still act.
   function commitMember(member, op, targetId) {
     state.queued.push({ member, op, targetId });
     state.acted.push(member.name);
     state.pending = null;
     state.aiming = null;
-    maybeResolve();
+    const next = pendingMembers()[0];
+    state.sel = next ? next.name : null;
   }
 
   // hotkey 0..4 across the flat ALL_OPS list
@@ -470,6 +471,7 @@
     if (!m || !canAct(m)) return;
     const op = entry.op;
     if (state.mode === 'move') state.mode = 'act';
+    state.sel = m.name;
     if (!affordable(m, op)) { log(`${m.name} CANNOT PAY FOR ${op.name}.`); return; }
 
     if (op.targets === 'circle') { commitMember(m, op); return; }
@@ -485,6 +487,8 @@
     if (it && !it.locked && it.prop.kind === 'chest') { openCache(it.prop); return; }
     if (it && !it.locked && it.prop.kind === 'stairs') { state.modal = 'exit'; return; }
     state.mode = 'act';
+    const first = pendingMembers()[0];
+    state.sel = first ? first.name : null;
   }
 
   // Hotkey picks the operation, one click on an enemy fires it. No confirm.
@@ -515,6 +519,7 @@
 
   function cancel() {
     if (state.pending) { state.pending = null; state.aiming = null; return; }
+    if (state.sel) { state.sel = null; return; }
     if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
   }
 
@@ -704,7 +709,17 @@
       };
     });
 
-    rosterEl.addEventListener('click', () => { openAct(); draw(); });
+    rosterEl.addEventListener('click', e => {
+      if (blocked()) return;
+      const card = e.target.closest('.unit');
+      if (!card) return;
+      const m = byName(card.dataset.member);
+      if (!m || !canAct(m)) return;
+      if (state.mode === 'move') state.mode = 'act';
+      state.pending = null; state.aiming = null;
+      state.sel = state.sel === m.name ? null : m.name;   // tap again closes
+      draw();
+    });
   }
 
   function syncRoster() {
@@ -730,7 +745,6 @@
   const fanEl = document.getElementById('fan');
   const hintEl = document.getElementById('hint');
   const groups = {};
-  let commitTag = null;
 
   function buildFan() {
     fanEl.innerHTML = state.circle.members.map(m => {
@@ -747,29 +761,18 @@
       return `<div class="grp" data-member="${m.name}" style="--tint:var(--${m.tint})">
                 <div class="grp-name">${m.name}<em></em></div>${chips}
               </div>`;
-    }).join('') + `
-      <div class="grp commit">
-        <div class="grp-name">ROUND<em></em></div>
-        <div class="chip commit-chip" data-commit="1"
-             title="End the round. Anyone who has not acted stands down.">
-          <span class="hk">\u2423</span><span class="cn">COMMIT</span><span class="cc">SPACE</span>
-          <span class="cnote">End the round now.</span>
-        </div>
-      </div>`;
+    }).join('');
 
     state.circle.members.forEach(m => {
       const el = fanEl.querySelector(`.grp[data-member="${m.name}"]`);
       groups[m.name] = { el, tag: el.querySelector('em'), chips: [...el.querySelectorAll('.chip')] };
     });
 
-    commitTag = fanEl.querySelector('.grp.commit em');
-
     fanEl.addEventListener('click', e => {
       const chip = e.target.closest('.chip');
       if (!chip) return;
       e.stopPropagation();
-      if (chip.dataset.commit) passOrHold();
-      else chooseOp(+chip.dataset.slot);
+      chooseOp(+chip.dataset.slot);
       draw();
     });
   }
@@ -778,12 +781,11 @@
   function tilePos(c, r) {
     const box = stage.getBoundingClientRect();
     const vp = viewportEl.getBoundingClientRect();
-    const vw = F.cols * T, vh = F.rows * T;
-    const scale = Math.min(box.width / vw, box.height / vh);
-    const ox = (box.width - vw * scale) / 2, oy = (box.height - vh * scale) / 2;
+    const scale = Math.min(box.width / cam.w, box.height / cam.h);
+    const ox = (box.width - cam.w * scale) / 2, oy = (box.height - cam.h * scale) / 2;
     return {
-      cx: box.left - vp.left + ox + (c * T + T / 2) * scale,
-      top: box.top - vp.top + oy + (r * T) * scale,
+      cx: box.left - vp.left + ox + (c * T + T / 2 - cam.x) * scale,
+      top: box.top - vp.top + oy + (r * T - cam.y) * scale,
       size: T * scale,
       vpw: vp.width,
     };
@@ -864,13 +866,14 @@
   }
 
   function syncFan() {
-    const open = state.mode === 'act' && !finished();
+    const open = state.mode === 'act' && !finished() && !!state.sel;
     fanEl.classList.toggle('open', open);
     fanEl.classList.toggle('aiming', !!state.pending);
     if (!open) return;
 
     state.circle.members.forEach(m => {
       const g = groups[m.name];
+      g.el.style.display = m.name === state.sel ? '' : 'none';
       const done = hasActed(m), dead = m.hp <= 0;
       g.el.classList.toggle('done', done || dead);
       g.el.classList.toggle('acting', state.aiming === m.name);
@@ -889,19 +892,15 @@
       });
     });
 
-    const stuck = isStuck();
-    fanEl.classList.toggle('stuck', stuck);
-    const idle = pendingMembers().length;
-    commitTag.textContent = stuck ? 'NOTHING TO DO' : idle ? idle + ' LEFT' : 'READY';
-
-    // Place above the token; flip below if it would clip the top edge.
-    const t = tokenRect();
-    const w = fanEl.offsetWidth, hgt = fanEl.offsetHeight;
-    const cx = Math.min(Math.max(t.cx, w / 2 + 6), Math.max(w / 2 + 6, t.vpw - w / 2 - 6));
-    const below = (t.top - hgt - 12) < 4;
-    fanEl.classList.toggle('below', below);
+    // Anchor above the selected member's nameplate, clamped to the viewport.
+    const card = cards[state.sel].el.getBoundingClientRect();
+    const vp = viewportEl.getBoundingClientRect();
+    const w = fanEl.offsetWidth;
+    const cx = Math.min(Math.max(card.left + card.width / 2 - vp.left, w / 2 + 6),
+                        Math.max(w / 2 + 6, vp.width - w / 2 - 6));
+    fanEl.classList.remove('below');
     fanEl.style.left = cx + 'px';
-    fanEl.style.top = (below ? t.top + t.size + 12 : t.top - 12) + 'px';
+    fanEl.style.top = (card.top - vp.top - 8) + 'px';
   }
 
   const modalEl = document.getElementById('modal');
@@ -951,6 +950,7 @@
 
     syncRoster();
     syncFan();
+    syncConfirm();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -982,12 +982,12 @@
       prompt.textContent = state.pending.member.name + ' \u2014 CLICK AN ENEMY \u00b7 '
                          + 'ENTER HITS THE NEAREST \u00b7 ESC CANCELS';
     else if (isStuck())
-      prompt.textContent = 'NO OPERATION AVAILABLE \u2014 PRESS SPACE TO COMMIT THE ROUND';
+      prompt.textContent = 'NO OPERATION AVAILABLE \u2014 COMMIT THE ROUND';
     else if (state.mode === 'act')
-      prompt.textContent = 'PICK OPERATIONS 1-5 \u2014 SPACE COMMITS THE ROUND';
+      prompt.textContent = 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND';
     else if (!canStep())
-      prompt.textContent = 'SURROUNDED \u2014 SPACE HOLDS, E OPENS AN ACT ROUND';
-    else prompt.textContent = 'WASD OR TAP MOVES \u2014 E OR 1-5 OPENS AN ACT ROUND';
+      prompt.textContent = 'SURROUNDED \u2014 SPACE HOLDS, TAP A NAMEPLATE TO ACT';
+    else prompt.textContent = 'WASD OR TAP MOVES \u2014 TAP A NAMEPLATE OR E TO ACT';
     prompt.className = 'prompt'
       + (state.pending ? ' hot' : '')
       + ((isStuck() || (state.mode === 'move' && !canStep() && !state.over)) ? ' warn' : '');
@@ -1041,6 +1041,27 @@
   stage.addEventListener('click', e => {
     const t = tileFromEvent(e);
     clickTile(t.c, t.r); draw();
+  });
+
+  const confirmEl = document.getElementById('confirm');
+  function syncConfirm() {
+    const show = state.mode === 'act' && !finished() && !state.pending;
+    confirmEl.classList.toggle('open', show);
+    if (!show) return;
+    const idle = pendingMembers().length, stuck = isStuck();
+    confirmEl.classList.toggle('ready', idle === 0 || stuck);
+    confirmEl.textContent =
+      stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
+      : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
+      : 'COMMIT ROUND';
+  }
+  confirmEl.addEventListener('click', () => { passOrHold(); draw(); });
+
+  // On touch, the "E \u2014 OPEN" tag over the token is the button for
+  // chests and stairs (the roster no longer routes to openAct).
+  hintEl.addEventListener('click', () => {
+    if (state.pending) return;
+    openAct(); draw();
   });
 
   // Headless test surface. Not used by the game itself.
