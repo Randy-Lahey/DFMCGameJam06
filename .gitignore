@@ -3,7 +3,3 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
-
-# superseded flat copy of the slice from before the repo restructure — delete it
-新しいフォルダー/
-_to_delete/

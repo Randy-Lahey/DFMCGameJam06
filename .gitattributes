@@ -1,0 +1,8 @@
+# Commit LF regardless of what Windows checks out, so blobs stay stable.
+* text=auto eol=lf
+
+# Shell scripts must keep LF or bash chokes on the CR.
+*.sh text eol=lf
+
+# Batch files are the one thing that genuinely wants CRLF.
+*.bat text eol=crlf
