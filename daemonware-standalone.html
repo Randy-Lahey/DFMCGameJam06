@@ -1857,7 +1857,7 @@
 
   const confirmEl = document.getElementById('confirm');
   function syncConfirm() {
-    const show = state.mode === 'act' && !finished() && !state.pending;
+    const show = state.mode === 'act' && !finished() && !state.pending && !state.sel;
     confirmEl.classList.toggle('open', show);
     if (!show) return;
     const idle = pendingMembers().length, stuck = isStuck();
