@@ -1,88 +1,109 @@
-// data/balance.js — THE NUMBERS BIBLE. Single source of truth.
+// THE NUMBERS BIBLE. Single source of truth. The game loads this at runtime.
+// Never copy these values anywhere else — change them here and only here.
 //
-// The game reads this at runtime. The docs site at
-// https://randy-lahey.github.io/jam06/#numbers loads THIS file over HTTP and renders
-// it live. Change a number here and both update. Nothing is duplicated anywhere —
-// if you find yourself typing a number into src/*.js, it belongs in here instead.
+// Damage model (deliberately trivial for the slice):
+//     dmg = max(minDamage, atk - def + rand(-variance, +variance))
 //
-// Plain .js rather than .json so it works when you open index.html straight off
-// disk (file:// blocks fetch). It is still just data.
+// Derived, at current values:
+//     CALX     -> TESTA    2 +/-1   => 7 hits   (ABRASIO, but hits up to 8)
+//     CALX     -> SILIQVA  4 +/-1   => 3 hits
+//     SPIKES   -> OPERATOR 7   CALX 8   CINIS 5   (30% of max, each entry)
+//     OPERATOR -> TESTA    5 +/-1   =>  3 hits to sever
+//     OPERATOR -> SILIQVA  7 +/-1   =>  2 hits to sever
+//     TESTA    -> OPERATOR 2 +/-1   => 12 hits
+//     TESTA    -> CALX     1 (min)  => 26 hits   (CALX is the wall)
+//     SILIQVA  -> CINIS    5 +/-1   =>  4 hits   (CINIS is glass)
 
 (function () {
+  window.BALANCE = {
 
-const BALANCE = {
+    combat: {
+      variance: 1,      // +/- this much on every damage roll
+      minDamage: 1,     // a hit always does something
+      pneumaRegen: 1,   // per living member, per round, move or act
+    },
 
-  // ---- dungeon shape ------------------------------------------------------
-  // Lattice of cells; each cell may hold one room; rooms joined by L-corridors
-  // along a random spanning tree, plus `extraLoops` extra edges.
-  map: {
-    cols: 3,          // cells across
-    rows: 3,          // cells down
-    cellW: 14,        // tiles per cell, horizontally
-    cellH: 9,         // tiles per cell, vertically
-    roomMinW: 4,
-    roomMaxW: 9,
-    roomMinH: 3,
-    roomMaxH: 5,
-    roomChance: 1.0,  // <1.0 leaves some cells as bare corridor junctions
-    extraLoops: 2,    // corridor edges beyond the spanning tree. 0 = no loops.
-  },
+    // Party. Order here is display order in the CIRCLE panel and left-to-right
+    // order of the VITAE pips above the token. `tint` is a CSS var name.
+    party: {
+      OPERATOR: { vitae: 24, pneuma: 10, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
+      CALX:     { vitae: 26, pneuma: 14, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
+      CINIS:    { vitae: 18, pneuma: 10, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
+    },
 
-  // ---- actors -------------------------------------------------------------
-  actors: {
-    hero:        { name: 'Hero',         glyph: '@', color: '#4ea3ff', hp: 20, atk: 6, def: 2 },
-    daemonAlpha: { name: 'Daemon Alpha', glyph: 'α', color: '#6fd68b', hp: 14, atk: 5, def: 1 },
-    daemonBeta:  { name: 'Daemon Beta',  glyph: 'β', color: '#c08cf0', hp: 14, atk: 5, def: 1 },
-    rat:         { name: 'Rat',          glyph: 'r', color: '#e2604f', hp:  8, atk: 4, def: 1 },
-  },
+    // Drops. Exactly one per severed enemy, rolled off this weighted table.
+    // ARGENT is the currency and stacks as a number; FLUX and DATA are discrete
+    // items so the inventory grid has something to lay out. `rarity` is shown
+    // on the pickup floater and, later, in the inventory.
+    drops: {
+      table: [
+        { kind: 'ARGENT', label: 'ARGENT',    sprite: 'argent',   weight: 72, rarity: 'COMMON' },
+        { kind: 'FLUX',   label: 'FLUX CELL', sprite: 'flux',     weight: 20, rarity: 'UNCOMMON' },
+        { kind: 'DATA',   label: 'DATA BANK', sprite: 'databank', weight:  8, rarity: 'RARE' },
+      ],
+      argentMin: 4,
+      argentMax: 12,
+    },
 
-  // ---- combat -------------------------------------------------------------
-  combat: {
-    minDamage: 1,        // a hit always does at least this
-    damageVariance: 1,   // damage = atk - def, then ± this
-  },
+    // Opening a cache costs a turn and always pays: argent plus one guaranteed
+    // non-argent item, rolled off the drop table's FLUX/DATA weights.
+    cache: {
+      argentMin: 10,
+      argentMax: 22,
+    },
 
-  // ---- ai -----------------------------------------------------------------
-  ai: {
-    aggroRange: 8,        // chebyshev tiles; foe must also have line of sight
-    wanderWaitChance: 0.6 // chance an unaware foe stands still instead of stepping
-  },
+    // Floor hazards. `pct` is a fraction of each member's MAX vitae, so a
+    // spike array hurts the whole circle proportionally rather than flat.
+    // Fires every time the tile is entered, not just on the reveal.
+    hazards: {
+      spikes: { pct: 0.30 },
+    },
 
-  // ---- spawning -----------------------------------------------------------
-  spawns: {
-    foeKind: 'rat',
-    foeCount: 5,
-    partyKinds: ['daemonAlpha', 'daemonBeta'], // the Hero is always first
-  },
+    // Foes. `aggro` is Chebyshev distance at which they wake and pursue.
+    foes: {
+      TESTA:   { vitae: 14, atk: 4, def: 2, aggro: 5, type: 'QLIPHOTH', sprite: 'testa' },
+      SILIQVA: { vitae: 10, atk: 6, def: 0, aggro: 6, type: 'QLIPHOTH', sprite: 'siliqva' },
+    },
 
-  // ---- presentation (not balance, but it's a knob) ------------------------
-  render: {
-    tileSize: 18,   // px per tile
-    foeDelayMs: 90, // pause between foe actions so you can read the turn
-  },
-};
-
-// One-line rationale per knob. The docs site (randy-lahey.github.io/jam06/#numbers)
-// shows these next to the values.
-// If a number has no note, that's a sign nobody knows why it's that number.
-const NOTES = {
-  'map.cols': 'Floor is cols x rows rooms. 3x3 = ~9 rooms, a 2-4 minute floor.',
-  'map.rows': 'Raise for longer floors. Cost is wall-clock playtime per run.',
-  'map.cellW': 'Must exceed roomMaxW + 4 or rooms get clamped.',
-  'map.cellH': 'Must exceed roomMaxH + 4 or rooms get clamped.',
-  'map.roomChance': 'Below 1.0 gives PMD-style bare junctions. 1.0 = every cell is a room.',
-  'map.extraLoops': 'Loops stop the floor being a dead-end tree. 0 makes backtracking punishing.',
-  'actors.hero.hp': 'Survives 10 rat hits (rat atk 4 - hero def 2 = 2 dmg). Generous on purpose while there are no abilities or healing; tighten once there are.',
-  'actors.rat.hp': 'Dies in 2 Hero hits (6-1=5 dmg). Keeps trash fast.',
-  'combat.damageVariance': 'Small. Enough to stop damage feeling like arithmetic, not enough to swing a fight.',
-  'ai.aggroRange': 'Roughly one room-width, so a room reads as one encounter.',
-  'ai.wanderWaitChance': 'High so unaware foes drift slowly and stay findable.',
-  'spawns.foeCount': 'Across ~8 non-spawn rooms, so most rooms are empty and encounters feel placed.',
-};
-
-BALANCE.NOTES = NOTES;
-
-if (typeof module !== 'undefined' && module.exports) module.exports = BALANCE;
-if (typeof window !== 'undefined') window.BALANCE = BALANCE;
-
+    // OPERATIONS.
+    //   targets 'foe'      -> pick a living foe within `range` of the circle
+    //   targets 'adjacent' -> no aiming; hits every foe within `range`
+    //   targets 'circle'   -> no target, applies to the whole party
+    //   mult             -> damage multiplier on the caster's ATK
+    //   vitaeCost        -> Svlphvr pays itself for power
+    //   fx               -> cosmetic only; keys into the FX table in game.js
+    //   hitFx            -> cosmetic; per-target burst when `fx` marks the
+    //                       origin instead of the impact (sweeps)
+    //   duration         -> rounds a ward stays up; omit for permanent
+    //   cd               -> rounds before the op can be cast again
+    // `note` is shown on the chip itself: keep it under ~40 characters.
+    // Order within a member is hotkey order (1, 2).
+    operations: {
+      PERCVSSIO: {
+        by: 'OPERATOR', kind: 'strike', targets: 'foe', range: 1,
+        pn: 0, mult: 1, fx: 'strike',
+        note: 'Melee. One enemy, adjacent.',
+      },
+      ABRASIO: {
+        by: 'CALX', kind: 'sweep', targets: 'adjacent', range: 1,
+        pn: 3, mult: 1.3, fx: 'sweep', hitFx: 'strike',
+        note: 'Melee sweep. Every enemy touching you.',
+      },
+      CONCRETIO: {
+        by: 'CALX', kind: 'hex', targets: 'foe', range: 3,
+        pn: 4, atk: 2, cd: 4, fx: 'hex',
+        note: 'Weakens one enemy. Permanent.',
+      },
+      FVLGVR: {
+        by: 'CINIS', kind: 'strike', targets: 'foe', range: 4,
+        pn: 3, mult: 1, fx: 'bolt',
+        note: 'Ranged strike. Four tiles.',
+      },
+      IMMOLATIO: {
+        by: 'CINIS', kind: 'strike', targets: 'foe', range: 2,
+        pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
+        note: 'Heavy hit at two tiles. Burns CINIS.',
+      },
+    },
+  };
 })();
