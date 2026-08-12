@@ -272,17 +272,12 @@
     transition:opacity .22s ease, transform .30s cubic-bezier(.16,.9,.24,1);
   }
   #fan.open{opacity:1;pointer-events:auto;transform:translate(-50%,-100%) translateY(0) scale(1)}
-  #fan.below{transform-origin:50% 0%;transform:translate(-50%,0) translateY(-10px) scale(.97)}
-  #fan.below.open{transform:translate(-50%,0) translateY(0) scale(1)}
 
   /* While aiming, the fan would sit on top of the enemies you need to click.
      Collapse it into the token and bring it back once the shot is taken. */
   #fan.open.aiming{
     opacity:0;pointer-events:none;
     transform:translate(-50%,-100%) translateY(16px) scale(.40);
-  }
-  #fan.below.open.aiming{
-    transform:translate(-50%,0) translateY(-16px) scale(.40);
   }
   #fan.aiming .grp{transition-delay:0s}
 
@@ -292,15 +287,25 @@
     bottom:-9px;width:1px;height:9px;
     background:var(--edge-i);
   }
-  #fan.below::after{bottom:auto;top:-9px}
 
+  /* Opacity only, no entry transform: a translateY here overflows the fan's
+     scroll box, which pops a transient scrollbar and changes the width that
+     syncFan measures to clamp the fan against the viewport edge. */
+  /* The scroll box is the group, not the fan. #fan::after is a tether hanging
+     9px BELOW the fan, so making the fan itself scrollable turned the tether
+     into permanent overflow — a scrollbar appeared, which changed the width
+     syncFan measures to clamp against the viewport edge. Scrollbar chrome is
+     hidden for the same reason. --fan-max is set by syncFan. */
   .grp{
     --tint:var(--cyan);
     display:grid;gap:6px;min-width:150px;align-content:start;
-    opacity:0;transform:translateY(6px);
-    transition:opacity .24s ease, transform .28s cubic-bezier(.16,.9,.24,1);
+    max-height:var(--fan-max,none);overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:none;
+    opacity:0;
+    transition:opacity .24s ease;
   }
-  #fan.open .grp{opacity:1;transform:translateY(0)}
+  .grp::-webkit-scrollbar{display:none}
+  #fan.open .grp{opacity:1}
   #fan.open .grp:nth-child(2){transition-delay:.05s}
   #fan.open .grp:nth-child(3){transition-delay:.10s}
 
@@ -682,10 +687,10 @@
   </div>
 </div>
 
-<script src="data/floor01.js?v=4d88c998"></script>
-<script src="data/balance.js?v=4d88c998"></script>
-<script src="data/fxsheets.js?v=4d88c998"></script>
-<script src="src/sprites.js?v=4d88c998"></script>
-<script src="src/game.js?v=4d88c998"></script>
+<script src="data/floor01.js?v=a9cfb22e"></script>
+<script src="data/balance.js?v=a9cfb22e"></script>
+<script src="data/fxsheets.js?v=a9cfb22e"></script>
+<script src="src/sprites.js?v=a9cfb22e"></script>
+<script src="src/game.js?v=a9cfb22e"></script>
 </body>
 </html>
