@@ -23,6 +23,19 @@
       pneumaRegen: 1,   // per living member, per round, move or act
     },
 
+    // Readability toggles. Not cosmetic — these change what the player knows
+    // when they commit, which changes how hard the floor plays.
+    ui: {
+      // Draw what each AWAKE foe has committed to this round: a chevron on the
+      // tile it will step to, a ring on the circle if it will attack. Sleeping
+      // foes stay hidden, so waking one is still a surprise.
+      //
+      // The turn model's whole point is that intents lock BEFORE movement, so
+      // stepping out of reach makes an attack whiff — a player who cannot see
+      // the intent cannot make that read. Set false to restore blind commits.
+      showFoeIntent: true,
+    },
+
     // Party. Order here is display order in the CIRCLE panel and left-to-right
     // order of the VITAE pips above the token. `tint` is a CSS var name.
     party: {

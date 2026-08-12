@@ -242,6 +242,16 @@
     return { kind: 'step', ...stepToward(foe, target) };
   }
 
+  // Display only. foeIntent() wakes foes and writes to the log, so it must never
+  // be called from the render path. This reads the same rules with no side
+  // effects, and only for foes that are already awake — waking one is still a
+  // surprise. Gated by BALANCE.ui.showFoeIntent.
+  function previewIntent(foe) {
+    if (foe.hp <= 0 || !foe.awake) return null;
+    if (adjacent(foe, state.circle)) return { kind: 'attack' };
+    return { kind: 'step', ...stepToward(foe, state.circle) };
+  }
+
   function stepToward(foe, t) {
     const dc = Math.sign(t.c - foe.c), dr = Math.sign(t.r - foe.r);
     const tries = Math.abs(t.c - foe.c) >= Math.abs(t.r - foe.r)
@@ -370,6 +380,7 @@
     state.turn++;
     state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
     state.sel = null; state.staged = null; state.hover = null;
+    view.free = false;                       // snap the camera back to the party
     checkEnd();
   }
 
@@ -410,6 +421,10 @@
     hit.filter(x => x.m.hp === 0)
        .forEach(x => log(`${x.m.name} IS SEVERED BY THE ${label}.`, 'bad'));
   }
+
+  // Naming a key to a player who has no keyboard is worse than saying nothing.
+  const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
+  const actHint = () => isCoarse() ? 'TAP THE TAG ABOVE THE CIRCLE' : 'PRESS E';
 
   // The prop under the circle that E would act on, or null.
   function interactable() {
@@ -457,11 +472,11 @@
       log('THE CIRCLE TRIPS A CONCEALED ' + p.label + '.', 'bad');
     }
     if (p.kind === 'spikes') triggerSpikes(p.label);
-    if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. PRESS E.', 'good');
+    if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. ' + actHint() + '.', 'good');
     if (p.kind === 'stairs') {
       const left = liveFoes().length;
       if (left) log('THE ' + p.label + ' IS SEALED. ' + left + ' STILL STAND.', 'bad');
-      else log('THE ' + p.label + ' OPENS BELOW. PRESS E.', 'good');
+      else log('THE ' + p.label + ' OPENS BELOW. ' + actHint() + '.', 'good');
     }
   }
 
@@ -629,15 +644,24 @@
   const MIN_TILE_PX = window.matchMedia('(pointer:coarse)').matches ? 64 : 44;
   let cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
 
+  // Free look. The camera always cropped the floor on a phone and only ever
+  // followed the party, so enemy position — the input to the round's central
+  // decision — could simply be off screen with no way to look. Two fingers
+  // pan and pinch; committing anything recentres.
+  const view = { zoom: 1, ox: 0, oy: 0, free: false };
+
   function updateCamera() {
     const box = stage.getBoundingClientRect();
     if (!box.width || !box.height) return;                    // pre-layout: keep full floor
-    const fitC = Math.max(3, Math.floor(box.width / MIN_TILE_PX));
-    const fitR = Math.max(3, Math.floor(box.height / MIN_TILE_PX));
+    const px = MIN_TILE_PX * view.zoom;
+    const fitC = Math.max(3, Math.floor(box.width / px));
+    const fitR = Math.max(3, Math.floor(box.height / px));
     const w = Math.min(F.cols, fitC) * T;
     const h = Math.min(F.rows, fitR) * T;
-    const x = Math.max(0, Math.min((state.circle.c + .5) * T - w / 2, F.cols * T - w));
-    const y = Math.max(0, Math.min((state.circle.r + .5) * T - h / 2, F.rows * T - h));
+    const cx = view.free ? view.ox : (state.circle.c + .5) * T;
+    const cy = view.free ? view.oy : (state.circle.r + .5) * T;
+    const x = Math.max(0, Math.min(cx - w / 2, F.cols * T - w));
+    const y = Math.max(0, Math.min(cy - h / 2, F.rows * T - h));
     cam = { x, y, w, h };
     stage.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
   }
@@ -750,6 +774,45 @@
       if (state.staged && state.staged.dc === dc && state.staged.dr === dr) return '';
       return `<polygon points="${plate(c, r, 9)}" fill="none" stroke="var(--cyan)"
                        stroke-width="1.2" opacity=".35"/>`;
+    }).join('');
+  }
+
+  // What each awake foe has already committed to this round. The turn model's
+  // whole point is that intents lock before movement, so stepping out of reach
+  // makes an attack whiff — a player who cannot see the intent cannot make
+  // that read, and on touch the commit is a single irreversible tap.
+  function intentLayer() {
+    if (!B.ui || !B.ui.showFoeIntent || finished()) return '';
+    let g = '', struck = false;
+    for (const f of liveFoes()) {
+      const it = previewIntent(f);
+      if (!it) continue;
+      if (it.kind === 'attack') {
+        if (struck) continue;
+        struck = true;
+        g += `<polygon points="${plate(state.circle.c, state.circle.r, 5)}" fill="none"
+                       stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
+                       opacity=".75"/>`;
+        continue;
+      }
+      if (!it.dc && !it.dr) continue;
+      g += `<polygon points="${plate(f.c + it.dc, f.r + it.dr, 20)}"
+                     fill="var(--blood)" opacity=".3"/>`;
+    }
+    return g;
+  }
+
+  // Awake foes the camera has cropped away, pinned to the edge they sit beyond.
+  function edgeLayer() {
+    const x1 = cam.x + cam.w, y1 = cam.y + cam.h;
+    return liveFoes().filter(f => f.awake).map(f => {
+      const fx = f.c * T + T / 2, fy = f.r * T + T / 2;
+      if (fx > cam.x && fx < x1 && fy > cam.y && fy < y1) return '';
+      const px = Math.max(cam.x + 13, Math.min(fx, x1 - 13));
+      const py = Math.max(cam.y + 13, Math.min(fy, y1 - 13));
+      return `<circle cx="${px}" cy="${py}" r="5.5" fill="var(--blood)" opacity=".85"/>
+              <circle cx="${px}" cy="${py}" r="11" fill="none" stroke="var(--blood)"
+                      stroke-width="1" opacity=".45"/>`;
     }).join('');
   }
 
@@ -1059,8 +1122,8 @@
   function draw() {
     updateCamera();
     stage.innerHTML = backdrop() + floorLayer() + propLayer() + aimLayer()
-                    + moveLayer() + dropLayer() + foeLayer()
-                    + stagedLayer() + circleLayer();
+                    + moveLayer() + intentLayer() + dropLayer() + foeLayer()
+                    + stagedLayer() + circleLayer() + edgeLayer();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
     document.getElementById('turn-value').textContent = String(state.turn).padStart(3, '0');
 
@@ -1068,6 +1131,7 @@
     syncFan();
     syncConfirm();
     syncCancel();
+    syncTargets();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -1096,15 +1160,24 @@
     else if (state.over === 'SEVERED') prompt.textContent = 'THE WORK ENDS.';
     else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
-      prompt.textContent = state.pending.member.name + ' \u2014 CLICK AN ENEMY \u00b7 '
-                         + 'ENTER HITS THE NEAREST \u00b7 ESC CANCELS';
+      prompt.textContent = state.pending.member.name + (isCoarse()
+        ? ' \u2014 TAP AN ENEMY OR A TARGET CHIP \u00b7 CANCEL BACKS OUT'
+        : ' \u2014 CLICK AN ENEMY \u00b7 ENTER HITS THE NEAREST \u00b7 ESC CANCELS');
     else if (isStuck())
       prompt.textContent = 'NO OPERATION AVAILABLE \u2014 COMMIT THE ROUND';
     else if (state.mode === 'act')
-      prompt.textContent = 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND';
+      prompt.textContent = isCoarse()
+        ? 'TAP A NAMEPLATE \u2014 COMMIT ENDS THE ROUND'
+        : 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND';
+    else if (state.staged)
+      prompt.textContent = 'CONFIRM THE STEP, OR TAP ANOTHER TILE';
     else if (!canStep())
-      prompt.textContent = 'SURROUNDED \u2014 SPACE HOLDS, TAP A NAMEPLATE TO ACT';
-    else prompt.textContent = 'WASD OR TAP MOVES \u2014 TAP A NAMEPLATE OR E TO ACT';
+      prompt.textContent = isCoarse()
+        ? 'SURROUNDED \u2014 HOLD GROUND, OR TAP A NAMEPLATE TO ACT'
+        : 'SURROUNDED \u2014 SPACE HOLDS, TAP A NAMEPLATE TO ACT';
+    else prompt.textContent = isCoarse()
+      ? 'TAP A TILE TO STEP \u2014 TAP A NAMEPLATE TO ACT'
+      : 'WASD OR TAP MOVES \u2014 TAP A NAMEPLATE OR E TO ACT';
     prompt.className = 'prompt'
       + (state.pending ? ' hot' : '')
       + ((isStuck() || (state.mode === 'move' && !canStep() && !state.over)) ? ' warn' : '');
@@ -1114,11 +1187,6 @@
   }
 
   // -------------------------------------------------------------- input
-
-  // Coarse pointers get the safe variants of everything: staged movement,
-  // no hover, tap-sized controls. Read live so a hybrid device that gains a
-  // mouse mid-session is not stuck in touch mode.
-  const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
 
   // One clock shared by EVERY pointer entry point. Same-element double-fire and
   // cross-element fall-through (a control drops pointer-events while it is still
@@ -1173,10 +1241,106 @@
   });
   stage.addEventListener('mouseleave', () => { if (state.hover) { state.hover = null; draw(); } });
   stage.addEventListener('click', e => {
+    // A long press already answered this gesture; the browser still sends the
+    // click, and letting it through would consume a round.
+    if (longPressed) { longPressed = false; return; }
     if (!tapOk()) return;
+    hideInspect();
     const t = tileFromEvent(e);
     clickTile(t.c, t.r); draw();
   });
+
+  // ---- long press to inspect ---------------------------------------------
+  // The only safe, non-committal gesture on the board. Without it, the way to
+  // find out about a tile is to tap it, and tapping spends the round.
+
+  const inspectEl = document.getElementById('inspect');
+  let pressTimer = 0, pressAt = null, longPressed = false;
+
+  function endPress() { clearTimeout(pressTimer); pressTimer = 0; pressAt = null; }
+  function hideInspect() { inspectEl.classList.remove('open'); }
+
+  function showInspect(c, r) {
+    const foe = foeAt(c, r);
+    const prop = propAt(c, r);
+    let html;
+    if (foe) {
+      const it = previewIntent(foe);
+      html = `<b>${foe.kind}</b><span>${foe.type}</span>
+              <span>VITAE ${foe.hp}/${foe.vitae}</span>
+              <span>ATK ${foe.atk} · DEF ${foe.def}</span>
+              <span class="${foe.awake ? 'bad' : ''}">${
+                !foe.awake ? 'DORMANT'
+                : it && it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
+                : 'CLOSING IN'}</span>`;
+    } else if (c === state.circle.c && r === state.circle.r) {
+      html = '<b>THE CIRCLE</b>' + state.circle.members.map(m =>
+        `<span>${m.name} — V ${m.hp}/${m.vitae} · P ${m.pn}/${m.pneuma}</span>`).join('');
+    } else if (prop && (!prop.hidden || state.revealed.has(key(c, r)))) {
+      html = `<b>${prop.label}</b><span>${prop.kind.toUpperCase()}</span>`;
+    } else if (walkable.has(key(c, r))) {
+      html = `<b>FLOOR ${c},${r}</b><span>NOTHING HERE</span>`;
+    } else {
+      return;
+    }
+    inspectEl.innerHTML = html;
+    inspectEl.classList.add('open');
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    endPress();
+    pressAt = { x: e.clientX, y: e.clientY };
+    pressTimer = setTimeout(() => {
+      pressTimer = 0;
+      longPressed = true;
+      const t = tileFromEvent(e);
+      showInspect(t.c, t.r);
+    }, 450);
+  });
+  stage.addEventListener('pointerup', endPress);
+  stage.addEventListener('pointercancel', endPress);
+  stage.addEventListener('pointermove', e => {
+    if (!pressTimer || !pressAt) return;
+    if (Math.abs(e.clientX - pressAt.x) > 10 || Math.abs(e.clientY - pressAt.y) > 10) endPress();
+  });
+  inspectEl.addEventListener('click', hideInspect);
+
+  // ---- two-finger pan and pinch -------------------------------------------
+  // Two fingers rather than one, so this never competes with a tap-to-step.
+
+  let pinch = null;
+  stage.addEventListener('touchstart', e => {
+    if (e.touches.length !== 2) return;
+    endPress();
+    const [a, b] = e.touches;
+    pinch = {
+      dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+      mx: (a.clientX + b.clientX) / 2,
+      my: (a.clientY + b.clientY) / 2,
+      zoom: view.zoom,
+    };
+    if (!view.free) {
+      view.free = true;
+      view.ox = (state.circle.c + .5) * T;
+      view.oy = (state.circle.r + .5) * T;
+    }
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    const [a, b] = e.touches;
+    const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const mx = (a.clientX + b.clientX) / 2, my = (a.clientY + b.clientY) / 2;
+    const box = stage.getBoundingClientRect();
+    const scale = Math.min(box.width / cam.w, box.height / cam.h);
+    view.ox -= (mx - pinch.mx) / scale;
+    view.oy -= (my - pinch.my) / scale;
+    view.zoom = Math.max(0.55, Math.min(2.2, pinch.zoom * (dist / pinch.dist)));
+    pinch.mx = mx; pinch.my = my;
+    draw();
+  }, { passive: true });
+
+  stage.addEventListener('touchend', () => { pinch = null; }, { passive: true });
 
   // The primary action button. It used to hide whenever a member was selected \u2014
   // but selecting a member is HOW you open the fan, so COMMIT vanished exactly
@@ -1224,6 +1388,31 @@
   cancelEl.addEventListener('click', () => {
     if (!tapOk()) return;
     backOut(); draw();
+  });
+
+  // While aiming, every valid foe as a chip, nearest first. Pixel-hunting a
+  // 44px enemy tile was the only way to fire on touch, and ENTER's "hit the
+  // nearest" shortcut existed but was keyboard-only — the prompt advertised it
+  // to players who had no ENTER key.
+  const targetsEl = document.getElementById('targets');
+  function syncTargets() {
+    const on = !!state.pending && !finished() && !state.modal;
+    targetsEl.classList.toggle('open', on);
+    if (!on) { targetsEl.innerHTML = ''; return; }
+    const list = validTargets(state.pending.op)
+      .slice().sort((a, b) => cheb(a, state.circle) - cheb(b, state.circle));
+    targetsEl.innerHTML = list.map((f, i) =>
+      `<button class="tgt${i === 0 ? ' near' : ''}" data-foe="${f.id}">
+         ${f.kind}<em>${f.hp}V · ${cheb(f, state.circle)}T</em>
+       </button>`).join('');
+  }
+  targetsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.tgt');
+    if (!btn || !state.pending || !tapOk()) return;
+    const foe = foeById(+btn.dataset.foe);
+    if (!foe || foe.hp <= 0) return;
+    commitMember(state.pending.member, state.pending.op, foe.id);
+    draw();
   });
 
   // On touch, the "OPEN" tag over the token is the button for chests and

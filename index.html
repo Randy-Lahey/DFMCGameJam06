@@ -74,7 +74,6 @@
 
   @media (max-width:900px){
     #body{grid-template-columns:1fr}
-    aside{display:none}
     #hud{grid-template-columns:1fr}
     .hud-side{border-left:0;border-top:1px solid var(--edge)}
   }
@@ -446,6 +445,52 @@
   }
   #toast.open{opacity:1;transform:translateX(-50%) translateY(0)}
 
+  /* ---- target chips while aiming ----
+     Firing used to mean pixel-hunting a 44px enemy tile. ENTER's "hit the
+     nearest" existed but was keyboard-only, and the prompt advertised it. */
+  #targets{
+    position:absolute;left:50%;bottom:62px;z-index:6;
+    transform:translateX(-50%) translateY(8px);
+    display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
+    max-width:min(94%,420px);
+    opacity:0;pointer-events:none;visibility:hidden;
+    transition:opacity .18s ease, transform .22s cubic-bezier(.16,.9,.24,1);
+  }
+  #targets.open{opacity:1;pointer-events:auto;visibility:visible;
+                transform:translateX(-50%) translateY(0)}
+  .tgt{
+    font:inherit;font-size:10px;letter-spacing:.16em;cursor:pointer;
+    min-height:44px;padding:0 14px;
+    display:flex;flex-direction:column;justify-content:center;gap:1px;
+    color:var(--bone);background:rgba(4,5,10,.94);
+    border:1px solid var(--edge-i);
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+  }
+  .tgt em{font-style:normal;font-size:8.5px;letter-spacing:.1em;opacity:.75}
+  .tgt.near{border-color:var(--gold);color:var(--gold)}
+  .tgt:active{background:rgba(227,179,71,.28)}
+
+  /* ---- long-press inspect card ----
+     The safe, non-committal counterpart to a tap. Without it the only way to
+     learn about a tile is to tap it, and tapping spends the round. */
+  #inspect{
+    position:absolute;left:50%;top:50%;z-index:8;
+    transform:translate(-50%,-50%) scale(.97);
+    display:grid;gap:3px;padding:14px 18px;min-width:190px;
+    font-size:10px;letter-spacing:.14em;
+    color:var(--bone);background:rgba(4,5,10,.97);
+    border:1px solid var(--gold);cursor:pointer;
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    opacity:0;pointer-events:none;visibility:hidden;
+    transition:opacity .16s ease, transform .2s cubic-bezier(.16,.9,.24,1);
+  }
+  #inspect.open{opacity:1;pointer-events:auto;visibility:visible;
+                transform:translate(-50%,-50%) scale(1)}
+  #inspect b{font-weight:400;color:var(--gold);letter-spacing:.24em;font-size:11px;
+             margin-bottom:4px}
+  #inspect span{opacity:.8;font-size:9.5px}
+  #inspect span.bad{color:var(--blood);opacity:1}
+
   /* ---- press feedback ----
      -webkit-tap-highlight-color is transparent and every affordance was
      :hover-only, so a tap gave nothing back at all. Hover is also wrapped,
@@ -469,8 +514,34 @@
     0%,100%{transform:none}33%{transform:translateX(-3px)}66%{transform:translateX(3px)}
   }
 
-  /* touch devices need no keyboard legend */
-  @media (pointer:coarse){ .keys{display:none} }
+  /* Touch gets its own legend, and loses the keycap glyphs — the hotkey
+     numeral on every chip was a 13px grid column spent on an unusable
+     affordance. */
+  .keys.touch{display:none}
+  @media (pointer:coarse){
+    .keys.kb{display:none}
+    .keys.touch{display:flex;opacity:.72;font-size:10px}
+    .chip{grid-template-columns:0 1fr auto}
+    .chip .hk,#hint .k{display:none}
+  }
+
+  /* Below 900px the record panel is hidden entirely, which removed the game's
+     only causal feedback — including STRIKES EMPTY AIR, the payoff line for
+     the whole intent-before-movement design. Two lines of it come back as a
+     ticker in the letterbox band under the map, where it occludes nothing. */
+  @media (max-width:900px){
+    #body{position:relative}
+    /* Top of the map, not the bottom: the bottom letterbox band is where
+       CANCEL and COMMIT live. */
+    aside{position:absolute;left:0;right:0;top:0;
+          border-left:0;pointer-events:none;z-index:3}
+    #logwrap{padding:6px 12px;
+             background:linear-gradient(180deg,rgba(4,5,10,.92) 40%,transparent)}
+    #logwrap h2{display:none}
+    #log{opacity:1;font-size:9.5px;line-height:1.6;overflow:hidden}
+    #log .line{opacity:.85}
+    #log .line:nth-child(n+3){display:none}
+  }
 
   /* landscape phones: reclaim vertical space for the map */
   @media (max-height:480px){
@@ -516,6 +587,8 @@
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
       <div id="toast" role="status" aria-live="polite"></div>
+      <div id="targets" role="group" aria-label="Targets in range"></div>
+      <div id="inspect"></div>
       <button id="cancel"></button>
       <button id="confirm"></button>
     </div>
@@ -535,10 +608,14 @@
       <div id="bag" class="bag"></div>
       <div id="effects" class="effects"></div>
       <div id="prompt" class="prompt"></div>
-      <div class="keys">
+      <div class="keys kb">
         <span><b>WASD</b> MOVE</span><span><b>E</b> ACT</span>
         <span><b>1-5</b> OPERATION</span><span><b>SPACE</b> COMMIT</span>
         <span><b>ESC</b> CANCEL</span>
+      </div>
+      <div class="keys touch">
+        <span><b>TAP</b> TILE, THEN CONFIRM</span><span><b>TAP</b> NAMEPLATE TO ACT</span>
+        <span><b>HOLD</b> TILE TO INSPECT</span><span><b>TWO FINGERS</b> LOOK AROUND</span>
       </div>
     </div>
   </footer>
