@@ -63,6 +63,7 @@
     aiming: null,                  // member name currently picking a target
     pending: null,                 // { op, member } while aiming
     hover: null,                   // { c, r } under the cursor
+    staged: null,                  // { dc, dr } step awaiting CONFIRM (touch only)
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
     cd: {},                        // { opName: rounds remaining }
@@ -137,6 +138,20 @@
   function log(text, tone) {
     state.log.unshift({ text, tone: tone || '' });
     if (state.log.length > 60) state.log.pop();
+  }
+
+  // A refusal the player must actually see. log() alone is not enough: the
+  // record panel is hidden below 900px, so on a phone a rejected tap produced
+  // no output at all. Looked up lazily because this runs before the DOM refs.
+  let toastTimer = 0;
+  function warn(text, tone) {
+    log(text, tone);
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('open');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('open'), 2000);
   }
 
   // -------------------------------------------------------------- combat
@@ -354,7 +369,7 @@
     for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
     state.turn++;
     state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
-    state.sel = null;
+    state.sel = null; state.staged = null; state.hover = null;
     checkEnd();
   }
 
@@ -476,10 +491,10 @@
     const op = entry.op;
     if (state.mode === 'move') state.mode = 'act';
     state.sel = m.name;
-    if (!affordable(m, op)) { log(`${m.name} CANNOT PAY FOR ${op.name}.`); return; }
+    if (!affordable(m, op)) { warn(`${m.name} CANNOT PAY FOR ${op.name}.`); return; }
 
     if (op.targets === 'circle') { commitMember(m, op); return; }
-    if (!validTargets(op).length) { log(`${op.name} HAS NO TARGET IN RANGE.`); return; }
+    if (!validTargets(op).length) { warn(`${op.name} HAS NO TARGET IN RANGE.`); return; }
     if (op.targets === 'adjacent') { commitMember(m, op); return; }   // no aiming
     state.pending = { op, member: m };
     state.aiming = m.name;
@@ -499,17 +514,63 @@
   function clickTile(c, r) {
     if (state.pending) {
       const foe = foeAt(c, r);
-      if (!foe) return;
-      if (cheb(foe, state.circle) > state.pending.op.range) return;
+      if (!foe) { warn('TAP AN ENEMY INSIDE THE WASH, OR CANCEL.'); return; }
+      if (cheb(foe, state.circle) > state.pending.op.range) {
+        warn(foe.kind + ' IS OUT OF RANGE.');
+        return;
+      }
       commitMember(state.pending.member, state.pending.op, foe.id);
       return;
     }
-    // Touch movement. An orthogonal neighbour steps there (same contract as
-    // WASD, via moveInput); the circle's own tile holds the ground (SPACE).
     if (state.mode === 'act') return;
+
     const dc = c - state.circle.c, dr = r - state.circle.r;
-    if (dc === 0 && dr === 0) { passOrHold(); return; }
-    if (Math.abs(dc) + Math.abs(dr) === 1) moveInput(dc, dr);
+
+    // The token's own tile used to hold the ground. It is the largest, most
+    // salient object on the board, so "tap the thing I care about" spent the
+    // round standing still and taking a free hit. HOLD is a labelled button now.
+    if (dc === 0 && dr === 0) { state.staged = null; return; }
+
+    if (Math.abs(dc) + Math.abs(dr) !== 1) {
+      // Diagonal and distant taps were silent, which reads as a dropped input.
+      state.staged = null;
+      if (walkable.has(key(c, r))) warn('THE CIRCLE STEPS ONE TILE, NOT DIAGONALLY.');
+      return;
+    }
+
+    // A mouse steps on click, as it always has. A finger stages the step and
+    // confirms it, because on touch a stray tap is both likely and irreversible:
+    // foe intents lock BEFORE movement, so a wasted round hands every awake foe
+    // a free approach and every adjacent foe a hit the right step would whiff.
+    if (!isCoarse()) { moveInput(dc, dr); return; }
+    if (state.staged && state.staged.dc === dc && state.staged.dr === dr) {
+      commitStaged();
+      return;
+    }
+    stageStep(dc, dr);
+  }
+
+  function stageStep(dc, dr) {
+    const nc = state.circle.c + dc, nr = state.circle.r + dr;
+    if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
+    if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
+    state.staged = { dc, dr };
+  }
+
+  function commitStaged() {
+    if (!state.staged) return;
+    const { dc, dr } = state.staged;
+    state.staged = null;
+    moveInput(dc, dr);
+  }
+
+  // The CANCEL button unwinds the whole state in one tap. ESC keeps its ladder
+  // (cancel below) because on desktop that is already the established feel.
+  function backOut() {
+    if (state.pending) { state.pending = null; state.aiming = null; state.hover = null; return; }
+    if (state.staged) { state.staged = null; return; }
+    state.sel = null;
+    if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
   }
 
   // Keyboard fallback: ENTER fires at the nearest enemy in range.
@@ -522,7 +583,8 @@
   }
 
   function cancel() {
-    if (state.pending) { state.pending = null; state.aiming = null; return; }
+    if (state.pending) { state.pending = null; state.aiming = null; state.hover = null; return; }
+    if (state.staged) { state.staged = null; return; }
     if (state.sel) { state.sel = null; return; }
     if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
   }
@@ -545,8 +607,8 @@
   function moveInput(dc, dr) {
     if (blocked() || state.mode === 'act') return;
     const nc = state.circle.c + dc, nr = state.circle.r + dr;
-    if (foeAt(nc, nr)) { log('AN ENEMY BLOCKS THE WAY.'); return; }
-    if (!walkable.has(key(nc, nr))) return;
+    if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
+    if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
     resolveRound({ kind: 'step', dc, dr });
   }
 
@@ -673,6 +735,29 @@
     }).join('');
   }
 
+  // The four legal steps, outlined. Nothing on the board used to say which
+  // tiles were the move buttons, so a diagonal tap did nothing with no feedback.
+  function moveLayer() {
+    if (state.mode !== 'move' || state.pending || finished() || !isCoarse()) return '';
+    return [[0, -1], [-1, 0], [0, 1], [1, 0]].map(([dc, dr]) => {
+      const c = state.circle.c + dc, r = state.circle.r + dr;
+      if (!walkable.has(key(c, r)) || foeAt(c, r)) return '';
+      if (state.staged && state.staged.dc === dc && state.staged.dr === dr) return '';
+      return `<polygon points="${plate(c, r, 9)}" fill="none" stroke="var(--cyan)"
+                       stroke-width="1.2" opacity=".35"/>`;
+    }).join('');
+  }
+
+  // Where a staged step would land, before it is paid for.
+  function stagedLayer() {
+    if (!state.staged) return '';
+    const c = state.circle.c + state.staged.dc, r = state.circle.r + state.staged.dr;
+    return `<polygon points="${plate(c, r, 3)}" fill="var(--gold)" opacity=".14"/>
+            <polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)"
+                     stroke-width="2" stroke-dasharray="6 4" opacity=".9"/>
+            <g transform="translate(${c * T},${r * T})" opacity=".38">${S.party()}</g>`;
+  }
+
   function circleLayer() {
     const { c, r } = state.circle;
     return `<polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
@@ -729,6 +814,7 @@
   function syncRoster() {
     state.circle.members.forEach(m => {
       const c = cards[m.name];
+      c.el.classList.toggle('sel', state.sel === m.name);
       c.el.classList.toggle('acting', state.aiming === m.name);
       c.el.classList.toggle('done', state.mode === 'act' && hasActed(m));
       c.el.classList.toggle('severed', m.hp <= 0);
@@ -968,13 +1054,15 @@
   function draw() {
     updateCamera();
     stage.innerHTML = backdrop() + floorLayer() + propLayer() + aimLayer()
-                    + dropLayer() + foeLayer() + circleLayer();
+                    + moveLayer() + dropLayer() + foeLayer()
+                    + stagedLayer() + circleLayer();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
     document.getElementById('turn-value').textContent = String(state.turn).padStart(3, '0');
 
     syncRoster();
     syncFan();
     syncConfirm();
+    syncCancel();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -1085,19 +1173,53 @@
     clickTile(t.c, t.r); draw();
   });
 
+  // The primary action button. It used to hide whenever a member was selected \u2014
+  // but selecting a member is HOW you open the fan, so COMMIT vanished exactly
+  // when the prompt was telling the player to press it. It is now visible in
+  // move rounds too, because holding the ground is a real play and used to be
+  // reachable only by tapping your own token (or SPACE).
   const confirmEl = document.getElementById('confirm');
   function syncConfirm() {
-    const show = state.mode === 'act' && !finished() && !state.pending && !state.sel;
+    const show = !finished() && !state.modal && !state.pending;
     confirmEl.classList.toggle('open', show);
     if (!show) return;
-    const idle = pendingMembers().length, stuck = isStuck();
-    confirmEl.classList.toggle('ready', idle === 0 || stuck);
-    confirmEl.textContent =
-      stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
-      : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
-      : 'COMMIT ROUND';
+
+    if (state.mode === 'act') {
+      const idle = pendingMembers().length, stuck = isStuck();
+      confirmEl.classList.toggle('ready', idle === 0 || stuck);
+      confirmEl.textContent =
+        stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
+        : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
+        : 'COMMIT ROUND';
+      return;
+    }
+    confirmEl.classList.toggle('ready', !!state.staged);
+    confirmEl.textContent = state.staged ? 'CONFIRM STEP' : 'HOLD GROUND';
   }
-  confirmEl.addEventListener('click', () => { if (!tapOk()) return; passOrHold(); draw(); });
+  confirmEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    if (state.staged) commitStaged(); else passOrHold();
+    draw();
+  });
+
+  // One tap out of aiming, out of a staged step, out of the act round.
+  const cancelEl = document.getElementById('cancel');
+  function syncCancel() {
+    const show = !finished() && !state.modal &&
+      (!!state.pending || !!state.staged ||
+       (state.mode === 'act' && !state.queued.length));
+    cancelEl.classList.toggle('open', show);
+    if (!show) return;
+    cancelEl.classList.toggle('hot', !!state.pending);
+    cancelEl.textContent =
+      state.pending ? '\u00d7 CANCEL'
+      : state.staged ? '\u00d7 CLEAR'
+      : '\u00d7 BACK';
+  }
+  cancelEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    backOut(); draw();
+  });
 
   // On touch, the "OPEN" tag over the token is the button for chests and
   // stairs (the roster no longer routes to openAct).

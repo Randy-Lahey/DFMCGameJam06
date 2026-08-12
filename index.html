@@ -10,6 +10,12 @@
     --void:#04050A; --cyan:#46F0DC; --gold:#E3B347;
     --shell:#8B5BF2; --blood:#D6402A; --bone:#E7E2D2;
     --edge:rgba(70,240,220,.22);
+    /* --edge composites to ~1.6:1 on --void. Fine as a decorative rule, far
+       too weak as the only boundary of a control the player has to find. */
+    --edge-i:rgba(70,240,220,.5);
+    /* --shell reaches only 4.73:1 at full opacity, so it is not viable as a
+       text colour. Keep it for bars and fills; use this for type. */
+    --shell-txt:#A98BF7;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -187,10 +193,10 @@
     transition:background .15s ease,color .15s ease,border-color .15s ease;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
   }
-  .box:hover{background:rgba(70,240,220,.12)}
   .box.yes{border-color:var(--gold);color:var(--gold)}
-  .box.yes:hover{background:rgba(227,179,71,.18)}
-  .box.no{border-color:var(--edge)}
+  /* NO used to keep --edge (~1.6:1) while YES was gold (10.4:1), which made the
+     irreversible choice the visually dominant one. */
+  .box.no{border-color:var(--edge-i)}
 
   .winbox{padding:44px 60px;border-color:var(--gold)}
   .win-title{
@@ -294,7 +300,6 @@
     background:rgba(231,226,210,.05);
     transition:background .14s ease, border-color .14s ease;
   }
-  .chip:hover{background:rgba(70,240,220,.14)}
   .chip .hk{color:var(--tint);opacity:.75;font-size:9px}
   .chip .cn{letter-spacing:.14em;white-space:nowrap}
   .chip .cc{color:var(--shell);font-size:9px;letter-spacing:.06em}
@@ -304,8 +309,7 @@
   }
   .chip:hover .cnote{opacity:.8}
   .chip.aiming .cnote{opacity:.85;color:var(--gold)}
-  .chip.locked{opacity:.3;cursor:not-allowed;border-left-color:var(--bone)}
-  .chip.locked:hover{background:rgba(231,226,210,.05)}
+  .chip.locked{opacity:.55;cursor:not-allowed;border-left-color:var(--bone)}
   .chip.locked .cc{color:var(--blood)}
   .chip.aiming{
     background:rgba(227,179,71,.2);border-left-color:var(--gold);
@@ -325,6 +329,7 @@
   .prompt.warn{color:var(--gold);opacity:1;border-color:var(--gold)}
 
   /* card states */
+  .unit.sel{border-color:var(--gold);background:rgba(227,179,71,.06)}
   .unit.acting{border-color:var(--gold);background:rgba(227,179,71,.08)}
   .unit.done{opacity:.4}
   .unit.severed{opacity:.28;border-color:var(--blood)}
@@ -375,14 +380,72 @@
     color:var(--bone);background:rgba(4,5,10,.92);
     border:1px solid var(--edge);cursor:pointer;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-    opacity:0;pointer-events:none;
+    opacity:0;pointer-events:none;visibility:hidden;
     transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1),
                color .2s ease, border-color .2s ease, background .2s ease;
   }
-  #confirm.open{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+  #confirm.open{opacity:1;pointer-events:auto;visibility:visible;
+                transform:translateX(-50%) translateY(0)}
   #confirm.ready{
     color:var(--gold);border-color:var(--gold);background:rgba(227,179,71,.14);
     animation:nudge 1.15s ease-in-out infinite;
+  }
+
+  /* ---- CANCEL / BACK: the one way out of every committed-looking state ----
+     Aiming used to be a dead end on touch — the fan collapsed to
+     pointer-events:none, COMMIT hid itself, taps on non-enemy tiles were
+     silently swallowed, and cancel() was bound to ESC only. */
+  #cancel{
+    position:absolute;left:12px;bottom:10px;z-index:5;
+    min-height:44px;padding:0 18px;
+    font:inherit;letter-spacing:.24em;font-size:10.5px;
+    color:var(--bone);background:rgba(4,5,10,.92);
+    border:1px solid var(--edge-i);cursor:pointer;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    opacity:0;pointer-events:none;visibility:hidden;
+    transform:translateY(8px);
+    transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1);
+  }
+  #cancel.open{opacity:1;pointer-events:auto;visibility:visible;transform:translateY(0)}
+  #cancel.hot{color:var(--blood);border-color:var(--blood)}
+
+  /* ---- refusal toast ----
+     Every rejection path used to be log()-only, and the log is hidden under
+     900px, so a refused tap produced nothing at all — indistinguishable from
+     a dropped input, which makes players tap again harder. */
+  #toast{
+    position:absolute;left:50%;bottom:62px;z-index:7;
+    transform:translateX(-50%) translateY(6px);
+    padding:8px 14px;max-width:min(92%,340px);text-align:center;
+    font-size:10px;letter-spacing:.18em;line-height:1.4;
+    color:var(--gold);background:rgba(4,5,10,.96);
+    border:1px solid var(--gold);pointer-events:none;
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    opacity:0;transition:opacity .16s ease, transform .22s cubic-bezier(.16,.9,.24,1);
+  }
+  #toast.open{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---- press feedback ----
+     -webkit-tap-highlight-color is transparent and every affordance was
+     :hover-only, so a tap gave nothing back at all. Hover is also wrapped,
+     because iOS leaves it stuck on the last-tapped element. */
+  @media (hover:hover){
+    .box:hover{background:rgba(70,240,220,.12)}
+    .box.yes:hover{background:rgba(227,179,71,.18)}
+    .chip:hover{background:rgba(70,240,220,.14)}
+    .chip.locked:hover{background:rgba(231,226,210,.05)}
+  }
+  @media (hover:none){
+    .chip:active{background:rgba(70,240,220,.28);border-left-color:var(--gold)}
+    .chip.locked:active{background:rgba(214,64,42,.18);animation:refuse .18s ease}
+    .box:active{background:rgba(70,240,220,.22)}
+    .box.yes:active{background:rgba(227,179,71,.30)}
+    #confirm:active{background:rgba(227,179,71,.28);border-color:var(--gold)}
+    #cancel:active{background:rgba(214,64,42,.22);border-color:var(--blood)}
+    .unit:active{border-color:var(--gold)}
+  }
+  @keyframes refuse{
+    0%,100%{transform:none}33%{transform:translateX(-3px)}66%{transform:translateX(3px)}
   }
 
   /* touch devices need no keyboard legend */
@@ -431,6 +494,8 @@
       <div id="floaters"></div>
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
+      <div id="toast" role="status" aria-live="polite"></div>
+      <button id="cancel"></button>
       <button id="confirm"></button>
     </div>
 
