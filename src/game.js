@@ -714,7 +714,7 @@
     });
 
     rosterEl.addEventListener('click', e => {
-      if (blocked()) return;
+      if (blocked() || !tapOk()) return;
       const card = e.target.closest('.unit');
       if (!card) return;
       const m = byName(card.dataset.member);
@@ -776,6 +776,7 @@
       const chip = e.target.closest('.chip');
       if (!chip) return;
       e.stopPropagation();
+      if (!tapOk()) return;
       chooseOp(+chip.dataset.slot);
       draw();
     });
@@ -873,6 +874,9 @@
     hintEl.classList.toggle('open', !!(aim || it));
     hintEl.classList.toggle('aim', !!aim);
     hintEl.classList.toggle('locked', !!(it && it.locked));
+    // Only interactive when there is actually something here to open. Any other
+    // state must stay click-through, or the tag blocks the tile behind it.
+    hintEl.classList.toggle('actionable', !aim && !!it && !it.locked);
     if (!aim && !it) return;
     hintEl.innerHTML = aim
       ? `<span class="k">\u2316</span> ${aim.member.name} \u00b7 ${aim.op.name}`
@@ -1018,6 +1022,23 @@
 
   // -------------------------------------------------------------- input
 
+  // Coarse pointers get the safe variants of everything: staged movement,
+  // no hover, tap-sized controls. Read live so a hybrid device that gains a
+  // mouse mid-session is not stuck in touch mode.
+  const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
+
+  // One clock shared by EVERY pointer entry point. Same-element double-fire and
+  // cross-element fall-through (a control drops pointer-events while it is still
+  // fading, so the second tap lands on the map) are the same bug, and a shared
+  // clock is what fixes both. Keyboard paths are deliberately not gated.
+  let lastTap = 0;
+  function tapOk() {
+    const t = Date.now();
+    if (t - lastTap < 200) return false;
+    lastTap = t;
+    return true;
+  }
+
   const MOVES = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
 
   window.addEventListener('keydown', e => {
@@ -1059,6 +1080,7 @@
   });
   stage.addEventListener('mouseleave', () => { if (state.hover) { state.hover = null; draw(); } });
   stage.addEventListener('click', e => {
+    if (!tapOk()) return;
     const t = tileFromEvent(e);
     clickTile(t.c, t.r); draw();
   });
@@ -1075,12 +1097,14 @@
       : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
       : 'COMMIT ROUND';
   }
-  confirmEl.addEventListener('click', () => { passOrHold(); draw(); });
+  confirmEl.addEventListener('click', () => { if (!tapOk()) return; passOrHold(); draw(); });
 
-  // On touch, the "E \u2014 OPEN" tag over the token is the button for
-  // chests and stairs (the roster no longer routes to openAct).
+  // On touch, the "OPEN" tag over the token is the button for chests and
+  // stairs (the roster no longer routes to openAct).
   hintEl.addEventListener('click', () => {
-    if (state.pending) return;
+    if (!tapOk()) return;
+    const it = interactable();
+    if (state.pending || !it || it.locked) return;
     openAct(); draw();
   });
 

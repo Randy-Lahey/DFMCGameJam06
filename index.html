@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#04050A">
 <title>DAEMONWARE — FLOOR 01</title>
 <style>
   :root{
@@ -19,7 +20,9 @@
     touch-action:manipulation;              /* no double-tap zoom delay */
     -webkit-tap-highlight-color:transparent;
   }
-  #app{height:100vh;display:grid;grid-template-rows:44px 1fr auto;min-height:0}
+  /* svh, not dvh: dvh resizes as the mobile toolbar hides/shows, and draw()
+     only re-runs on resize, so dvh causes the camera to jump mid-tap. */
+  #app{height:100vh;height:100svh;display:grid;grid-template-rows:44px 1fr auto;min-height:0}
 
   header{
     display:flex;align-items:center;justify-content:space-between;
@@ -200,10 +203,15 @@
   .win-stats div{display:flex;justify-content:space-between;gap:34px}
   .win-stats b{font-weight:400;color:var(--gold)}
 
-  /* ---- interaction hint: small tag above the token ---- */
+  /* ---- interaction hint: tag above the token ----
+     This tag is the ONLY touch route to chests and stairs, so when it has
+     something to act on it must be a real, finger-sized button. It stays
+     pointer-events:none in every other state, or it would eat taps aimed at
+     the tile behind it (the tag renders over the tile north of the token). */
   #hint{
     position:absolute;z-index:4;pointer-events:none;
-    padding:4px 8px;font-size:9.5px;letter-spacing:.2em;white-space:nowrap;
+    min-height:44px;display:flex;align-items:center;
+    padding:0 14px;font-size:11px;letter-spacing:.2em;white-space:nowrap;
     color:var(--gold);background:rgba(4,5,10,.94);
     border:1px solid var(--gold);
     clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
@@ -212,6 +220,8 @@
   }
   #hint.open{opacity:1;transform:translate(-50%,-100%) translateY(0);
              animation:hintbob 2.2s ease-in-out infinite}
+  #hint.open.actionable{pointer-events:auto;cursor:pointer}
+  #hint.open.actionable:active{background:var(--gold);color:var(--void)}
   #hint.aim{color:var(--gold);border-color:var(--gold)}
   #hint.locked{color:var(--blood);border-color:var(--blood);animation:none}
   #hint.aim .k{border-color:var(--gold);color:var(--gold)}
