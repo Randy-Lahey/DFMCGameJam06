@@ -32,9 +32,21 @@ function stubEl() {
     set(o, k, v) { o[k] = v; return true; },
   });
 }
+// IDs that actually exist in index.html, and that appear BEFORE the script
+// tags -- i.e. the ones present in the DOM when game.js runs. Anything else
+// must come back null, or a missing element looks identical to a present one
+// and the stub silently hides the exact class of bug it should catch.
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const scriptAt = html.indexOf('<script');
+const liveIds = new Set(
+  [...html.slice(0, scriptAt).matchAll(/id="([^"]+)"/g)].map(m => m[1]));
+
 const byId = {};
 global.document = {
-  getElementById: id => (byId[id] = byId[id] || stubEl()),
+  getElementById: id => {
+    if (!liveIds.has(id)) return null;
+    return (byId[id] = byId[id] || stubEl());
+  },
   createElement: () => stubEl(),
   createElementNS: () => stubEl(),
   querySelector: () => stubEl(),
@@ -61,6 +73,10 @@ const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit } = w
 const B = window.BALANCE;
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.error('FAIL: ' + msg); } };
+
+// ------------------------------------------------------- DOM availability
+ok(liveIds.has('inv'), 'inventory overlay exists in the DOM before game.js runs');
+ok(liveIds.has('bag'), 'HUD satchel line exists in the DOM before game.js runs');
 
 // ---------------------------------------------------------------- loadout
 ok(state.loadout.CALX.length === 2 && state.loadout.CINIS.length === 2,
