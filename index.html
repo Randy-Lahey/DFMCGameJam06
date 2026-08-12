@@ -753,6 +753,16 @@
     box-shadow:inset 0 0 0 1.5px var(--cyan),0 0 12px rgba(70,240,220,.16);}
   #inv .ibay.blood{color:var(--blood);box-shadow:inset 0 0 0 1px rgba(214,64,42,.55);
     background:rgba(214,64,42,.07);}
+  /* a seated flux is pullable: the pull affordance only shows on hover so the
+     bay still reads as a component at rest, not as a button */
+  #inv .ibay.seated{cursor:pointer;}
+  #inv .ibay .ipull{margin-left:auto;font-size:12px;line-height:1;opacity:0;
+    transition:opacity .12s;}
+  #inv .ibay.seated:hover{box-shadow:inset 0 0 0 1.5px var(--blood);
+    background:rgba(214,64,42,.1);color:var(--blood);}
+  #inv .ibay.seated:hover .ipull{opacity:.85;}
+  #inv .ibay.seated:focus-visible{outline:1px solid var(--cyan);outline-offset:1px;}
+  #inv .ibay.seated:hover svg{stroke:var(--blood);}
 
   /* right rail: flow arrow with one lamp per bay */
   #inv .irail{width:12px;flex:none;display:flex;flex-direction:column;
@@ -953,10 +963,10 @@
 </div>
 
 <div id="inv" aria-hidden="false"></div>
-<script src="data/floor01.js?v=18b892d2"></script>
-<script src="data/balance.js?v=18b892d2"></script>
-<script src="data/fxsheets.js?v=18b892d2"></script>
-<script src="src/sprites.js?v=18b892d2"></script>
-<script src="src/game.js?v=18b892d2"></script>
+<script src="data/floor01.js?v=961f2075"></script>
+<script src="data/balance.js?v=961f2075"></script>
+<script src="data/fxsheets.js?v=961f2075"></script>
+<script src="src/sprites.js?v=961f2075"></script>
+<script src="src/game.js?v=961f2075"></script>
 </body>
 </html>

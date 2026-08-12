@@ -1802,9 +1802,16 @@
       const m = state.circle.members.find(x => x.name === who) || {};
       const banks = state.loadout[who].map((sl, si) => {
         const elig = sel && sel.kind === 'DATA' && B.banks[sel.bank].type === ptype;
+        // One flux of a kind per bank: a bay only lights if this bank isn't
+        // already running that flux. Duplicates across different banks stay
+        // legal — stacking the same rider inside one bank is what's out.
+        const dup = sel && sel.kind === 'FLUX' && sl.fluxes.includes(sel.flux);
         const bays = sl.fluxes.map((f, fi) => f
-          ? `<div class="ibay${f === 'FVLMINANS' ? ' blood' : ''}">${fluxGlyph(f)}${f}</div>`
-          : `<div class="ibay empty${sel && sel.kind === 'FLUX' ? ' elig' : ''}"
+          ? `<div class="ibay seated${f === 'FVLMINANS' ? ' blood' : ''}"
+                  data-who="${who}" data-slot="${si}" data-bay="${fi}"
+                  role="button" tabindex="0" aria-label="VNSEAT ${f}"
+                  >${fluxGlyph(f)}${f}<span class="ipull">\u00d7</span></div>`
+          : `<div class="ibay empty${sel && sel.kind === 'FLUX' && !dup ? ' elig' : ''}"
                   data-who="${who}" data-slot="${si}" data-bay="${fi}">\u2014 BAY \u2014</div>`).join('');
         const lamps = sl.fluxes.map(f =>
           `<span class="ilamp${f ? (f === 'FVLMINANS' ? ' blood' : '') : ' off'}"></span>
@@ -1843,11 +1850,13 @@
       cols = bankSpec(sl.bank, sl.fluxes, true);
     }
 
-    let insp = 'SELECT AN ITEM \u2014 ELIGIBLE SOCKETS AND BAYS SIGNAL.';
+    let insp = 'SELECT AN ITEM \u2014 ELIGIBLE SOCKETS AND BAYS SIGNAL.'
+             + ' CLICK A SEATED FLVX TO PVLL IT BACK.';
     if (sel && sel.kind === 'DATA') {
       insp = `<b>${sel.bank}</b> \u00b7 ${B.operations[sel.bank].note} \u00b7 CLICK A GLOWING SOCKET TO SWAP.`;
     } else if (sel && sel.kind === 'FLUX') {
-      insp = `<b>${sel.flux}</b> \u00b7 ${B.fluxes[sel.flux].note} CLICK A GLOWING BAY TO SEAT.`;
+      insp = `<b>${sel.flux}</b> \u00b7 ${B.fluxes[sel.flux].note}` +
+             ` CLICK A GLOWING BAY TO SEAT \u00b7 ONE PER BANK.`;
     }
     const cost = aggroLive()
       ? 'FOES AWAKE \u2014 A REFIT SPENDS THAT DAEMON\u2019S ACTION THIS ROVND'
@@ -1921,6 +1930,7 @@
       <div class="ifoot">
         <span class="fl">${cost}</span>
         <span class="fr"><span><kbd>TAP</kbd>SELECT \u00b7 SEAT</span>
+          <span><kbd>TAP</kbd>SEATED FLVX \u00b7 VNSEAT</span>
           <span><kbd>[I]</kbd>CLOSE</span><span><kbd>[ESC]</kbd>CLOSE</span></span>
       </div>`;
   }
@@ -1934,10 +1944,27 @@
       state.invSel = state.invSel === i ? null : i;
       renderInv(); return;
     }
+    // Pulling a flux needs no selection, so this sits above the guard below.
+    // It costs a refit like any other loadout change: mid-combat, stripping a
+    // rider is as expensive as fitting one.
+    const pull = e.target.closest('.ibay.seated');
+    if (pull) {
+      const who = pull.dataset.who;
+      if (!payRefit(who)) { renderInv(); draw(); return; }
+      const sl = state.loadout[who][+pull.dataset.slot];
+      const fi = +pull.dataset.bay, flux = sl.fluxes[fi];
+      sl.fluxes[fi] = null;
+      state.bag.items.push({ kind: 'FLUX', label: 'FLUX CELL', flux,
+                             sprite: 'flux', rarity: 'UNCOMMON' });
+      state.invSel = null;
+      log(flux + ' VNSEATED.', 'good');
+      renderFanChips(); renderInv(); draw(); return;
+    }
+
     const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
     if (!sel) return;
 
-    const bay = e.target.closest('.ibay.elig');
+    const bay = e.target.closest('.ibay.empty.elig');
     if (bay && sel.kind === 'FLUX') {
       const who = bay.dataset.who;
       if (!payRefit(who)) { renderInv(); draw(); return; }
