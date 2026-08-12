@@ -1654,80 +1654,277 @@
   }
 
   const TYPE_TINT = { SAL: '#E7E2D2', SVLPHVR: '#E3B347' };
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+
+  // Faint occult linework behind the whole panel. Drawn once by invShell(),
+  // never re-rendered, so selecting an item can't make it flicker.
+  const INV_BG = `<svg viewBox="0 0 1200 860" preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true" fill="none" stroke="#E3B347" stroke-width="1">
+    <g opacity=".85">
+      <circle cx="150" cy="120" r="88"/><circle cx="150" cy="120" r="72"/>
+      <path d="M150 52 L209 154 H91 Z"/><path d="M150 188 L209 86 H91 Z"/>
+      <circle cx="150" cy="120" r="34"/>
+      <path d="M40 40 h60 M40 40 v60 M1160 40 h-60 M1160 40 v60"/>
+      <circle cx="430" cy="150" r="46"/><path d="M430 112 L462 168 H398 Z"/>
+      <circle cx="430" cy="150" r="14"/>
+      <circle cx="990" cy="470" r="60"/><circle cx="990" cy="470" r="40"/>
+      <path d="M950 470 h80 M990 430 v80"/>
+      <circle cx="230" cy="620" r="54"/><path d="M230 566 L277 647 H183 Z"/>
+      <circle cx="640" cy="800" r="38"/><circle cx="640" cy="800" r="22"/>
+      <path d="M300 300 h140 M300 300 v-30 M440 300 v30"/>
+      <path d="M760 640 h160 M760 640 v34 M920 640 v-34"/>
+      <circle cx="70" cy="430" r="26"/><circle cx="1130" cy="720" r="30"/>
+      <path d="M1090 180 l40 40 l-40 40 l-40 -40 z"/>
+      <path d="M520 560 l34 34 l-34 34 l-34 -34 z"/>
+    </g>
+    <g stroke="#8B5BF2" opacity=".75">
+      <circle cx="1010" cy="140" r="78"/><circle cx="1010" cy="140" r="60"/>
+      <path d="M1010 80 L1062 170 H958 Z"/><path d="M1010 200 L1062 110 H958 Z"/>
+      <circle cx="1010" cy="80" r="9"/><circle cx="1010" cy="200" r="9"/>
+      <circle cx="958" cy="110" r="9"/><circle cx="1062" cy="110" r="9"/>
+      <circle cx="958" cy="170" r="9"/><circle cx="1062" cy="170" r="9"/>
+      <circle cx="1010" cy="140" r="9"/>
+    </g>
+    <g stroke="#46F0DC" opacity=".5">
+      <path d="M540 60 h120 v40 M540 60 v40"/>
+      <circle cx="180" cy="340" r="18"/><circle cx="820" cy="240" r="14"/>
+      <path d="M60 760 h120 M120 700 v120"/>
+    </g>
+  </svg>`;
 
   function bankGlyph(id) {
-    const c = TYPE_TINT[B.banks[id].type] || '#46F0DC';
-    const pips = Array.from({ length: B.banks[id].bays }, (_, i) =>
-      `<rect x="${16 + i * 12}" y="26" width="8" height="5" fill="none" stroke="${c}" stroke-width="1.5"/>`).join('');
+    const bk = B.banks[id];
+    const c = TYPE_TINT[bk.type] || '#46F0DC';
+    const tabs = Array.from({ length: bk.bays }, (_, i) =>
+      `<rect x="${20 + i * 9 - (bk.bays - 1) * 4.5}" y="39" width="6" height="4"
+             fill="none" stroke="${c}" stroke-width="1.4"/>`).join('');
     return `<svg viewBox="0 0 48 48" aria-hidden="true">
-      <path d="M8 4 h32 l4 4 v26 l-4 4 h-32 l-4 -4 v-26 z" fill="rgba(70,240,220,.05)" stroke="${c}" stroke-width="1.5"/>
-      <line x1="12" y1="12" x2="36" y2="12" stroke="${c}" stroke-width="1.5"/>
-      ${pips}
-      <path d="M20 38 h8 l3 3 h-14 z" fill="${c}"/></svg>`;
+      <circle cx="24" cy="22" r="15" fill="none" stroke="${c}" stroke-width="1.6"/>
+      <path d="M24 7 v30 M9 22 h30" stroke="${c}" stroke-width="1.3"/>
+      <circle cx="24" cy="22" r="4.5" fill="none" stroke="${c}" stroke-width="1.3"/>
+      ${tabs}</svg>`;
   }
+
+  // One distinct sigil per flux. Falls back to a plain ring for anything new.
+  const FLUX_ART = {
+    VITRIOL:   '<circle cx="24" cy="24" r="13" stroke-width="2.4"/>',
+    VIVVM:     '<circle cx="24" cy="24" r="8" stroke-width="2"/>' +
+               '<path d="M24 6 v6 M24 36 v6 M6 24 h6 M36 24 h6 M11 11 l4 4 M33 33 l4 4 M37 11 l-4 4 M15 33 l-4 4" stroke-width="1.8"/>',
+    NITRVM:    '<path d="M24 8 L39 36 H9 Z" stroke-width="2.2"/>',
+    ADAMANS:   '<circle cx="24" cy="22" r="12" stroke-width="2"/>' +
+               '<path d="M12 22 h24 M15 34 h18" stroke-width="1.8"/>',
+    FVLMINANS: '<circle cx="24" cy="24" r="8" stroke-width="2.2"/>' +
+               '<path d="M24 10 v-5 M24 38 v5 M10 24 h-5 M38 24 h5 M13 13 l-4 -4 M35 35 l4 4 M35 13 l4 -4 M13 35 l-4 4" stroke-width="2"/>' +
+               '<path d="M24 19 v10 M19 24 h10" stroke-width="1.8"/>',
+  };
   function fluxGlyph(id) {
     const c = id === 'FVLMINANS' ? '#D6402A' : '#46F0DC';
-    return `<svg viewBox="0 0 48 48" aria-hidden="true">
-      <rect x="16" y="8" width="16" height="30" fill="rgba(70,240,220,.05)" stroke="${c}" stroke-width="1.5"/>
-      <circle cx="24" cy="18" r="5" fill="none" stroke="${c}" stroke-width="2"/>
-      <line x1="19" y1="31" x2="29" y2="31" stroke="${c}" stroke-width="1"/></svg>`;
+    const art = FLUX_ART[id] || '<circle cx="24" cy="24" r="12" stroke-width="2.2"/>';
+    return `<svg viewBox="0 0 48 48" aria-hidden="true" fill="none"
+      stroke="${c}" stroke-linecap="round">${art}</svg>`;
+  }
+  function argentGlyph() {
+    return `<svg viewBox="0 0 48 48" aria-hidden="true" fill="none"
+      stroke="#E3B347" stroke-width="1.8">
+      <path d="M24 6 L36 20 L28 42 H20 L12 20 Z"/><path d="M12 20 h24 M24 6 v36"/></svg>`;
+  }
+
+  // Display rarity is derived from drop weight, not stored on the item: the
+  // drop table tags every FLUX the same, which makes for a flat-looking grid.
+  function rarityOf(it) {
+    if (it.kind === 'DATA') return 'UNCOMMON';
+    const w = (B.fluxes[it.flux] || {}).weight || 0;
+    return w >= 18 ? 'COMMON' : w >= 12 ? 'UNCOMMON' : 'RARE';
+  }
+
+  const KIND_LABEL = (op) =>
+    op.kind === 'sweep'  ? 'MELEE SWEEP'
+  : op.kind === 'hex'    ? 'HEX \u00b7 PERMANENT'
+  : op.kind === 'ward'   ? 'WARD \u00b7 CIRCLE'
+  : op.kind === 'splash' ? 'SPLASH BOLT'
+  : op.range > 1         ? 'RANGED STRIKE' : 'MELEE STRIKE';
+
+  const delta = (n) => n > 0 ? `  (+${n})` : n < 0 ? `  (${n})` : '';
+  const row = (k, v, dim) => `<div><dt>${k}</dt><dd${dim ? ' class="dim"' : ''}>${v}</dd></div>`;
+
+  // Three spec-plate columns for one bank, seated or loose. LOAD and STRAIN
+  // are reserved for the socket system and read as sealed until it lands.
+  function bankSpec(bank, fluxes, seated) {
+    const base = B.operations[bank];
+    const op = fold({ bank, fluxes: fluxes || [] });
+    const dmg = op.mult
+      ? `ATK \u00d7${op.mult}${op.dmgBonus ? ' +' + op.dmgBonus : ''}`
+      : op.def ? `DEF +${op.def}` : '\u2014';
+    const seatedTxt = (fluxes || []).filter(Boolean).join(' \u00b7 ') || '\u2014';
+    return [
+      row('KIND', KIND_LABEL(op)) +
+      row('RANGE', op.range + delta(op.range - base.range)) +
+      row('PNEVMA', op.pn + delta(op.pn - base.pn)) +
+      row('DAMAGE', dmg),
+      row('BAYS', ROMAN[B.banks[bank].bays - 1]) +
+      row('WIRING', 'PARALLEL') +
+      row('SEATED', seatedTxt) +
+      row('COOLDOWN', op.cd ? op.cd + ' TVRNS' : '\u2014'),
+      row('LOAD', '\u2014', 1) +
+      row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('PLVG', seated ? 'HEX \u00b7 MATED' : 'HEX \u00b7 OPEN') +
+      row('SELF COST', op.vitaeCost ? op.vitaeCost + ' VITAE' : '\u2014'),
+    ];
+  }
+  function fluxSpec(id) {
+    const f = B.fluxes[id];
+    const eff = [f.dmgBonus && `+${f.dmgBonus} DAMAGE`, f.rangeDelta && `+${f.rangeDelta} RANGE`,
+                 f.pnDelta && `${f.pnDelta} PNEVMA`, f.minDmg && `MIN DMG ${f.minDmg}`,
+                 f.vitaeCost && `+${f.vitaeCost} VITAE COST`].filter(Boolean);
+    return [
+      row('KIND', 'FLVX CELL') + row('EFFECT', eff[0] || '\u2014') +
+      row('RIDER', eff[1] || '\u2014') + row('DRAW WEIGHT', f.weight),
+      row('SEATS IN', 'ANY BAY') + row('WIRING', 'PARALLEL') +
+      row('TYPE LOCK', 'NONE') + row('RARITY', rarityOf({ kind: 'FLUX', flux: id })),
+      row('LOAD', '\u2014', 1) + row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('PLVG', 'CONTACT \u00b7 OPEN') + row('STACKS', 'ONE PER BAY'),
+    ];
+  }
+
+  function invShell() {
+    invEl.innerHTML = `<div class="invbox" role="dialog" aria-label="INVENTORY">
+        <div class="invbg">${INV_BG}</div><div class="invmain"></div></div>`;
+    return invEl.querySelector('.invmain');
   }
 
   function renderInv() {
+    const main = invEl.querySelector('.invmain') || invShell();
     const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
 
+    // ------------------------------------------------------------- rig
     const panels = ['CALX', 'CINIS'].map(who => {
       const ptype = B.party[who].type;
-      const slots = state.loadout[who].map((sl, si) => {
+      const m = state.circle.members.find(x => x.name === who) || {};
+      const banks = state.loadout[who].map((sl, si) => {
         const elig = sel && sel.kind === 'DATA' && B.banks[sel.bank].type === ptype;
         const bays = sl.fluxes.map((f, fi) => f
-          ? `<div class="ibay${f === 'FVLMINANS' ? ' blood' : ''}"><span class="iring"></span>${f}</div>`
+          ? `<div class="ibay${f === 'FVLMINANS' ? ' blood' : ''}">${fluxGlyph(f)}${f}</div>`
           : `<div class="ibay empty${sel && sel.kind === 'FLUX' ? ' elig' : ''}"
                   data-who="${who}" data-slot="${si}" data-bay="${fi}">\u2014 BAY \u2014</div>`).join('');
-        return `<div class="isock${elig ? ' elig' : ''}" data-who="${who}" data-slot="${si}">
-                  <div class="isock-h"><span class="inm t-${B.banks[sl.bank].type.toLowerCase()}">${sl.bank}</span>
-                    <span class="ihex">\u2b21 SEATED</span></div>
-                  <div class="inote">${B.operations[sl.bank].note}</div>
-                  <div class="ibays">${bays}</div>
-                </div>`;
+        const lamps = sl.fluxes.map(f =>
+          `<span class="ilamp${f ? (f === 'FVLMINANS' ? ' blood' : '') : ' off'}"></span>
+           <span class="iline"></span>`).join('');
+        return `<div class="isockwrap">
+            <div class="iroman">${ROMAN[si]}</div>
+            <div class="isock${elig ? ' elig' : ''}" data-who="${who}" data-slot="${si}">
+              <div class="isock-body">
+                <div class="iname"><b class="t-${ptype.toLowerCase()}">${sl.bank}</b>
+                  <small>${ptype} \u00b7 BANK</small></div>
+                <div class="ibays">${bays}</div>
+              </div>
+              <div class="irail"><span class="iline"></span>${lamps}<span class="itip">\u25bc</span></div>
+            </div>
+            <div class="iplug"></div>
+          </div>`;
       }).join('');
-      return `<div class="ipanel"><div class="ipanel-h">${who}
-                <span class="t-${ptype.toLowerCase()}">${ptype}</span></div>${slots}</div>`;
+      return `<div class="ipanel${ptype === 'SVLPHVR' ? ' gold' : ''}">
+          <div class="ipanel-h"><span>${who}</span><em>${ptype}</em></div>
+          <div class="ipanel-s">VITAE <b>${m.hp}</b>/${m.vitae} &nbsp; PNEVMA <b>${m.pn}</b>/${m.pneuma}</div>
+          <div class="ibanks">${banks}</div>
+        </div>`;
     }).join('');
 
-    const cells = state.bag.items.map((it, i) => {
-      const g = it.kind === 'DATA' ? bankGlyph(it.bank) : fluxGlyph(it.flux);
-      return `<div class="icell${state.invSel === i ? ' selct' : ''}" data-i="${i}"
-                   role="button" tabindex="0" aria-label="${it.label}">${g}</div>`;
-    });
-    cells.push(`<div class="icell argent" aria-label="ARGENT">\u25c6<span class="iqty">\u00d7${state.bag.argent}</span></div>`);
-    while (cells.length < 16 || cells.length % 8) cells.push('<div class="icell"></div>');
+    // ------------------------------------------------------ spec plate
+    let title = '\u2014', sub = 'NO SVBJECT', cols = [ '', '', '' ];
+    if (sel && sel.kind === 'DATA') {
+      title = sel.bank; sub = B.banks[sel.bank].type + ' \u00b7 DATA BANK \u00b7 LOOSE';
+      cols = bankSpec(sel.bank, [], false);
+    } else if (sel && sel.kind === 'FLUX') {
+      title = sel.flux; sub = 'FLVX CELL \u00b7 LOOSE';
+      cols = fluxSpec(sel.flux);
+    } else {
+      const who = 'CALX', sl = state.loadout[who][0];
+      title = sl.bank; sub = B.banks[sl.bank].type + ' \u00b7 SEATED \u00b7 ' + who;
+      cols = bankSpec(sl.bank, sl.fluxes, true);
+    }
 
     let insp = 'SELECT AN ITEM \u2014 ELIGIBLE SOCKETS AND BAYS SIGNAL.';
     if (sel && sel.kind === 'DATA') {
-      const bk = B.banks[sel.bank];
-      insp = `<b>${sel.bank}</b> \u00b7 ${bk.type} DATA BANK \u00b7 ${bk.bays} BAY${bk.bays > 1 ? 'S' : ''}` +
-             ` \u00b7 ${B.operations[sel.bank].note} \u00b7 CLICK A GLOWING SOCKET TO SWAP.`;
+      insp = `<b>${sel.bank}</b> \u00b7 ${B.operations[sel.bank].note} \u00b7 CLICK A GLOWING SOCKET TO SWAP.`;
     } else if (sel && sel.kind === 'FLUX') {
-      insp = `<b>${sel.flux}</b> \u00b7 FLUX \u00b7 ${B.fluxes[sel.flux].note} CLICK A GLOWING BAY TO SEAT.`;
+      insp = `<b>${sel.flux}</b> \u00b7 ${B.fluxes[sel.flux].note} CLICK A GLOWING BAY TO SEAT.`;
     }
     const cost = aggroLive()
       ? 'FOES AWAKE \u2014 A REFIT SPENDS THAT DAEMON\u2019S ACTION THIS ROVND'
       : 'FLOOR QVIET \u2014 REFITS ARE FREE';
 
-    invEl.innerHTML = `
-      <div class="invbox" role="dialog" aria-label="INVENTORY">
-        <div class="inv-h"><span>INVENTARIVM // VESSEL\u00b7CONFIGVRATION</span>
-          <button id="inv-close" aria-label="CLOSE INVENTORY">\u00d7 [I]</button></div>
-        <div class="iapex"><div class="ipanel-h">OPERATOR <span class="t-arc">ARCANVM</span></div>
-          <span class="ichip">PERCVSSIO <small>INTRINSIC\u00b7STRIKE</small></span>
-          <span class="ichip sealed">ATTVNED\u00b7SLOT <small>SEALED</small></span></div>
-        <div class="irig">${panels}</div>
+    // --------------------------------------------------------- satchel
+    // Identical items collapse into one card; data-i points at the first of
+    // the stack, so seating still splices exactly one entry out of the bag.
+    const stacks = [];
+    state.bag.items.forEach((it, i) => {
+      const key = it.kind + ':' + (it.bank || it.flux);
+      const s = stacks.find(x => x.key === key);
+      if (s) s.n++; else stacks.push({ key, i, it, n: 1 });
+    });
+    const cells = stacks.map(s => {
+      const it = s.it, name = it.bank || it.flux, rar = rarityOf(it);
+      const g = it.kind === 'DATA' ? bankGlyph(it.bank) : fluxGlyph(it.flux);
+      return `<div class="icell r-${rar.toLowerCase()}${state.invSel === s.i ? ' selct' : ''}"
+                   data-i="${s.i}" role="button" tabindex="0" aria-label="${name} ${rar}">
+                <div class="inm2">${name}</div>${g}<div class="irar">${rar}</div>
+                ${s.n > 1 ? `<span class="iqty">\u00d7${s.n}</span>` : ''}</div>`;
+    });
+    if (state.bag.argent) cells.push(`<div class="icell argent" aria-label="ARGENT">
+        <div class="inm2">VNASSAYED<br>ARGENT</div>${argentGlyph()}
+        <div class="irar">CVRRENCY</div><span class="iqty">\u00d7${state.bag.argent}</span></div>`);
+    const rows = Math.min(4, Math.max(2, Math.ceil(cells.length / 8)));
+    while (cells.length < rows * 8)
+      cells.push('<div class="icell vacant"><div class="inm2"></div><div class="inm2">VACANT</div></div>');
+
+    main.innerHTML = `
+      <div class="inv-h"><span>INVENTARIVM // VESSEL\u00b7CONFIGVRATION</span>
+        <button id="inv-close" aria-label="CLOSE INVENTORY">\u00d7 [I]</button></div>
+
+      <div class="iapexwrap"><div class="iapex">
+        <div class="iapex-h">OPERATOR \u25c7</div>
+        <div class="icards">
+          <div class="icard"><b>PERCVSSIO</b><small>INTRINSIC\u00b7STRIKE</small>
+            <svg viewBox="0 0 60 48" fill="none" stroke="var(--bone)" stroke-width="1.6"
+              aria-hidden="true"><path d="M18 30 v-9 a4 4 0 0 1 8 0 v-3 a4 4 0 0 1 8 0 v3
+              a4 4 0 0 1 8 0 v11 a9 9 0 0 1 -9 9 h-8 a7 7 0 0 1 -7 -7 z"/>
+              <path d="M8 12 l6 4 M52 12 l-6 4 M30 6 v6" stroke-width="1.2"/></svg></div>
+          <div class="icard sealed"><b>ATTVNED\u00b7SLOT</b>
+            <svg viewBox="0 0 60 48" fill="none" stroke="var(--shell-txt)" stroke-width="1.6"
+              stroke-dasharray="4 3" aria-hidden="true">
+              <path d="M18 8 h24 l10 16 l-10 16 h-24 l-10 -16 z"/></svg>
+            <small>SEALED</small></div>
+        </div></div></div>
+
+      <div class="itrace"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M362 0 V13 H150 V34"/><path d="M638 0 V13 H850 V34"/>
+        <rect x="358" y="9" width="8" height="8"/><rect x="146" y="9" width="8" height="8"/>
+        <rect x="634" y="9" width="8" height="8"/><rect x="846" y="9" width="8" height="8"/>
+      </svg></div>
+
+      <div class="irig">${panels}</div>
+
+      <div class="ispec">
         <div class="iinsp">${insp}</div>
         <div class="icost">${cost}</div>
+        <div class="ispec-b">
+          <div class="ispec-t">${title}<small>${sub}</small></div>
+          <dl>${cols[0]}</dl><dl>${cols[1]}</dl><dl>${cols[2]}</dl>
+        </div>
+      </div>
+
+      <div class="isat">
+        <div class="isat-h">SATCHEL <span>[ ${state.bag.items.length} / 32 ]</span></div>
         <div class="igrid">${cells.join('')}</div>
+      </div>
+
+      <div class="ifoot">
+        <span class="fl">${cost}</span>
+        <span class="fr"><span><kbd>TAP</kbd>SELECT \u00b7 SEAT</span>
+          <span><kbd>[I]</kbd>CLOSE</span><span><kbd>[ESC]</kbd>CLOSE</span></span>
       </div>`;
   }
+
 
   invEl.addEventListener('click', e => {
     if (e.target.closest('#inv-close')) { closeInv(); draw(); return; }

@@ -29,7 +29,7 @@ html = (ROOT / 'index.html').read_text(encoding='utf-8')
 # query string is ignored on file:// so local play is unaffected.
 stamp = hashlib.md5(
     b''.join((ROOT / f).read_bytes() for f in SCRIPTS)).hexdigest()[:8]
-tag_re = re.compile(r'<script src="((?:data|src)/[a-z0-9]+\.js)(?:\?v=[0-9a-f]+)?"></script>')
+tag_re = re.compile(r'<script src="((?:data|src)/[a-z0-9]+\.js)(?:\?v=[0-9a-z]+)?"></script>')
 stamped = tag_re.sub(lambda m: '<script src="{}?v={}"></script>'.format(m.group(1), stamp), html)
 if stamped != html:
     (ROOT / 'index.html').write_text(stamped, encoding='utf-8', newline='')

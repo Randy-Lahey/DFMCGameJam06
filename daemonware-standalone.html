@@ -68,9 +68,6 @@
     display:flex;justify-content:space-between;
   }
   .hud-label span{color:var(--gold);opacity:.9;letter-spacing:.2em}
-  .keys{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9px;opacity:.42;
-        letter-spacing:.14em;margin-top:auto}
-  .keys b{color:var(--cyan);font-weight:400}
 
   @media (max-width:900px){
     #body{grid-template-columns:1fr}
@@ -227,6 +224,34 @@
              opacity:.7;margin-bottom:26px}
   .win-stats div{display:flex;justify-content:space-between;gap:34px}
   .win-stats b{font-weight:400;color:var(--gold)}
+
+  /* ---- controls screen + its reopen handle ----
+     The legend used to live permanently in the HUD, four lines of 9px text at
+     .42 opacity that every player reads once and then pays for on every frame
+     of vertical space. It shows once, on first load, and is recallable. */
+  #help{
+    position:absolute;right:10px;bottom:10px;z-index:6;
+    width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+    font:inherit;font-size:15px;line-height:1;cursor:pointer;
+    color:var(--cyan);background:rgba(4,5,10,.9);
+    border:1px solid var(--edge-i);opacity:.55;
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    transition:opacity .18s ease,color .18s ease,border-color .18s ease;
+  }
+  #help:hover,#help:active{opacity:1;color:var(--gold);border-color:var(--gold)}
+  /* Nothing behind an overlay is reachable, and a live-looking button that
+     does nothing reads as a broken one. */
+  #help.hide{display:none}
+
+  .ctlbox{max-width:min(420px,92vw);padding:26px 26px 22px;text-align:left}
+  .ctl{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;
+       font-size:10px;letter-spacing:.14em;line-height:1.5}
+  .ctl dt{color:var(--cyan);white-space:nowrap;letter-spacing:.2em}
+  .ctl dd{margin:0;opacity:.8;text-transform:none;letter-spacing:.1em}
+  .ctl-rule{height:1px;background:var(--edge);opacity:.6;margin:18px 0 16px}
+  .ctl-note{font-size:9.5px;letter-spacing:.16em;color:var(--gold);
+            opacity:.85;line-height:1.6;margin-bottom:16px}
+  .ctlbox .dlg-actions{margin-top:20px}
 
   /* ---- interaction hint: tag above the token ----
      This tag is the ONLY touch route to chests and stairs, so when it has
@@ -410,7 +435,7 @@
   #actionbar{
     position:absolute;left:0;right:0;bottom:10px;z-index:5;
     display:flex;gap:10px;justify-content:center;align-items:center;
-    padding:0 12px;pointer-events:none;
+    padding:0 52px;pointer-events:none;
   }
   #actionbar button{pointer-events:auto;white-space:nowrap}
   #confirm{
@@ -440,6 +465,28 @@
     transition:color .2s ease, border-color .2s ease, background .2s ease;
   }
   #cancel.hot{color:var(--blood);border-color:var(--blood)}
+
+  /* ---- armed-operation readout ----
+     This used to be #hint, pinned to the tile north of the token — which on a
+     phone is a ~500px tag laid across the exact row you are aiming into. It
+     lives in the action bar instead: fixed spot, never over the board, and the
+     bar is empty during aim because #confirm hides itself while pending.
+     Shrinks and ellipsises so the row can never wrap CANCEL onto a second
+     line at 360px (that would push #toast underneath it). */
+  #armed{
+    min-height:44px;display:flex;align-items:center;
+    padding:0 14px;font-size:10.5px;letter-spacing:.2em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    min-width:0;flex-shrink:1;
+    color:var(--gold);background:rgba(4,5,10,.94);
+    border:1px solid var(--gold);pointer-events:none;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  }
+  #armed:not(.open){display:none}
+  #armed .k{
+    display:inline-block;min-width:13px;text-align:center;margin-right:7px;
+    border:1px solid var(--gold);padding:0 3px;flex:none;
+  }
 
   /* ---- refusal toast ----
      Every rejection path used to be log()-only, and the log is hidden under
@@ -502,13 +549,13 @@
     0%,100%{transform:none}33%{transform:translateX(-3px)}66%{transform:translateX(3px)}
   }
 
-  /* Touch gets its own legend, and loses the keycap glyphs — the hotkey
+  /* Touch gets its own control list, and loses the keycap glyphs — the hotkey
      numeral on every chip was a 13px grid column spent on an unusable
      affordance. */
-  .keys.touch{display:none}
+  .ctl.touch{display:none}
   @media (pointer:coarse){
-    .keys.kb{display:none}
-    .keys.touch{display:flex;opacity:.72;font-size:10px}
+    .ctl.kb{display:none}
+    .ctl.touch{display:grid}
     /* visibility, not display: display:none removes .hk from the grid flow,
        which shifts .cn into the zero-width first column and stacks it under
        the cost readout. */
@@ -544,7 +591,7 @@
     .hud-side{border-top:0;border-left:1px solid var(--edge);padding:6px 10px;gap:4px}
     #roster{padding:6px 10px;gap:6px}
     .unit{padding:5px 8px}
-    .keys{display:none}
+    #help{width:32px;height:32px;font-size:14px}
   }
 
   /* ---- focus ----
@@ -585,6 +632,220 @@
     #confirm.ready{animation:none}
     .chip.locked:active{animation:none}
   }
+
+  /* ------------------------------------------------------ inventory
+     Upscaled enclosure UI. Presentation only: every hook the click handler
+     reads (.icell[data-i], .isock[data-who][data-slot], .ibay[data-bay])
+     is unchanged from the plain version. */
+  #inv{position:fixed;inset:0;display:none;z-index:60;
+    background:rgba(2,3,6,.9);align-items:center;justify-content:center;}
+  #inv.show{display:flex}
+  #inv .invbox{--ch:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+    position:relative;width:min(1180px,97vw);max-height:95vh;overflow:auto;
+    background:#04060C;clip-path:var(--ch);
+    box-shadow:inset 0 0 0 1.5px var(--edge-i);padding:16px 20px 12px;}
+  /* graded feel without raster assets: procedural grain + vignette */
+  #inv .invbox::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:8;
+    background:radial-gradient(125% 95% at 50% 38%,transparent 52%,rgba(0,0,0,.55));}
+  #inv .invbox::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:8;opacity:.045;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)'/%3E%3C/svg%3E");}
+  #inv .invbg{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.15;}
+  #inv .invbg svg{width:100%;height:100%;display:block;}
+  #inv .invmain{position:relative;z-index:2;}
+  #inv svg text{font-family:inherit}
+
+  /* ---------------------------------------------------------- header */
+  #inv .inv-h{display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid var(--edge);padding-bottom:9px;margin-bottom:12px;
+    color:var(--cyan);font-size:14px;letter-spacing:.42em;}
+  #inv .inv-h button{background:none;border:1px solid var(--edge-i);color:var(--bone);
+    font:inherit;font-size:11px;letter-spacing:.2em;padding:5px 12px;cursor:pointer;}
+  #inv .inv-h button:hover{border-color:var(--cyan);color:var(--cyan);}
+
+  /* ------------------------------------------------------ apex + rig */
+  #inv .iapexwrap{display:flex;justify-content:center;}
+  #inv .iapex{--ch2:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    position:relative;clip-path:var(--ch2);padding:7px 9px 9px;
+    background:linear-gradient(165deg,rgba(70,240,220,.07),rgba(4,6,12,.85) 65%);
+    box-shadow:inset 0 0 0 1px var(--edge-i);min-width:min(430px,90%);}
+  #inv .iapex-h{text-align:center;font-size:10px;letter-spacing:.42em;color:var(--cyan);
+    padding-bottom:6px;}
+  #inv .icards{display:flex;gap:10px;justify-content:center;}
+  #inv .icard{flex:1;position:relative;padding:12px 10px 10px;text-align:center;
+    box-shadow:inset 0 0 0 1px var(--edge);background:rgba(4,6,12,.75);
+    --ch3:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    clip-path:var(--ch3);}
+  #inv .icard b{display:block;font-size:12px;letter-spacing:.3em;color:var(--bone);font-weight:400;}
+  #inv .icard small{display:block;font-size:8px;letter-spacing:.2em;
+    color:rgba(231,226,210,.5);margin-top:2px;}
+  #inv .icard svg{width:52px;height:44px;margin-top:6px;}
+  #inv .icard.sealed{box-shadow:inset 0 0 0 1px rgba(139,91,242,.55);
+    background:rgba(139,91,242,.06);}
+  #inv .icard.sealed b{color:var(--shell-txt);}
+
+  /* right-angle traces from the apex down into each panel */
+  #inv .itrace{height:34px;position:relative;}
+  #inv .itrace svg{width:100%;height:100%;display:block;overflow:visible;}
+  #inv .itrace path{fill:none;stroke:var(--cyan);stroke-width:1.5;opacity:.55;
+    vector-effect:non-scaling-stroke;}
+  #inv .itrace rect{fill:#04060C;stroke:var(--cyan);stroke-width:1.5;
+    vector-effect:non-scaling-stroke;}
+
+  #inv .irig{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;}
+  #inv .ipanel{--ch2:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+    position:relative;clip-path:var(--ch2);padding:10px 12px 12px;
+    background:linear-gradient(170deg,rgba(70,240,220,.045),rgba(4,6,12,.8) 55%);
+    box-shadow:inset 0 0 0 1px var(--edge);}
+  #inv .ipanel.gold{background:linear-gradient(170deg,rgba(227,179,71,.05),rgba(4,6,12,.8) 55%);
+    box-shadow:inset 0 0 0 1px rgba(227,179,71,.3);}
+  #inv .ipanel-h{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:14px;letter-spacing:.4em;color:var(--cyan);}
+  #inv .ipanel.gold .ipanel-h{color:var(--gold);}
+  #inv .ipanel-h em{font-style:normal;font-size:10px;letter-spacing:.3em;}
+  #inv .ipanel-s{font-size:9px;letter-spacing:.24em;color:rgba(231,226,210,.55);
+    margin:2px 0 10px;}
+  #inv .ipanel-s b{color:var(--bone);font-weight:400;}
+  #inv .ibanks{display:grid;gap:10px;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));}
+
+  /* ------------------------------------------------- bank enclosure */
+  #inv .isockwrap{display:flex;flex-direction:column;align-items:stretch;}
+  #inv .iroman{text-align:center;font-size:10px;letter-spacing:.3em;
+    color:rgba(70,240,220,.6);padding-bottom:4px;}
+  #inv .ipanel.gold .iroman{color:rgba(227,179,71,.6);}
+  #inv .isock{--ch2:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
+    position:relative;clip-path:var(--ch2);padding:9px 8px 9px 9px;
+    display:flex;gap:7px;
+    background:linear-gradient(158deg,rgba(231,226,210,.07),rgba(4,6,12,.92) 62%);
+    box-shadow:inset 0 0 0 1px var(--edge);}
+  /* four corner screws, drawn as background gradients — no extra markup */
+  #inv .isock::before{content:"";position:absolute;inset:3px;pointer-events:none;
+    background-image:
+      radial-gradient(circle,rgba(231,226,210,.55) 0 1.4px,transparent 2.2px),
+      radial-gradient(circle,rgba(231,226,210,.55) 0 1.4px,transparent 2.2px),
+      radial-gradient(circle,rgba(231,226,210,.55) 0 1.4px,transparent 2.2px),
+      radial-gradient(circle,rgba(231,226,210,.55) 0 1.4px,transparent 2.2px);
+    background-size:7px 7px;background-repeat:no-repeat;
+    background-position:0 0,100% 0,0 100%,100% 100%;}
+  #inv .isock.elig{box-shadow:inset 0 0 0 1.5px var(--cyan),0 0 14px rgba(70,240,220,.18);
+    cursor:pointer;}
+  #inv .isock.elig:hover{background:linear-gradient(158deg,rgba(70,240,220,.14),rgba(4,6,12,.92) 62%);}
+  #inv .isock-body{flex:1;min-width:0;}
+  #inv .iname{text-align:center;padding:3px 2px 4px;
+    box-shadow:inset 0 0 0 1px rgba(231,226,210,.16);
+    background:rgba(4,6,12,.6);}
+  #inv .iname b{display:block;font-size:11px;letter-spacing:.26em;font-weight:400;}
+  #inv .iname small{display:block;font-size:7.5px;letter-spacing:.2em;
+    color:rgba(231,226,210,.45);margin-top:1px;}
+  #inv .t-sal{color:var(--bone)} #inv .t-svlphvr{color:var(--gold)}
+  #inv .t-arc{color:var(--shell-txt)}
+
+  #inv .ibays{margin-top:7px;display:flex;flex-direction:column;gap:6px;}
+  #inv .ibay{display:flex;align-items:center;gap:7px;padding:5px 7px;min-height:30px;
+    font-size:9.5px;letter-spacing:.2em;color:var(--cyan);
+    box-shadow:inset 0 0 0 1px rgba(70,240,220,.2);
+    background:rgba(0,0,0,.4);}
+  #inv .ibay svg{width:17px;height:17px;flex:none;}
+  #inv .ibay.empty{color:rgba(70,240,220,.4);justify-content:center;letter-spacing:.28em;
+    box-shadow:inset 0 0 0 1px rgba(70,240,220,.18);
+    background:repeating-linear-gradient(45deg,rgba(70,240,220,.03) 0 5px,transparent 5px 10px);}
+  #inv .ibay.empty.elig{color:var(--cyan);cursor:pointer;
+    box-shadow:inset 0 0 0 1.5px var(--cyan),0 0 12px rgba(70,240,220,.16);}
+  #inv .ibay.blood{color:var(--blood);box-shadow:inset 0 0 0 1px rgba(214,64,42,.55);
+    background:rgba(214,64,42,.07);}
+
+  /* right rail: flow arrow with one lamp per bay */
+  #inv .irail{width:12px;flex:none;display:flex;flex-direction:column;
+    align-items:center;padding-top:24px;gap:0;}
+  #inv .irail .iline{flex:1;width:1px;background:rgba(70,240,220,.35);}
+  #inv .irail .ilamp{width:7px;height:7px;border-radius:50%;flex:none;
+    background:var(--cyan);box-shadow:0 0 6px rgba(70,240,220,.7);}
+  #inv .irail .ilamp.blood{background:var(--blood);box-shadow:0 0 6px rgba(214,64,42,.7);}
+  #inv .irail .ilamp.off{background:transparent;box-shadow:none;
+    border:1px solid rgba(70,240,220,.35);}
+  #inv .irail .itip{font-size:9px;color:var(--cyan);line-height:1;}
+  #inv .ipanel.gold .irail .iline{background:rgba(227,179,71,.35);}
+  #inv .ipanel.gold .irail .ilamp{background:var(--gold);box-shadow:0 0 6px rgba(227,179,71,.7);}
+  #inv .ipanel.gold .irail .ilamp.off{background:transparent;box-shadow:none;
+    border:1px solid rgba(227,179,71,.35);}
+  #inv .ipanel.gold .irail .itip{color:var(--gold);}
+
+  #inv .iplug{width:34px;height:19px;margin:6px auto 0;
+    clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+    background:linear-gradient(150deg,rgba(231,226,210,.3),rgba(231,226,210,.08));}
+  #inv .ipanel.gold .iplug{background:linear-gradient(150deg,rgba(227,179,71,.35),rgba(227,179,71,.08));}
+
+  /* -------------------------------------------------------- spec plate */
+  #inv .ispec{margin-top:14px;padding:9px 12px 10px;
+    box-shadow:inset 0 0 0 1px rgba(227,179,71,.3);background:rgba(4,6,12,.7);}
+  #inv .iinsp{font-size:9px;letter-spacing:.16em;color:rgba(231,226,210,.62);}
+  #inv .iinsp b{color:var(--cyan);letter-spacing:.25em;}
+  #inv .icost{font-size:8.5px;letter-spacing:.2em;color:var(--gold);margin-top:2px;}
+  #inv .ispec-b{display:grid;gap:14px;margin-top:9px;align-items:start;
+    grid-template-columns:150px repeat(3,1fr);}
+  #inv .ispec-t{font-size:19px;letter-spacing:.22em;color:var(--gold);}
+  #inv .ispec-t small{display:block;font-size:8px;letter-spacing:.24em;
+    color:rgba(231,226,210,.45);margin-top:3px;}
+  #inv .ispec dl{margin:0;font-size:9px;letter-spacing:.18em;}
+  #inv .ispec dl div{display:flex;justify-content:space-between;gap:8px;
+    padding:3px 0;border-bottom:1px solid rgba(70,240,220,.13);}
+  #inv .ispec dt{color:rgba(231,226,210,.5);}
+  #inv .ispec dd{margin:0;color:var(--bone);text-align:right;}
+  #inv .ispec dd.dim{color:rgba(231,226,210,.35);}
+
+  /* ---------------------------------------------------------- satchel */
+  #inv .isat{margin-top:12px;}
+  #inv .isat-h{font-size:11px;letter-spacing:.4em;color:var(--cyan);
+    padding-bottom:7px;}
+  #inv .isat-h span{color:var(--bone);letter-spacing:.24em;}
+  #inv .igrid{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;}
+  #inv .icell{position:relative;aspect-ratio:.86;display:flex;flex-direction:column;
+    align-items:center;justify-content:space-between;padding:6px 3px 5px;cursor:pointer;
+    --ch3:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+    clip-path:var(--ch3);background:rgba(70,240,220,.03);
+    box-shadow:inset 0 0 0 1px var(--edge);}
+  #inv .icell svg{width:52%;height:auto;}
+  #inv .icell .inm2{font-size:8px;letter-spacing:.14em;color:var(--bone);
+    text-align:center;line-height:1.15;word-break:break-word;}
+  #inv .icell .irar{font-size:7px;letter-spacing:.16em;color:rgba(231,226,210,.45);}
+  #inv .icell .iqty{position:absolute;right:4px;bottom:3px;font-size:8px;color:var(--cyan);}
+  #inv .icell:hover{background:rgba(70,240,220,.08);}
+  #inv .icell.r-uncommon{box-shadow:inset 0 0 0 1px rgba(227,179,71,.5);}
+  #inv .icell.r-uncommon .irar{color:var(--gold);}
+  #inv .icell.r-rare{box-shadow:inset 0 0 0 1px rgba(214,64,42,.65);
+    background:rgba(214,64,42,.05);}
+  #inv .icell.r-rare .irar,#inv .icell.r-rare .inm2{color:var(--blood);}
+  #inv .icell.selct{box-shadow:inset 0 0 0 1.5px var(--cyan),0 0 14px rgba(70,240,220,.25);
+    background:rgba(70,240,220,.1);}
+  #inv .icell.argent{cursor:default;}
+  #inv .icell.vacant{cursor:default;opacity:.3;box-shadow:inset 0 0 0 1px rgba(70,240,220,.12);}
+  #inv .icell.vacant .inm2{color:rgba(231,226,210,.4);letter-spacing:.2em;}
+
+  /* ----------------------------------------------------------- footer */
+  #inv .ifoot{margin-top:11px;padding-top:9px;border-top:1px solid var(--edge);
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    flex-wrap:wrap;font-size:9px;letter-spacing:.22em;}
+  #inv .ifoot .fl{color:var(--gold);}
+  #inv .ifoot .fr{color:rgba(231,226,210,.5);display:flex;gap:14px;flex-wrap:wrap;}
+  #inv .ifoot .fr kbd{font:inherit;color:var(--cyan);padding:2px 6px;margin-right:6px;
+    box-shadow:inset 0 0 0 1px var(--edge-i);}
+
+  @media (max-width:900px){
+    #inv .invbox{padding:12px 12px 10px;}
+    #inv .irig{grid-template-columns:1fr;}
+    #inv .ispec-b{grid-template-columns:1fr 1fr;}
+    #inv .igrid{grid-template-columns:repeat(5,1fr);}
+    #inv .inv-h{font-size:11px;letter-spacing:.22em;}
+  }
+  @media (max-width:560px){
+    #inv .ispec-b{grid-template-columns:1fr;}
+    #inv .igrid{grid-template-columns:repeat(4,1fr);}
+    #inv .ibanks{grid-template-columns:1fr;}
+    #inv .itrace{height:20px;}
+  }
+
+  /* seated-flux marker on fan chips */
+  .chip .cflux{display:block;font-size:8px;letter-spacing:.15em;color:var(--cyan);opacity:.8;}
 </style>
 </head>
 <body>
@@ -604,9 +865,11 @@
       <div id="toast" role="status" aria-live="polite"></div>
       <div id="inspect"></div>
       <div id="actionbar">
+        <div id="armed" role="status" aria-live="polite"></div>
         <button id="cancel"></button>
         <button id="confirm"></button>
       </div>
+      <button id="help" aria-label="CONTROLS" title="CONTROLS">?</button>
     </div>
 
     <aside>
@@ -624,17 +887,45 @@
       <div id="bag" class="bag"></div>
       <div id="effects" class="effects"></div>
       <div id="prompt" class="prompt" role="status" aria-live="polite"></div>
-      <div class="keys kb">
-        <span><b>WASD</b> MOVE</span><span><b>E</b> ACT</span>
-        <span><b>1-5</b> OPERATION</span><span><b>SPACE</b> COMMIT</span>
-        <span><b>ESC</b> CANCEL</span>
-      </div>
-      <div class="keys touch">
-        <span><b>TAP</b> TILE, THEN CONFIRM</span><span><b>TAP</b> NAMEPLATE TO ACT</span>
-        <span><b>HOLD</b> TILE TO INSPECT</span><span><b>TWO FINGERS</b> LOOK AROUND</span>
-      </div>
     </div>
   </footer>
+</div>
+
+<!-- controls: auto-shown once, recallable from the ? handle -->
+<div id="controls" class="overlay">
+  <div class="dialog ctlbox">
+    <div class="dlg-eyebrow">DAEMONWARE &middot; FLOOR 01</div>
+    <div class="ctl-note">
+      EACH ROUND, EVERY MEMBER EITHER MOVES OR ACTS &mdash; NEVER BOTH.
+      ENEMIES LOCK THEIR INTENT BEFORE YOU MOVE.
+    </div>
+
+    <dl class="ctl touch">
+      <dt>TAP TILE</dt><dd>Stage a step, then CONFIRM STEP.</dd>
+      <dt>TAP NAMEPLATE</dt><dd>Open that member's operations.</dd>
+      <dt>TAP ENEMY</dt><dd>Fire the armed operation at it.</dd>
+      <dt>HOLD TILE</dt><dd>Inspect it. Costs nothing, spends no round.</dd>
+      <dt>TWO FINGERS</dt><dd>Drag to pan, pinch to zoom the floor.</dd>
+      <dt>CANCEL</dt><dd>Backs out of anything, including a queued operation.</dd>
+      <dt>COMMIT ROUND</dt><dd>Resolves everyone at once. This ends the round.</dd>
+    </dl>
+
+    <dl class="ctl kb">
+      <dt>WASD</dt><dd>Move the circle one tile.</dd>
+      <dt>E</dt><dd>Act on this tile &mdash; open a cache, take the stairs.</dd>
+      <dt>1 &ndash; 5</dt><dd>Arm an operation for the selected member.</dd>
+      <dt>ENTER</dt><dd>Fire the armed operation at the hovered target.</dd>
+      <dt>SPACE</dt><dd>Commit the round, or hold ground.</dd>
+      <dt>I</dt><dd>Open the inventory: seat fluxes, swap data banks.</dd>
+      <dt>ESC</dt><dd>Cancel aiming, a staged step, or the act round.</dd>
+    </dl>
+
+    <div class="ctl-rule"></div>
+    <div class="dlg-actions">
+      <button class="box yes" id="ctl-close">BEGIN</button>
+    </div>
+    <div class="dlg-keys">? REOPENS THIS &middot; ESC CLOSES</div>
+  </div>
 </div>
 
 <!-- exit confirmation -->
@@ -661,6 +952,7 @@
   </div>
 </div>
 
+<div id="inv" aria-hidden="false"></div>
 <script>
 // FLOOR 01 — hand-authored. 21 tiles.
 // Coordinates are [col, row], origin top-left.
@@ -777,6 +1069,9 @@
       ],
       argentMin: 4,
       argentMax: 12,
+      // DATA BANK sub-roll pool. Found banks leave the pool permanently
+      // (no duplicate drops); once empty, a DATA roll pays out as FLUX.
+      bankPool: ['LORICA', 'VAPOR'],
     },
 
     // Opening a cache costs a turn and always pays: argent plus one guaranteed
@@ -819,25 +1114,69 @@
         note: 'Melee. One enemy, adjacent.',
       },
       ABRASIO: {
-        by: 'CALX', kind: 'sweep', targets: 'adjacent', range: 1,
+        kind: 'sweep', targets: 'adjacent', range: 1,
         pn: 3, mult: 1.3, fx: 'sweep', hitFx: 'strike',
         note: 'Melee sweep. Every enemy touching you.',
       },
       CONCRETIO: {
-        by: 'CALX', kind: 'hex', targets: 'foe', range: 3,
+        kind: 'hex', targets: 'foe', range: 3,
         pn: 4, atk: 2, cd: 4, fx: 'hex',
         note: 'Weakens one enemy. Permanent.',
       },
       FVLGVR: {
-        by: 'CINIS', kind: 'strike', targets: 'foe', range: 4,
+        kind: 'strike', targets: 'foe', range: 4,
         pn: 3, mult: 1, fx: 'bolt',
         note: 'Ranged strike. Four tiles.',
       },
       IMMOLATIO: {
-        by: 'CINIS', kind: 'strike', targets: 'foe', range: 2,
+        kind: 'strike', targets: 'foe', range: 2,
         pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
-        note: 'Heavy hit at two tiles. Burns CINIS.',
+        note: 'Heavy hit at two tiles. Burns the caster.',
       },
+      // Findable banks. Not in any default loadout; they enter play only as
+      // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
+      LORICA: {
+        kind: 'ward', targets: 'circle', range: 0,
+        pn: 4, def: 2, duration: 3, cd: 5, fx: 'hex',
+        note: 'All members +2 DEF for 3 turns.',
+      },
+      VAPOR: {
+        kind: 'splash', targets: 'foe', range: 3,
+        pn: 3, mult: 0.8, fx: 'bolt', hitFx: 'strike',
+        note: 'Bolt at 3. Also hits foes beside the target.',
+      },
+    },
+
+    // ------------------------------------------------------------- banks
+    // A DATA BANK *is* an operation: the archive that carries it. Daemons run
+    // whatever banks are seated in their two slots; the OPERATOR's PERCVSSIO
+    // is intrinsic (bare hands, not an archive) and has no bank entry.
+    // `type` locks a bank to daemons of that alchemical type. `bays` is how
+    // many FLUX cartridges it seats: workhorse ops get 2, spike ops get 1.
+    banks: {
+      ABRASIO:   { type: 'SAL',     bays: 2 },
+      CONCRETIO: { type: 'SAL',     bays: 1 },
+      FVLGVR:    { type: 'SVLPHVR', bays: 2 },
+      IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
+      LORICA:    { type: 'SAL',     bays: 1 },
+      VAPOR:     { type: 'SVLPHVR', bays: 2 },
+    },
+    defaultLoadout: {
+      CALX:  ['ABRASIO', 'CONCRETIO'],
+      CINIS: ['FVLGVR', 'IMMOLATIO'],
+    },
+
+    // ------------------------------------------------------------- fluxes
+    // A FLUX seats into a bank bay and modifies that operation only.
+    // Effects are resolved by fold() in src/game.js. `weight` drives the
+    // FLUX CELL drop sub-roll. FVLMINANS is deliberately greedy: power the
+    // body pays for. Strain will formalise this post-jam.
+    fluxes: {
+      VITRIOL:   { weight: 30, dmgBonus: 2,               note: '+2 damage.' },
+      NITRVM:    { weight: 22, pnDelta: -1,               note: '\u22121 PNEUMA cost. Floor 1.' },
+      VIVVM:     { weight: 20, rangeDelta: 1,             note: '+1 range.' },
+      ADAMANS:   { weight: 18, minDmg: 3,                 note: 'Minimum damage 3.' },
+      FVLMINANS: { weight: 10, dmgBonus: 5, vitaeCost: 2, note: '+5 damage. \u22122 VITAE per cast.' },
     },
   };
 })();
@@ -1034,22 +1373,57 @@
   const cheb = (a, b) => Math.max(Math.abs(a.c - b.c), Math.abs(a.r - b.r));
   const adjacent = (a, b) => Math.abs(a.c - b.c) + Math.abs(a.r - b.r) === 1;
 
-  // Operations grouped by owner, in hotkey order.
-  const OPS_BY = {};
+  // Intrinsic operations only (ops with a `by` field, i.e. the OPERATOR's
+  // bare-hands PERCVSSIO). Everything else is a seated DATA BANK: the bank IS
+  // the operation, and a daemon runs whatever archives its two slots hold.
+  const INTRINSIC = {};
   for (const [name, op] of Object.entries(B.operations)) {
-    (OPS_BY[op.by] = OPS_BY[op.by] || []).push({ name, ...op });
+    if (op.by) (INTRINSIC[op.by] = INTRINSIC[op.by] || []).push({ name, ...op });
   }
-  // Flat list in party order -> hotkeys 1..5. OPERATOR:1, CALX:2-3, CINIS:4-5.
-  const ALL_OPS = [];
-  Object.keys(B.party).forEach(who =>
-    (OPS_BY[who] || []).forEach(op => ALL_OPS.push({ owner: who, op })));
+
+  // fold(): resolve one seated bank -> a usable operation. Base stats come
+  // from B.operations; every seated flux applies its one modifier. This is
+  // the seam the full socket system (series/parallel, strain) replaces later.
+  function fold(slot) {
+    const base = B.operations[slot.bank];
+    const op = { name: slot.bank, ...base, fluxes: slot.fluxes.slice() };
+    for (const fid of slot.fluxes) {
+      if (!fid) continue;
+      const f = B.fluxes[fid];
+      if (f.dmgBonus)   op.dmgBonus = (op.dmgBonus || 0) + f.dmgBonus;
+      if (f.rangeDelta) op.range += f.rangeDelta;
+      if (f.pnDelta && op.pn > 0) op.pn = Math.max(1, op.pn + f.pnDelta);
+      if (f.minDmg)     op.minDmg = Math.max(op.minDmg || 0, f.minDmg);
+      if (f.vitaeCost)  op.vitaeCost = (op.vitaeCost || 0) + f.vitaeCost;
+    }
+    return op;
+  }
+
+  // Ops for one member, hotkey order: intrinsics first, then seated banks.
+  function memberOps(name) {
+    const slots = (state.loadout[name] || []);
+    return [...(INTRINSIC[name] || []), ...slots.map(fold)];
+  }
+  // Flat list in party order -> hotkeys 1..5. Rebuilt on every read because
+  // the loadout can change mid-run; this list is tiny.
+  function allOps() {
+    const out = [];
+    Object.keys(B.party).forEach(who =>
+      memberOps(who).forEach(op => out.push({ owner: who, op })));
+    return out;
+  }
 
   // -------------------------------------------------------------- state
 
   const state = {
     turn: 1,
+    // Two bank slots per daemon, seeded from the default loadout. Each slot:
+    // { bank, fluxes: [fluxId|null per bay] }. The OPERATOR has no slots.
+    loadout: Object.fromEntries(Object.entries(B.defaultLoadout).map(
+      ([who, banks]) => [who, banks.map(b =>
+        ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
-    modal: null,                   // null | 'exit'
+    modal: null,                   // null | 'exit' | 'controls' | 'inv'
     mode: 'move',                  // 'move' | 'act'
     sel: null,                     // member whose op menu is open (nameplate tap)
     acted: [],                     // member names done this act round (any order)
@@ -1149,10 +1523,40 @@
 
   // -------------------------------------------------------------- combat
 
-  function roll(atk, def) {
+  function roll(atk, def, minDmg) {
     const v = B.combat.variance;
     const jitter = Math.floor(Math.random() * (v * 2 + 1)) - v;
-    return Math.max(B.combat.minDamage, Math.round(atk - def) + jitter);
+    return Math.max(minDmg || B.combat.minDamage, Math.round(atk - def) + jitter);
+  }
+
+  // Banks the run already owns, anywhere: seated in a loadout slot or
+  // sitting in the bag. Pool banks that appear here never drop again.
+  function ownedBanks() {
+    const owned = new Set();
+    Object.values(state.loadout).forEach(slots =>
+      slots.forEach(sl => owned.add(sl.bank)));
+    state.bag.items.forEach(i => { if (i.bank) owned.add(i.bank); });
+    return owned;
+  }
+
+  // Resolve a top-table kind into a concrete item. FLUX rolls one of the five
+  // fluxes by weight; DATA rolls the remaining bank pool (no duplicates) and
+  // degrades to FLUX once the pool is exhausted.
+  function rollItem(kind) {
+    if (kind === 'DATA') {
+      const owned = ownedBanks();
+      const pool = B.drops.bankPool.filter(b => !owned.has(b));
+      if (pool.length) {
+        const bank = pool[Math.floor(Math.random() * pool.length)];
+        return { kind: 'DATA', bank, label: bank, sprite: 'databank', rarity: 'RARE' };
+      }
+      kind = 'FLUX';                       // pool empty: rare pays out as flux
+    }
+    const entries = Object.entries(B.fluxes);
+    const total = entries.reduce((t, [, f]) => t + f.weight, 0);
+    let n = Math.random() * total;
+    const [flux] = entries.find(([, f]) => (n -= f.weight) < 0) || entries[0];
+    return { kind: 'FLUX', flux, label: flux, sprite: 'flux', rarity: 'UNCOMMON' };
   }
 
   // Exactly one drop per severed enemy, rolled off the weighted table.
@@ -1161,7 +1565,9 @@
     const total = table.reduce((s, e) => s + e.weight, 0);
     let n = Math.random() * total;
     const pick = table.find(e => (n -= e.weight) < 0) || table[0];
-    const d = { id: dropSeq++, ...pick, c: foe.c, r: foe.r };
+    const d = pick.kind === 'ARGENT'
+      ? { id: dropSeq++, ...pick, c: foe.c, r: foe.r }
+      : { id: dropSeq++, ...rollItem(pick.kind), c: foe.c, r: foe.r };
     if (d.kind === 'ARGENT') {
       const { argentMin: lo, argentMax: hi } = B.drops;
       d.amount = lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -1182,8 +1588,8 @@
         log(`COLLECTED ${d.amount} ARGENT.`, 'good');
         float(d.c, d.r, '+' + d.amount + ' ARGENT', cls, d.rarity);
       } else {
-        state.bag.items.push({ kind: d.kind, label: d.label,
-                               sprite: d.sprite, rarity: d.rarity });
+        state.bag.items.push({ kind: d.kind, label: d.label, flux: d.flux,
+                               bank: d.bank, sprite: d.sprite, rarity: d.rarity });
         log(`COLLECTED ${d.label}.`, 'good');
         float(d.c, d.r, d.label, cls, d.rarity);
       }
@@ -1191,7 +1597,7 @@
   }
 
   function strikeFoe(member, op, foe) {
-    const dmg = roll(member.atk * (op.mult || 1), foe.def);
+    const dmg = roll(member.atk * (op.mult || 1) + (op.dmgBonus || 0), foe.def, op.minDmg);
     foe.hp -= dmg;
     float(foe.c, foe.r, '-' + dmg, 'f-dmg');
     burst(foe.c, foe.r, op.hitFx || op.fx || 'strike');
@@ -1262,7 +1668,7 @@
 
   // ---------------------------------------------------------- operations
 
-  const opsFor = m => OPS_BY[m.name] || [];
+  const opsFor = m => memberOps(m.name);
   const cdLeft = op => state.cd[op.name] || 0;
   // An op with a legal cost but nothing in reach is a different failure from
   // one you cannot pay for, and the player needs to be able to tell them apart.
@@ -1270,7 +1676,7 @@
   const usable = (m, op) => affordable(m, op) && !noTarget(op);
   // Nobody left who can do anything -> the only way out of the round is SPACE.
   const isStuck = () => state.mode === 'act' && !state.pending &&
-    pendingMembers().every(m => (OPS_BY[m.name] || []).every(op => !usable(m, op)));
+    pendingMembers().every(m => opsFor(m).every(op => !usable(m, op)));
   // Every direction blocked by wall or enemy -> the only way out is SPACE too.
   const canStep = () => [[0,-1],[-1,0],[0,1],[1,0]].some(([dc, dr]) => {
     const c = state.circle.c + dc, r = state.circle.r + dr;
@@ -1326,6 +1732,11 @@
     }
 
     if (op.kind === 'strike') strikeFoe(member, op, foe);
+    if (op.kind === 'splash') {
+      const hit = [foe, ...liveFoes().filter(f => f !== foe && cheb(f, foe) <= 1)];
+      log(`${op.name} BVRSTS OVER ${hit.length} ${hit.length > 1 ? 'ENEMIES' : 'ENEMY'}.`);
+      hit.forEach(f => strikeFoe(member, op, f));
+    }
     if (op.kind === 'hex') {
       foe.atk = Math.max(1, foe.atk - op.atk);
       burst(foe.c, foe.r, op.fx || 'hex');
@@ -1446,9 +1857,9 @@
     const pool = B.drops.table.filter(e => e.kind !== 'ARGENT');
     const total = pool.reduce((s, e) => s + e.weight, 0);
     let n = Math.random() * total;
-    const pick = pool.find(e => (n -= e.weight) < 0) || pool[0];
-    state.bag.items.push({ kind: pick.kind, label: pick.label,
-                           sprite: pick.sprite, rarity: pick.rarity });
+    const pick = rollItem((pool.find(e => (n -= e.weight) < 0) || pool[0]).kind);
+    state.bag.items.push({ kind: pick.kind, label: pick.label, flux: pick.flux,
+                           bank: pick.bank, sprite: pick.sprite, rarity: pick.rarity });
 
     float(p.c, p.r, '+' + argent + ' ARGENT', 'f-argent', pick.rarity && 'COMMON');
     float(p.c, p.r, pick.label, 'f-' + pick.kind.toLowerCase(), pick.rarity);
@@ -1508,7 +1919,7 @@
   // hotkey 0..4 across the flat ALL_OPS list
   function chooseOp(slot) {
     if (blocked()) return;
-    const entry = ALL_OPS[slot];
+    const entry = allOps()[slot];
     if (!entry) return;
     const m = byName(entry.owner);
     if (!m || !canAct(m)) return;
@@ -1932,16 +2343,23 @@
   const hintEl = document.getElementById('hint');
   const groups = {};
 
-  function buildFan() {
+  // Chips are rebuilt whenever the loadout changes: a seated bank IS the
+  // operation, so the fan must always mirror state.loadout, not a load-time
+  // snapshot. Listeners stay on fanEl (delegated), so rebuilding is safe.
+  function renderFanChips() {
+    const flat = allOps();
     fanEl.innerHTML = state.circle.members.map(m => {
-      const chips = (OPS_BY[m.name] || []).map(op => {
-        const slot = ALL_OPS.findIndex(e => e.op.name === op.name);
+      const chips = memberOps(m.name).map(op => {
+        const slot = flat.findIndex(e => e.owner === m.name && e.op.name === op.name);
+        const seated = (op.fluxes || []).filter(Boolean);
+        const fluxTag = seated.length
+          ? `<span class="cflux">\u2b21 ${seated.join(' \u00b7 ')}</span>` : '';
         return `<div class="chip" data-slot="${slot}" data-op="${op.name}"
                      role="button" tabindex="0" aria-label="${op.name}. ${op.note}">
                   <span class="hk">${slot + 1}</span>
                   <span class="cn">${op.name}</span>
                   <span class="cc"></span>
-                  <span class="cnote">${op.note}</span>
+                  <span class="cnote">${op.note}</span>${fluxTag}
                 </div>`;
       }).join('');
       return `<div class="grp" data-member="${m.name}" style="--tint:var(--${m.tint})">
@@ -1953,6 +2371,10 @@
       const el = fanEl.querySelector(`.grp[data-member="${m.name}"]`);
       groups[m.name] = { el, tag: el.querySelector('em'), chips: [...el.querySelectorAll('.chip')] };
     });
+  }
+
+  function buildFan() {
+    renderFanChips();
 
     fanEl.addEventListener('click', e => {
       const chip = e.target.closest('.chip');
@@ -2050,21 +2472,21 @@
 
   // A tag over the token when there is something here to act on.
   function syncHint() {
-    // While the fan is collapsed for aiming, this tag is the only thing telling
-    // you which operation is armed, so it takes priority over the E prompt.
-    const aim = state.pending;
-    const it = aim ? null : interactable();
-    hintEl.classList.toggle('open', !!(aim || it));
-    hintEl.classList.toggle('aim', !!aim);
+    // This tag renders on the tile NORTH of the token, so it is only ever worth
+    // the occlusion when it is the sole route to an interaction. It used to
+    // also carry the armed operation while aiming, which laid a full-width bar
+    // across the row the player was aiming into and hid the reachable tiles.
+    // That readout moved to #armed in the action bar; this stays click-through
+    // chrome for caches and stairs, and closes entirely during aim.
+    const it = state.pending ? null : interactable();
+    hintEl.classList.toggle('open', !!it);
+    hintEl.classList.toggle('aim', false);
     hintEl.classList.toggle('locked', !!(it && it.locked));
     // Only interactive when there is actually something here to open. Any other
     // state must stay click-through, or the tag blocks the tile behind it.
-    hintEl.classList.toggle('actionable', !aim && !!it && !it.locked);
-    if (!aim && !it) return;
-    hintEl.innerHTML = aim
-      ? `<span class="k">\u2316</span> ${aim.member.name} \u00b7 ${aim.op.name}`
-      : it.locked ? it.text
-      : `<span class="k">E</span> ${it.text}`;
+    hintEl.classList.toggle('actionable', !!it && !it.locked);
+    if (!it) return;
+    hintEl.innerHTML = it.locked ? it.text : `<span class="k">E</span> ${it.text}`;
     const t = tokenRect();
     const w = hintEl.offsetWidth;
     hintEl.style.left = Math.min(Math.max(t.cx, w / 2 + 6),
@@ -2134,6 +2556,39 @@
 
   const modalEl = document.getElementById('modal');
   const winEl = document.getElementById('win');
+  const ctlEl = document.getElementById('controls');
+  const helpEl = document.getElementById('help');
+
+  // "Goes away forever" is a stored fact, not a session flag. Wrapped because
+  // localStorage throws outright in some privacy modes and on some file://
+  // origins, and the controls screen is not worth taking the boot down with it.
+  const SEEN_KEY = 'dw:controls-seen:v1';
+  function seenControls() {
+    try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return false; }
+  }
+  function markControlsSeen() {
+    try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* private mode */ }
+  }
+
+  function openControls() {
+    // Never displace a live exit prompt or the win screen.
+    if (state.modal || finished()) return;
+    state.modal = 'controls';
+  }
+  function closeControls() {
+    if (state.modal !== 'controls') return;
+    state.modal = null;
+    markControlsSeen();
+  }
+
+  helpEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    openControls(); draw();
+  });
+  document.getElementById('ctl-close').addEventListener('click', () => {
+    if (!tapOk()) return;
+    closeControls(); draw();
+  });
 
   modalEl.addEventListener('click', e => {
     const b = e.target.closest('[data-answer]');
@@ -2146,6 +2601,14 @@
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
     winEl.classList.toggle('open', state.over === 'WIN');
+
+    const ctlOpen = state.modal === 'controls';
+    ctlEl.classList.toggle('open', ctlOpen);
+    // First sight of the game gets BEGIN; every later visit is a reference
+    // lookup and CLOSE is the honest label for it.
+    document.getElementById('ctl-close').textContent =
+      seenControls() ? 'CLOSE' : 'BEGIN';
+    helpEl.classList.toggle('hide', !!state.modal || finished());
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
@@ -2182,6 +2645,7 @@
     syncFan();
     syncConfirm();
     syncCancel();
+    syncArmed();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -2260,6 +2724,12 @@
     const focused = document.activeElement;
     if (focused && focused.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
 
+    if (state.modal === 'controls') {
+      e.preventDefault();
+      if (k === 'escape' || k === 'enter' || k === ' ' || k === '?') closeControls();
+      draw();
+      return;
+    }
     if (state.modal === 'exit') {
       e.preventDefault();
       if (k === 'y' || k === 'enter') answerExit(true);
@@ -2267,7 +2737,19 @@
       draw();
       return;
     }
+    if (state.modal === 'inv') {
+      e.preventDefault();
+      if (k === 'escape' || k === 'i') closeInv();
+      draw();
+      return;
+    }
+    // The satchel opens from anywhere outside a modal, including the win
+    // screen: reading your haul after the descent is half the reward.
+    if (k === 'i') { e.preventDefault(); openInv(); draw(); return; }
     if (finished()) return;
+
+    // ? is a reference lookup, so it stays available mid-round.
+    if (k === '?') { e.preventDefault(); openControls(); draw(); return; }
 
     if (MOVES[k]) { e.preventDefault(); moveInput(...MOVES[k]); draw(); return; }
     if (k === ' ')      { e.preventDefault(); passOrHold(); draw(); return; }
@@ -2426,6 +2908,18 @@
     draw();
   });
 
+  // What is armed, shown in the action bar rather than over the board. The fan
+  // is collapsed and #confirm is hidden while pending, so without this the only
+  // on-screen trace of the chosen operation is the HUD prompt line.
+  const armedEl = document.getElementById('armed');
+  function syncArmed() {
+    const aim = !finished() && !state.modal && state.pending;
+    armedEl.classList.toggle('open', !!aim);
+    if (!aim) return;
+    armedEl.innerHTML =
+      `<span class="k">\u2316</span>${aim.member.name} \u00b7 ${aim.op.name}`;
+  }
+
   // One tap out of aiming, out of a staged step, out of the act round.
   const cancelEl = document.getElementById('cancel');
   function syncCancel() {
@@ -2459,8 +2953,355 @@
   });
 
   // Headless test surface. Not used by the game itself.
+
+  // ---------------------------------------------------------- inventory
+  const invEl = document.getElementById('inv');
+
+  const aggroLive = () => liveFoes().some(f => f.awake && f.hp > 0);
+
+  // Mid-combat refits are not free: with any foe awake, touching a daemon's
+  // loadout spends that daemon's action for the round and takes back any
+  // operation it had queued. With the floor quiet, the workbench is open.
+  function payRefit(who) {
+    if (!aggroLive()) return true;
+    if (state.acted.includes(who)) {
+      log(who + ' HAS ALREADY ACTED \u2014 REFIT NEXT ROVND.', 'bad');
+      return false;
+    }
+    state.queued = state.queued.filter(q => q.member.name !== who);
+    state.acted.push(who);
+    log(who + ' SPENDS THE ROVND REFITTING.');
+    return true;
+  }
+
+  function openInv() {
+    if (state.modal) return;
+    state.modal = 'inv'; state.invSel = null;
+    renderInv();
+    invEl.classList.add('show');
+  }
+  function closeInv() {
+    state.modal = null; state.invSel = null;
+    invEl.classList.remove('show');
+  }
+
+  const TYPE_TINT = { SAL: '#E7E2D2', SVLPHVR: '#E3B347' };
+  const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+
+  // Faint occult linework behind the whole panel. Drawn once by invShell(),
+  // never re-rendered, so selecting an item can't make it flicker.
+  const INV_BG = `<svg viewBox="0 0 1200 860" preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true" fill="none" stroke="#E3B347" stroke-width="1">
+    <g opacity=".85">
+      <circle cx="150" cy="120" r="88"/><circle cx="150" cy="120" r="72"/>
+      <path d="M150 52 L209 154 H91 Z"/><path d="M150 188 L209 86 H91 Z"/>
+      <circle cx="150" cy="120" r="34"/>
+      <path d="M40 40 h60 M40 40 v60 M1160 40 h-60 M1160 40 v60"/>
+      <circle cx="430" cy="150" r="46"/><path d="M430 112 L462 168 H398 Z"/>
+      <circle cx="430" cy="150" r="14"/>
+      <circle cx="990" cy="470" r="60"/><circle cx="990" cy="470" r="40"/>
+      <path d="M950 470 h80 M990 430 v80"/>
+      <circle cx="230" cy="620" r="54"/><path d="M230 566 L277 647 H183 Z"/>
+      <circle cx="640" cy="800" r="38"/><circle cx="640" cy="800" r="22"/>
+      <path d="M300 300 h140 M300 300 v-30 M440 300 v30"/>
+      <path d="M760 640 h160 M760 640 v34 M920 640 v-34"/>
+      <circle cx="70" cy="430" r="26"/><circle cx="1130" cy="720" r="30"/>
+      <path d="M1090 180 l40 40 l-40 40 l-40 -40 z"/>
+      <path d="M520 560 l34 34 l-34 34 l-34 -34 z"/>
+    </g>
+    <g stroke="#8B5BF2" opacity=".75">
+      <circle cx="1010" cy="140" r="78"/><circle cx="1010" cy="140" r="60"/>
+      <path d="M1010 80 L1062 170 H958 Z"/><path d="M1010 200 L1062 110 H958 Z"/>
+      <circle cx="1010" cy="80" r="9"/><circle cx="1010" cy="200" r="9"/>
+      <circle cx="958" cy="110" r="9"/><circle cx="1062" cy="110" r="9"/>
+      <circle cx="958" cy="170" r="9"/><circle cx="1062" cy="170" r="9"/>
+      <circle cx="1010" cy="140" r="9"/>
+    </g>
+    <g stroke="#46F0DC" opacity=".5">
+      <path d="M540 60 h120 v40 M540 60 v40"/>
+      <circle cx="180" cy="340" r="18"/><circle cx="820" cy="240" r="14"/>
+      <path d="M60 760 h120 M120 700 v120"/>
+    </g>
+  </svg>`;
+
+  function bankGlyph(id) {
+    const bk = B.banks[id];
+    const c = TYPE_TINT[bk.type] || '#46F0DC';
+    const tabs = Array.from({ length: bk.bays }, (_, i) =>
+      `<rect x="${20 + i * 9 - (bk.bays - 1) * 4.5}" y="39" width="6" height="4"
+             fill="none" stroke="${c}" stroke-width="1.4"/>`).join('');
+    return `<svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="22" r="15" fill="none" stroke="${c}" stroke-width="1.6"/>
+      <path d="M24 7 v30 M9 22 h30" stroke="${c}" stroke-width="1.3"/>
+      <circle cx="24" cy="22" r="4.5" fill="none" stroke="${c}" stroke-width="1.3"/>
+      ${tabs}</svg>`;
+  }
+
+  // One distinct sigil per flux. Falls back to a plain ring for anything new.
+  const FLUX_ART = {
+    VITRIOL:   '<circle cx="24" cy="24" r="13" stroke-width="2.4"/>',
+    VIVVM:     '<circle cx="24" cy="24" r="8" stroke-width="2"/>' +
+               '<path d="M24 6 v6 M24 36 v6 M6 24 h6 M36 24 h6 M11 11 l4 4 M33 33 l4 4 M37 11 l-4 4 M15 33 l-4 4" stroke-width="1.8"/>',
+    NITRVM:    '<path d="M24 8 L39 36 H9 Z" stroke-width="2.2"/>',
+    ADAMANS:   '<circle cx="24" cy="22" r="12" stroke-width="2"/>' +
+               '<path d="M12 22 h24 M15 34 h18" stroke-width="1.8"/>',
+    FVLMINANS: '<circle cx="24" cy="24" r="8" stroke-width="2.2"/>' +
+               '<path d="M24 10 v-5 M24 38 v5 M10 24 h-5 M38 24 h5 M13 13 l-4 -4 M35 35 l4 4 M35 13 l4 -4 M13 35 l-4 4" stroke-width="2"/>' +
+               '<path d="M24 19 v10 M19 24 h10" stroke-width="1.8"/>',
+  };
+  function fluxGlyph(id) {
+    const c = id === 'FVLMINANS' ? '#D6402A' : '#46F0DC';
+    const art = FLUX_ART[id] || '<circle cx="24" cy="24" r="12" stroke-width="2.2"/>';
+    return `<svg viewBox="0 0 48 48" aria-hidden="true" fill="none"
+      stroke="${c}" stroke-linecap="round">${art}</svg>`;
+  }
+  function argentGlyph() {
+    return `<svg viewBox="0 0 48 48" aria-hidden="true" fill="none"
+      stroke="#E3B347" stroke-width="1.8">
+      <path d="M24 6 L36 20 L28 42 H20 L12 20 Z"/><path d="M12 20 h24 M24 6 v36"/></svg>`;
+  }
+
+  // Display rarity is derived from drop weight, not stored on the item: the
+  // drop table tags every FLUX the same, which makes for a flat-looking grid.
+  function rarityOf(it) {
+    if (it.kind === 'DATA') return 'UNCOMMON';
+    const w = (B.fluxes[it.flux] || {}).weight || 0;
+    return w >= 18 ? 'COMMON' : w >= 12 ? 'UNCOMMON' : 'RARE';
+  }
+
+  const KIND_LABEL = (op) =>
+    op.kind === 'sweep'  ? 'MELEE SWEEP'
+  : op.kind === 'hex'    ? 'HEX \u00b7 PERMANENT'
+  : op.kind === 'ward'   ? 'WARD \u00b7 CIRCLE'
+  : op.kind === 'splash' ? 'SPLASH BOLT'
+  : op.range > 1         ? 'RANGED STRIKE' : 'MELEE STRIKE';
+
+  const delta = (n) => n > 0 ? `  (+${n})` : n < 0 ? `  (${n})` : '';
+  const row = (k, v, dim) => `<div><dt>${k}</dt><dd${dim ? ' class="dim"' : ''}>${v}</dd></div>`;
+
+  // Three spec-plate columns for one bank, seated or loose. LOAD and STRAIN
+  // are reserved for the socket system and read as sealed until it lands.
+  function bankSpec(bank, fluxes, seated) {
+    const base = B.operations[bank];
+    const op = fold({ bank, fluxes: fluxes || [] });
+    const dmg = op.mult
+      ? `ATK \u00d7${op.mult}${op.dmgBonus ? ' +' + op.dmgBonus : ''}`
+      : op.def ? `DEF +${op.def}` : '\u2014';
+    const seatedTxt = (fluxes || []).filter(Boolean).join(' \u00b7 ') || '\u2014';
+    return [
+      row('KIND', KIND_LABEL(op)) +
+      row('RANGE', op.range + delta(op.range - base.range)) +
+      row('PNEVMA', op.pn + delta(op.pn - base.pn)) +
+      row('DAMAGE', dmg),
+      row('BAYS', ROMAN[B.banks[bank].bays - 1]) +
+      row('WIRING', 'PARALLEL') +
+      row('SEATED', seatedTxt) +
+      row('COOLDOWN', op.cd ? op.cd + ' TVRNS' : '\u2014'),
+      row('LOAD', '\u2014', 1) +
+      row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('PLVG', seated ? 'HEX \u00b7 MATED' : 'HEX \u00b7 OPEN') +
+      row('SELF COST', op.vitaeCost ? op.vitaeCost + ' VITAE' : '\u2014'),
+    ];
+  }
+  function fluxSpec(id) {
+    const f = B.fluxes[id];
+    const eff = [f.dmgBonus && `+${f.dmgBonus} DAMAGE`, f.rangeDelta && `+${f.rangeDelta} RANGE`,
+                 f.pnDelta && `${f.pnDelta} PNEVMA`, f.minDmg && `MIN DMG ${f.minDmg}`,
+                 f.vitaeCost && `+${f.vitaeCost} VITAE COST`].filter(Boolean);
+    return [
+      row('KIND', 'FLVX CELL') + row('EFFECT', eff[0] || '\u2014') +
+      row('RIDER', eff[1] || '\u2014') + row('DRAW WEIGHT', f.weight),
+      row('SEATS IN', 'ANY BAY') + row('WIRING', 'PARALLEL') +
+      row('TYPE LOCK', 'NONE') + row('RARITY', rarityOf({ kind: 'FLUX', flux: id })),
+      row('LOAD', '\u2014', 1) + row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('PLVG', 'CONTACT \u00b7 OPEN') + row('STACKS', 'ONE PER BAY'),
+    ];
+  }
+
+  function invShell() {
+    invEl.innerHTML = `<div class="invbox" role="dialog" aria-label="INVENTORY">
+        <div class="invbg">${INV_BG}</div><div class="invmain"></div></div>`;
+    return invEl.querySelector('.invmain');
+  }
+
+  function renderInv() {
+    const main = invEl.querySelector('.invmain') || invShell();
+    const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
+
+    // ------------------------------------------------------------- rig
+    const panels = ['CALX', 'CINIS'].map(who => {
+      const ptype = B.party[who].type;
+      const m = state.circle.members.find(x => x.name === who) || {};
+      const banks = state.loadout[who].map((sl, si) => {
+        const elig = sel && sel.kind === 'DATA' && B.banks[sel.bank].type === ptype;
+        const bays = sl.fluxes.map((f, fi) => f
+          ? `<div class="ibay${f === 'FVLMINANS' ? ' blood' : ''}">${fluxGlyph(f)}${f}</div>`
+          : `<div class="ibay empty${sel && sel.kind === 'FLUX' ? ' elig' : ''}"
+                  data-who="${who}" data-slot="${si}" data-bay="${fi}">\u2014 BAY \u2014</div>`).join('');
+        const lamps = sl.fluxes.map(f =>
+          `<span class="ilamp${f ? (f === 'FVLMINANS' ? ' blood' : '') : ' off'}"></span>
+           <span class="iline"></span>`).join('');
+        return `<div class="isockwrap">
+            <div class="iroman">${ROMAN[si]}</div>
+            <div class="isock${elig ? ' elig' : ''}" data-who="${who}" data-slot="${si}">
+              <div class="isock-body">
+                <div class="iname"><b class="t-${ptype.toLowerCase()}">${sl.bank}</b>
+                  <small>${ptype} \u00b7 BANK</small></div>
+                <div class="ibays">${bays}</div>
+              </div>
+              <div class="irail"><span class="iline"></span>${lamps}<span class="itip">\u25bc</span></div>
+            </div>
+            <div class="iplug"></div>
+          </div>`;
+      }).join('');
+      return `<div class="ipanel${ptype === 'SVLPHVR' ? ' gold' : ''}">
+          <div class="ipanel-h"><span>${who}</span><em>${ptype}</em></div>
+          <div class="ipanel-s">VITAE <b>${m.hp}</b>/${m.vitae} &nbsp; PNEVMA <b>${m.pn}</b>/${m.pneuma}</div>
+          <div class="ibanks">${banks}</div>
+        </div>`;
+    }).join('');
+
+    // ------------------------------------------------------ spec plate
+    let title = '\u2014', sub = 'NO SVBJECT', cols = [ '', '', '' ];
+    if (sel && sel.kind === 'DATA') {
+      title = sel.bank; sub = B.banks[sel.bank].type + ' \u00b7 DATA BANK \u00b7 LOOSE';
+      cols = bankSpec(sel.bank, [], false);
+    } else if (sel && sel.kind === 'FLUX') {
+      title = sel.flux; sub = 'FLVX CELL \u00b7 LOOSE';
+      cols = fluxSpec(sel.flux);
+    } else {
+      const who = 'CALX', sl = state.loadout[who][0];
+      title = sl.bank; sub = B.banks[sl.bank].type + ' \u00b7 SEATED \u00b7 ' + who;
+      cols = bankSpec(sl.bank, sl.fluxes, true);
+    }
+
+    let insp = 'SELECT AN ITEM \u2014 ELIGIBLE SOCKETS AND BAYS SIGNAL.';
+    if (sel && sel.kind === 'DATA') {
+      insp = `<b>${sel.bank}</b> \u00b7 ${B.operations[sel.bank].note} \u00b7 CLICK A GLOWING SOCKET TO SWAP.`;
+    } else if (sel && sel.kind === 'FLUX') {
+      insp = `<b>${sel.flux}</b> \u00b7 ${B.fluxes[sel.flux].note} CLICK A GLOWING BAY TO SEAT.`;
+    }
+    const cost = aggroLive()
+      ? 'FOES AWAKE \u2014 A REFIT SPENDS THAT DAEMON\u2019S ACTION THIS ROVND'
+      : 'FLOOR QVIET \u2014 REFITS ARE FREE';
+
+    // --------------------------------------------------------- satchel
+    // Identical items collapse into one card; data-i points at the first of
+    // the stack, so seating still splices exactly one entry out of the bag.
+    const stacks = [];
+    state.bag.items.forEach((it, i) => {
+      const key = it.kind + ':' + (it.bank || it.flux);
+      const s = stacks.find(x => x.key === key);
+      if (s) s.n++; else stacks.push({ key, i, it, n: 1 });
+    });
+    const cells = stacks.map(s => {
+      const it = s.it, name = it.bank || it.flux, rar = rarityOf(it);
+      const g = it.kind === 'DATA' ? bankGlyph(it.bank) : fluxGlyph(it.flux);
+      return `<div class="icell r-${rar.toLowerCase()}${state.invSel === s.i ? ' selct' : ''}"
+                   data-i="${s.i}" role="button" tabindex="0" aria-label="${name} ${rar}">
+                <div class="inm2">${name}</div>${g}<div class="irar">${rar}</div>
+                ${s.n > 1 ? `<span class="iqty">\u00d7${s.n}</span>` : ''}</div>`;
+    });
+    if (state.bag.argent) cells.push(`<div class="icell argent" aria-label="ARGENT">
+        <div class="inm2">VNASSAYED<br>ARGENT</div>${argentGlyph()}
+        <div class="irar">CVRRENCY</div><span class="iqty">\u00d7${state.bag.argent}</span></div>`);
+    const rows = Math.min(4, Math.max(2, Math.ceil(cells.length / 8)));
+    while (cells.length < rows * 8)
+      cells.push('<div class="icell vacant"><div class="inm2"></div><div class="inm2">VACANT</div></div>');
+
+    main.innerHTML = `
+      <div class="inv-h"><span>INVENTARIVM // VESSEL\u00b7CONFIGVRATION</span>
+        <button id="inv-close" aria-label="CLOSE INVENTORY">\u00d7 [I]</button></div>
+
+      <div class="iapexwrap"><div class="iapex">
+        <div class="iapex-h">OPERATOR \u25c7</div>
+        <div class="icards">
+          <div class="icard"><b>PERCVSSIO</b><small>INTRINSIC\u00b7STRIKE</small>
+            <svg viewBox="0 0 60 48" fill="none" stroke="var(--bone)" stroke-width="1.6"
+              aria-hidden="true"><path d="M18 30 v-9 a4 4 0 0 1 8 0 v-3 a4 4 0 0 1 8 0 v3
+              a4 4 0 0 1 8 0 v11 a9 9 0 0 1 -9 9 h-8 a7 7 0 0 1 -7 -7 z"/>
+              <path d="M8 12 l6 4 M52 12 l-6 4 M30 6 v6" stroke-width="1.2"/></svg></div>
+          <div class="icard sealed"><b>ATTVNED\u00b7SLOT</b>
+            <svg viewBox="0 0 60 48" fill="none" stroke="var(--shell-txt)" stroke-width="1.6"
+              stroke-dasharray="4 3" aria-hidden="true">
+              <path d="M18 8 h24 l10 16 l-10 16 h-24 l-10 -16 z"/></svg>
+            <small>SEALED</small></div>
+        </div></div></div>
+
+      <div class="itrace"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M362 0 V13 H150 V34"/><path d="M638 0 V13 H850 V34"/>
+        <rect x="358" y="9" width="8" height="8"/><rect x="146" y="9" width="8" height="8"/>
+        <rect x="634" y="9" width="8" height="8"/><rect x="846" y="9" width="8" height="8"/>
+      </svg></div>
+
+      <div class="irig">${panels}</div>
+
+      <div class="ispec">
+        <div class="iinsp">${insp}</div>
+        <div class="icost">${cost}</div>
+        <div class="ispec-b">
+          <div class="ispec-t">${title}<small>${sub}</small></div>
+          <dl>${cols[0]}</dl><dl>${cols[1]}</dl><dl>${cols[2]}</dl>
+        </div>
+      </div>
+
+      <div class="isat">
+        <div class="isat-h">SATCHEL <span>[ ${state.bag.items.length} / 32 ]</span></div>
+        <div class="igrid">${cells.join('')}</div>
+      </div>
+
+      <div class="ifoot">
+        <span class="fl">${cost}</span>
+        <span class="fr"><span><kbd>TAP</kbd>SELECT \u00b7 SEAT</span>
+          <span><kbd>[I]</kbd>CLOSE</span><span><kbd>[ESC]</kbd>CLOSE</span></span>
+      </div>`;
+  }
+
+
+  invEl.addEventListener('click', e => {
+    if (e.target.closest('#inv-close')) { closeInv(); draw(); return; }
+    const cell = e.target.closest('.icell[data-i]');
+    if (cell) {
+      const i = +cell.dataset.i;
+      state.invSel = state.invSel === i ? null : i;
+      renderInv(); return;
+    }
+    const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
+    if (!sel) return;
+
+    const bay = e.target.closest('.ibay.elig');
+    if (bay && sel.kind === 'FLUX') {
+      const who = bay.dataset.who;
+      if (!payRefit(who)) { renderInv(); draw(); return; }
+      state.loadout[who][+bay.dataset.slot].fluxes[+bay.dataset.bay] = sel.flux;
+      state.bag.items.splice(state.invSel, 1); state.invSel = null;
+      log(sel.flux + ' SEATED.', 'good');
+      renderFanChips(); renderInv(); draw(); return;
+    }
+    const sock = e.target.closest('.isock.elig');
+    if (sock && sel.kind === 'DATA') {
+      const who = sock.dataset.who;
+      if (!payRefit(who)) { renderInv(); draw(); return; }
+      const sl = state.loadout[who][+sock.dataset.slot];
+      // Ride-along (sheet 24): fluxes travel with their bank, both ways.
+      const old = { kind: 'DATA', bank: sl.bank, label: sl.bank, sprite: 'databank',
+                    rarity: 'RARE', fluxes: sl.fluxes.slice() };
+      sl.bank = sel.bank;
+      sl.fluxes = (sel.fluxes || Array(B.banks[sel.bank].bays).fill(null)).slice();
+      state.bag.items[state.invSel] = old; state.invSel = null;
+      log(old.bank + ' VNSEATED \u2014 ' + sl.bank + ' SEATED.', 'good');
+      renderFanChips(); renderInv(); draw(); return;
+    }
+  });
+
+  // The HUD satchel line doubles as the inventory button.
+  document.getElementById('bag').addEventListener('click', () => {
+    if (state.modal) return;
+    openInv(); draw();
+  });
+
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
-                  moveInput, openAct, draw, opsFor, ALL_OPS, fanEl, interactable, answerExit, floatsEl };
+                  moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl };
 
   buildRoster();
   buildFan();
@@ -2476,6 +3317,9 @@
   window.addEventListener('orientationchange', () => setTimeout(redraw, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', redraw);
   log(`FLOOR 01 COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
+  // Set before the first draw so the overlay is up on the first painted frame,
+  // rather than flashing the board and then covering it.
+  if (!seenControls()) state.modal = 'controls';
   draw();
 })();
 
