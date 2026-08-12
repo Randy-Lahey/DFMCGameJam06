@@ -36,9 +36,9 @@
     background:linear-gradient(180deg,rgba(70,240,220,.05),transparent);
   }
   .brand{color:var(--cyan);font-size:13px;letter-spacing:.4em}
-  .brand small{color:var(--bone);opacity:.4;letter-spacing:.25em;margin-left:12px}
+  .brand small{color:var(--bone);opacity:.62;letter-spacing:.25em;margin-left:12px}
   .turn{display:flex;align-items:baseline;gap:10px}
-  .turn .lbl{opacity:.45;letter-spacing:.3em;font-size:10px}
+  .turn .lbl{opacity:.7;letter-spacing:.3em;font-size:10px}
   .turn .val{color:var(--gold);font-size:22px;letter-spacing:.1em}
 
   #body{display:grid;grid-template-columns:1fr 300px;min-height:0}
@@ -78,6 +78,22 @@
     #hud{grid-template-columns:1fr}
     .hud-side{border-left:0;border-top:1px solid var(--edge)}
   }
+
+  /* At 375px a card is 111.7px wide but .unit-head needs ~158px and
+     .unit-meta ~98px — and .unit has a clip-path, so the overflow is not
+     merely ugly, the VITAE / PNEUMA readout is silently cut off. */
+  @media (max-width:600px){
+    header{overflow:hidden}
+    .brand{font-size:11px;letter-spacing:.24em}
+    .brand small{display:none}
+    .turn .val{font-size:18px}
+    .unit{padding:7px 8px}
+    .unit-head{flex-direction:column;align-items:flex-start;gap:1px}
+    .unit-name{font-size:10px;letter-spacing:.06em}
+    .unit-role{font-size:8px;letter-spacing:.04em;
+               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+    .unit-meta{font-size:10px;letter-spacing:0}
+  }
   .block{padding:12px 14px;border-bottom:1px solid var(--edge)}
   h2{
     font-size:10px;font-weight:400;letter-spacing:.34em;
@@ -89,14 +105,14 @@
   /* ---- unit card ---- */
   .unit{
     --tint:var(--cyan);
-    border:1px solid var(--edge);padding:8px 10px;
+    border:1px solid var(--edge-i);padding:8px 10px;
     background:rgba(70,240,220,.02);
     transition:border-color .2s ease,background .2s ease,opacity .2s ease;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
   }
   .unit-head{display:flex;justify-content:space-between;align-items:baseline}
   .unit-name{letter-spacing:.2em;font-size:11px;color:var(--tint)}
-  .unit-role{font-size:9px;opacity:.4;letter-spacing:.18em}
+  .unit-role{font-size:9px;opacity:.62;letter-spacing:.18em}
 
   /* ---- particles ---- */
   .p{
@@ -157,9 +173,9 @@
   .float.f-hurt  {color:var(--blood);font-size:12.5px}
   .float.f-sever {color:var(--gold);font-size:10px;letter-spacing:.3em}
   .float.f-argent{color:var(--gold)}
-  .float.f-flux  {color:var(--shell)}
+  .float.f-flux  {color:var(--shell-txt)}
   .float.f-data  {color:var(--cyan)}
-  .float small{opacity:.6;font-size:8.5px;letter-spacing:.2em;margin-left:5px}
+  .float small{opacity:.75;font-size:8.5px;letter-spacing:.2em;margin-left:5px}
 
   /* ---- overlays: exit dialog + win screen ---- */
   .overlay{
@@ -182,14 +198,14 @@
 
   .dlg-eyebrow{font-size:9px;letter-spacing:.4em;color:var(--cyan);opacity:.7;margin-bottom:12px}
   .dlg-title{font-size:14px;letter-spacing:.16em;color:var(--bone);line-height:1.6}
-  .dlg-note{font-size:9.5px;letter-spacing:.16em;opacity:.45;margin-top:10px}
-  .dlg-actions{display:flex;gap:12px;justify-content:center;margin-top:22px}
-  .dlg-keys{font-size:9px;letter-spacing:.24em;opacity:.35;margin-top:14px}
+  .dlg-note{font-size:9.5px;letter-spacing:.16em;opacity:.7;margin-top:10px}
+  .dlg-actions{display:flex;gap:16px;justify-content:center;margin-top:22px}
+  .dlg-keys{font-size:9px;letter-spacing:.24em;opacity:.6;margin-top:14px}
 
   .box{
     font:inherit;letter-spacing:.28em;font-size:11px;cursor:pointer;
-    padding:9px 26px;color:var(--bone);background:transparent;
-    border:1px solid var(--edge);
+    min-height:44px;padding:12px 28px;color:var(--bone);background:transparent;
+    border:1px solid var(--edge-i);
     transition:background .15s ease,color .15s ease,border-color .15s ease;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
   }
@@ -243,7 +259,7 @@
     display:flex;gap:8px;align-items:flex-end;
     padding:8px 9px;
     background:rgba(4,5,10,.92);
-    border:1px solid var(--edge);
+    border:1px solid var(--edge-i);
     box-shadow:0 0 0 1px rgba(4,5,10,.9), 0 8px 28px rgba(0,0,0,.65);
     clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
     opacity:0;pointer-events:none;
@@ -275,7 +291,7 @@
 
   .grp{
     --tint:var(--cyan);
-    display:grid;gap:3px;min-width:150px;align-content:start;
+    display:grid;gap:6px;min-width:150px;align-content:start;
     opacity:0;transform:translateY(6px);
     transition:opacity .24s ease, transform .28s cubic-bezier(.16,.9,.24,1);
   }
@@ -288,26 +304,29 @@
     border-bottom:1px solid var(--tint);padding-bottom:3px;margin-bottom:2px;
     display:flex;justify-content:space-between;align-items:baseline;
   }
-  .grp-name em{font-style:normal;font-size:8px;opacity:.5;letter-spacing:.12em}
-  .grp.done{opacity:.28}
+  .grp-name em{font-style:normal;font-size:8.5px;opacity:.8;letter-spacing:.12em}
+  .grp.done{opacity:.45}
   .grp.done .grp-name{border-bottom-style:dashed}
   .grp.acting .grp-name{color:var(--gold);border-bottom-color:var(--gold)}
 
   .chip{
     display:grid;grid-template-columns:13px 1fr auto;gap:2px 6px;align-items:center;
-    padding:5px 7px;cursor:pointer;font-size:10px;max-width:190px;
+    align-content:center;min-height:44px;
+    padding:9px 10px;cursor:pointer;font-size:10px;max-width:190px;
     border-left:2px solid var(--tint);
     background:rgba(231,226,210,.05);
     transition:background .14s ease, border-color .14s ease;
   }
   .chip .hk{color:var(--tint);opacity:.75;font-size:9px}
   .chip .cn{letter-spacing:.14em;white-space:nowrap}
-  .chip .cc{color:var(--shell);font-size:9px;letter-spacing:.06em}
+  .chip .cc{color:var(--shell-txt);font-size:9px;letter-spacing:.06em}
+  /* .42 was authored as a hover-reveal, and touch never gets the hover — so
+     the only text explaining an operation sat at ~3.3:1 while the player was
+     asked to spend pneuma on it. */
   .chip .cnote{
-    grid-column:2 / 4;font-size:8.5px;line-height:1.35;letter-spacing:.05em;
-    opacity:.42;text-transform:none;transition:opacity .14s ease;
+    grid-column:2 / 4;font-size:9px;line-height:1.4;letter-spacing:.05em;
+    opacity:.72;text-transform:none;transition:opacity .14s ease;
   }
-  .chip:hover .cnote{opacity:.8}
   .chip.aiming .cnote{opacity:.85;color:var(--gold)}
   .chip.locked{opacity:.55;cursor:not-allowed;border-left-color:var(--bone)}
   .chip.locked .cc{color:var(--blood)}
@@ -343,14 +362,15 @@
   .vitae i,.pneuma i{display:block;height:100%;background:var(--tint);
                      transition:width .25s cubic-bezier(.16,.9,.24,1)}
   .pneuma i{background:var(--shell)}
-  .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.5;margin-top:4px}
+  /* these are the live VITAE / PNEUMA numbers — they were at ~4.35:1 */
+  .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.78;margin-top:4px}
 
   /* ---- effects + prompt ---- */
   .bag{display:flex;flex-wrap:wrap;gap:5px}
   .bg{font-size:9px;letter-spacing:.16em;padding:2px 6px;
-      border:1px solid currentColor;opacity:.55}
+      border:1px solid currentColor;opacity:.85}
   .bg b{font-weight:400;opacity:1}
-  .bg.a{color:var(--gold)} .bg.f{color:var(--shell)} .bg.d{color:var(--cyan)}
+  .bg.a{color:var(--gold)} .bg.f{color:var(--shell-txt)} .bg.d{color:var(--cyan)}
   .bg.drop{color:var(--bone);border-style:dashed;opacity:.75}
 
   .effects{display:flex;flex-wrap:wrap;gap:5px}
@@ -359,8 +379,9 @@
   .eff b{color:var(--gold);font-weight:400}
   .eff.dim{border-color:var(--edge);opacity:.4}
 
-  .prompt{font-size:9.5px;letter-spacing:.2em;opacity:.5;
-          border-left:1px solid var(--edge);padding-left:8px;transition:color .2s,opacity .2s}
+  /* the only instruction text on screen once the record panel is hidden */
+  .prompt{font-size:10px;letter-spacing:.2em;opacity:.78;
+          border-left:1px solid var(--edge-i);padding-left:8px;transition:color .2s,opacity .2s}
   .prompt.hot{color:var(--gold);opacity:1;border-color:var(--gold)}
 
   /* ---- log ---- */
@@ -378,7 +399,7 @@
     min-height:44px;padding:0 22px;
     font:inherit;letter-spacing:.24em;font-size:10.5px;
     color:var(--bone);background:rgba(4,5,10,.92);
-    border:1px solid var(--edge);cursor:pointer;
+    border:1px solid var(--edge-i);cursor:pointer;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
     opacity:0;pointer-events:none;visibility:hidden;
     transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1),

@@ -621,7 +621,12 @@
   // shows everything and never moves. When it doesn't (phones), the viewBox
   // crops to what fits, centred on the circle, clamped to the floor edges.
   // `cam` is read back by tileFromEvent, so pointer math always matches.
-  const MIN_TILE_PX = 44;
+  //
+  // 44 is the accessibility floor, and adjacent tiles are contiguous with no
+  // gutter — a thumb 3mm off centre steps the wrong way. On a 375px phone it
+  // also wastes ~240px of letterbox. Coarse pointers get 64, which yields
+  // ~70px tiles through the same clamping.
+  const MIN_TILE_PX = window.matchMedia('(pointer:coarse)').matches ? 64 : 44;
   let cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
 
   function updateCamera() {
