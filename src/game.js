@@ -41,22 +41,57 @@
   const cheb = (a, b) => Math.max(Math.abs(a.c - b.c), Math.abs(a.r - b.r));
   const adjacent = (a, b) => Math.abs(a.c - b.c) + Math.abs(a.r - b.r) === 1;
 
-  // Operations grouped by owner, in hotkey order.
-  const OPS_BY = {};
+  // Intrinsic operations only (ops with a `by` field, i.e. the OPERATOR's
+  // bare-hands PERCVSSIO). Everything else is a seated DATA BANK: the bank IS
+  // the operation, and a daemon runs whatever archives its two slots hold.
+  const INTRINSIC = {};
   for (const [name, op] of Object.entries(B.operations)) {
-    (OPS_BY[op.by] = OPS_BY[op.by] || []).push({ name, ...op });
+    if (op.by) (INTRINSIC[op.by] = INTRINSIC[op.by] || []).push({ name, ...op });
   }
-  // Flat list in party order -> hotkeys 1..5. OPERATOR:1, CALX:2-3, CINIS:4-5.
-  const ALL_OPS = [];
-  Object.keys(B.party).forEach(who =>
-    (OPS_BY[who] || []).forEach(op => ALL_OPS.push({ owner: who, op })));
+
+  // fold(): resolve one seated bank -> a usable operation. Base stats come
+  // from B.operations; every seated flux applies its one modifier. This is
+  // the seam the full socket system (series/parallel, strain) replaces later.
+  function fold(slot) {
+    const base = B.operations[slot.bank];
+    const op = { name: slot.bank, ...base, fluxes: slot.fluxes.slice() };
+    for (const fid of slot.fluxes) {
+      if (!fid) continue;
+      const f = B.fluxes[fid];
+      if (f.dmgBonus)   op.dmgBonus = (op.dmgBonus || 0) + f.dmgBonus;
+      if (f.rangeDelta) op.range += f.rangeDelta;
+      if (f.pnDelta && op.pn > 0) op.pn = Math.max(1, op.pn + f.pnDelta);
+      if (f.minDmg)     op.minDmg = Math.max(op.minDmg || 0, f.minDmg);
+      if (f.vitaeCost)  op.vitaeCost = (op.vitaeCost || 0) + f.vitaeCost;
+    }
+    return op;
+  }
+
+  // Ops for one member, hotkey order: intrinsics first, then seated banks.
+  function memberOps(name) {
+    const slots = (state.loadout[name] || []);
+    return [...(INTRINSIC[name] || []), ...slots.map(fold)];
+  }
+  // Flat list in party order -> hotkeys 1..5. Rebuilt on every read because
+  // the loadout can change mid-run; this list is tiny.
+  function allOps() {
+    const out = [];
+    Object.keys(B.party).forEach(who =>
+      memberOps(who).forEach(op => out.push({ owner: who, op })));
+    return out;
+  }
 
   // -------------------------------------------------------------- state
 
   const state = {
     turn: 1,
+    // Two bank slots per daemon, seeded from the default loadout. Each slot:
+    // { bank, fluxes: [fluxId|null per bay] }. The OPERATOR has no slots.
+    loadout: Object.fromEntries(Object.entries(B.defaultLoadout).map(
+      ([who, banks]) => [who, banks.map(b =>
+        ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
-    modal: null,                   // null | 'exit'
+    modal: null,                   // null | 'exit' | 'controls' | 'inv'
     mode: 'move',                  // 'move' | 'act'
     sel: null,                     // member whose op menu is open (nameplate tap)
     acted: [],                     // member names done this act round (any order)
@@ -156,10 +191,40 @@
 
   // -------------------------------------------------------------- combat
 
-  function roll(atk, def) {
+  function roll(atk, def, minDmg) {
     const v = B.combat.variance;
     const jitter = Math.floor(Math.random() * (v * 2 + 1)) - v;
-    return Math.max(B.combat.minDamage, Math.round(atk - def) + jitter);
+    return Math.max(minDmg || B.combat.minDamage, Math.round(atk - def) + jitter);
+  }
+
+  // Banks the run already owns, anywhere: seated in a loadout slot or
+  // sitting in the bag. Pool banks that appear here never drop again.
+  function ownedBanks() {
+    const owned = new Set();
+    Object.values(state.loadout).forEach(slots =>
+      slots.forEach(sl => owned.add(sl.bank)));
+    state.bag.items.forEach(i => { if (i.bank) owned.add(i.bank); });
+    return owned;
+  }
+
+  // Resolve a top-table kind into a concrete item. FLUX rolls one of the five
+  // fluxes by weight; DATA rolls the remaining bank pool (no duplicates) and
+  // degrades to FLUX once the pool is exhausted.
+  function rollItem(kind) {
+    if (kind === 'DATA') {
+      const owned = ownedBanks();
+      const pool = B.drops.bankPool.filter(b => !owned.has(b));
+      if (pool.length) {
+        const bank = pool[Math.floor(Math.random() * pool.length)];
+        return { kind: 'DATA', bank, label: bank, sprite: 'databank', rarity: 'RARE' };
+      }
+      kind = 'FLUX';                       // pool empty: rare pays out as flux
+    }
+    const entries = Object.entries(B.fluxes);
+    const total = entries.reduce((t, [, f]) => t + f.weight, 0);
+    let n = Math.random() * total;
+    const [flux] = entries.find(([, f]) => (n -= f.weight) < 0) || entries[0];
+    return { kind: 'FLUX', flux, label: flux, sprite: 'flux', rarity: 'UNCOMMON' };
   }
 
   // Exactly one drop per severed enemy, rolled off the weighted table.
@@ -168,7 +233,9 @@
     const total = table.reduce((s, e) => s + e.weight, 0);
     let n = Math.random() * total;
     const pick = table.find(e => (n -= e.weight) < 0) || table[0];
-    const d = { id: dropSeq++, ...pick, c: foe.c, r: foe.r };
+    const d = pick.kind === 'ARGENT'
+      ? { id: dropSeq++, ...pick, c: foe.c, r: foe.r }
+      : { id: dropSeq++, ...rollItem(pick.kind), c: foe.c, r: foe.r };
     if (d.kind === 'ARGENT') {
       const { argentMin: lo, argentMax: hi } = B.drops;
       d.amount = lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -189,8 +256,8 @@
         log(`COLLECTED ${d.amount} ARGENT.`, 'good');
         float(d.c, d.r, '+' + d.amount + ' ARGENT', cls, d.rarity);
       } else {
-        state.bag.items.push({ kind: d.kind, label: d.label,
-                               sprite: d.sprite, rarity: d.rarity });
+        state.bag.items.push({ kind: d.kind, label: d.label, flux: d.flux,
+                               bank: d.bank, sprite: d.sprite, rarity: d.rarity });
         log(`COLLECTED ${d.label}.`, 'good');
         float(d.c, d.r, d.label, cls, d.rarity);
       }
@@ -198,7 +265,7 @@
   }
 
   function strikeFoe(member, op, foe) {
-    const dmg = roll(member.atk * (op.mult || 1), foe.def);
+    const dmg = roll(member.atk * (op.mult || 1) + (op.dmgBonus || 0), foe.def, op.minDmg);
     foe.hp -= dmg;
     float(foe.c, foe.r, '-' + dmg, 'f-dmg');
     burst(foe.c, foe.r, op.hitFx || op.fx || 'strike');
@@ -269,7 +336,7 @@
 
   // ---------------------------------------------------------- operations
 
-  const opsFor = m => OPS_BY[m.name] || [];
+  const opsFor = m => memberOps(m.name);
   const cdLeft = op => state.cd[op.name] || 0;
   // An op with a legal cost but nothing in reach is a different failure from
   // one you cannot pay for, and the player needs to be able to tell them apart.
@@ -277,7 +344,7 @@
   const usable = (m, op) => affordable(m, op) && !noTarget(op);
   // Nobody left who can do anything -> the only way out of the round is SPACE.
   const isStuck = () => state.mode === 'act' && !state.pending &&
-    pendingMembers().every(m => (OPS_BY[m.name] || []).every(op => !usable(m, op)));
+    pendingMembers().every(m => opsFor(m).every(op => !usable(m, op)));
   // Every direction blocked by wall or enemy -> the only way out is SPACE too.
   const canStep = () => [[0,-1],[-1,0],[0,1],[1,0]].some(([dc, dr]) => {
     const c = state.circle.c + dc, r = state.circle.r + dr;
@@ -333,6 +400,11 @@
     }
 
     if (op.kind === 'strike') strikeFoe(member, op, foe);
+    if (op.kind === 'splash') {
+      const hit = [foe, ...liveFoes().filter(f => f !== foe && cheb(f, foe) <= 1)];
+      log(`${op.name} BVRSTS OVER ${hit.length} ${hit.length > 1 ? 'ENEMIES' : 'ENEMY'}.`);
+      hit.forEach(f => strikeFoe(member, op, f));
+    }
     if (op.kind === 'hex') {
       foe.atk = Math.max(1, foe.atk - op.atk);
       burst(foe.c, foe.r, op.fx || 'hex');
@@ -453,9 +525,9 @@
     const pool = B.drops.table.filter(e => e.kind !== 'ARGENT');
     const total = pool.reduce((s, e) => s + e.weight, 0);
     let n = Math.random() * total;
-    const pick = pool.find(e => (n -= e.weight) < 0) || pool[0];
-    state.bag.items.push({ kind: pick.kind, label: pick.label,
-                           sprite: pick.sprite, rarity: pick.rarity });
+    const pick = rollItem((pool.find(e => (n -= e.weight) < 0) || pool[0]).kind);
+    state.bag.items.push({ kind: pick.kind, label: pick.label, flux: pick.flux,
+                           bank: pick.bank, sprite: pick.sprite, rarity: pick.rarity });
 
     float(p.c, p.r, '+' + argent + ' ARGENT', 'f-argent', pick.rarity && 'COMMON');
     float(p.c, p.r, pick.label, 'f-' + pick.kind.toLowerCase(), pick.rarity);
@@ -515,7 +587,7 @@
   // hotkey 0..4 across the flat ALL_OPS list
   function chooseOp(slot) {
     if (blocked()) return;
-    const entry = ALL_OPS[slot];
+    const entry = allOps()[slot];
     if (!entry) return;
     const m = byName(entry.owner);
     if (!m || !canAct(m)) return;
@@ -939,16 +1011,23 @@
   const hintEl = document.getElementById('hint');
   const groups = {};
 
-  function buildFan() {
+  // Chips are rebuilt whenever the loadout changes: a seated bank IS the
+  // operation, so the fan must always mirror state.loadout, not a load-time
+  // snapshot. Listeners stay on fanEl (delegated), so rebuilding is safe.
+  function renderFanChips() {
+    const flat = allOps();
     fanEl.innerHTML = state.circle.members.map(m => {
-      const chips = (OPS_BY[m.name] || []).map(op => {
-        const slot = ALL_OPS.findIndex(e => e.op.name === op.name);
+      const chips = memberOps(m.name).map(op => {
+        const slot = flat.findIndex(e => e.owner === m.name && e.op.name === op.name);
+        const seated = (op.fluxes || []).filter(Boolean);
+        const fluxTag = seated.length
+          ? `<span class="cflux">\u2b21 ${seated.join(' \u00b7 ')}</span>` : '';
         return `<div class="chip" data-slot="${slot}" data-op="${op.name}"
                      role="button" tabindex="0" aria-label="${op.name}. ${op.note}">
                   <span class="hk">${slot + 1}</span>
                   <span class="cn">${op.name}</span>
                   <span class="cc"></span>
-                  <span class="cnote">${op.note}</span>
+                  <span class="cnote">${op.note}</span>${fluxTag}
                 </div>`;
       }).join('');
       return `<div class="grp" data-member="${m.name}" style="--tint:var(--${m.tint})">
@@ -960,6 +1039,10 @@
       const el = fanEl.querySelector(`.grp[data-member="${m.name}"]`);
       groups[m.name] = { el, tag: el.querySelector('em'), chips: [...el.querySelectorAll('.chip')] };
     });
+  }
+
+  function buildFan() {
+    renderFanChips();
 
     fanEl.addEventListener('click', e => {
       const chip = e.target.closest('.chip');
@@ -1322,6 +1405,15 @@
       draw();
       return;
     }
+    if (state.modal === 'inv') {
+      e.preventDefault();
+      if (k === 'escape' || k === 'i') closeInv();
+      draw();
+      return;
+    }
+    // The satchel opens from anywhere outside a modal, including the win
+    // screen: reading your haul after the descent is half the reward.
+    if (k === 'i') { e.preventDefault(); openInv(); draw(); return; }
     if (finished()) return;
 
     // ? is a reference lookup, so it stays available mid-round.
@@ -1529,8 +1621,158 @@
   });
 
   // Headless test surface. Not used by the game itself.
+
+  // ---------------------------------------------------------- inventory
+  const invEl = document.getElementById('inv');
+
+  const aggroLive = () => liveFoes().some(f => f.awake && f.hp > 0);
+
+  // Mid-combat refits are not free: with any foe awake, touching a daemon's
+  // loadout spends that daemon's action for the round and takes back any
+  // operation it had queued. With the floor quiet, the workbench is open.
+  function payRefit(who) {
+    if (!aggroLive()) return true;
+    if (state.acted.includes(who)) {
+      log(who + ' HAS ALREADY ACTED \u2014 REFIT NEXT ROVND.', 'bad');
+      return false;
+    }
+    state.queued = state.queued.filter(q => q.member.name !== who);
+    state.acted.push(who);
+    log(who + ' SPENDS THE ROVND REFITTING.');
+    return true;
+  }
+
+  function openInv() {
+    if (state.modal) return;
+    state.modal = 'inv'; state.invSel = null;
+    renderInv();
+    invEl.classList.add('show');
+  }
+  function closeInv() {
+    state.modal = null; state.invSel = null;
+    invEl.classList.remove('show');
+  }
+
+  const TYPE_TINT = { SAL: '#E7E2D2', SVLPHVR: '#E3B347' };
+
+  function bankGlyph(id) {
+    const c = TYPE_TINT[B.banks[id].type] || '#46F0DC';
+    const pips = Array.from({ length: B.banks[id].bays }, (_, i) =>
+      `<rect x="${16 + i * 12}" y="26" width="8" height="5" fill="none" stroke="${c}" stroke-width="1.5"/>`).join('');
+    return `<svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M8 4 h32 l4 4 v26 l-4 4 h-32 l-4 -4 v-26 z" fill="rgba(70,240,220,.05)" stroke="${c}" stroke-width="1.5"/>
+      <line x1="12" y1="12" x2="36" y2="12" stroke="${c}" stroke-width="1.5"/>
+      ${pips}
+      <path d="M20 38 h8 l3 3 h-14 z" fill="${c}"/></svg>`;
+  }
+  function fluxGlyph(id) {
+    const c = id === 'FVLMINANS' ? '#D6402A' : '#46F0DC';
+    return `<svg viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="16" y="8" width="16" height="30" fill="rgba(70,240,220,.05)" stroke="${c}" stroke-width="1.5"/>
+      <circle cx="24" cy="18" r="5" fill="none" stroke="${c}" stroke-width="2"/>
+      <line x1="19" y1="31" x2="29" y2="31" stroke="${c}" stroke-width="1"/></svg>`;
+  }
+
+  function renderInv() {
+    const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
+
+    const panels = ['CALX', 'CINIS'].map(who => {
+      const ptype = B.party[who].type;
+      const slots = state.loadout[who].map((sl, si) => {
+        const elig = sel && sel.kind === 'DATA' && B.banks[sel.bank].type === ptype;
+        const bays = sl.fluxes.map((f, fi) => f
+          ? `<div class="ibay${f === 'FVLMINANS' ? ' blood' : ''}"><span class="iring"></span>${f}</div>`
+          : `<div class="ibay empty${sel && sel.kind === 'FLUX' ? ' elig' : ''}"
+                  data-who="${who}" data-slot="${si}" data-bay="${fi}">\u2014 BAY \u2014</div>`).join('');
+        return `<div class="isock${elig ? ' elig' : ''}" data-who="${who}" data-slot="${si}">
+                  <div class="isock-h"><span class="inm t-${B.banks[sl.bank].type.toLowerCase()}">${sl.bank}</span>
+                    <span class="ihex">\u2b21 SEATED</span></div>
+                  <div class="inote">${B.operations[sl.bank].note}</div>
+                  <div class="ibays">${bays}</div>
+                </div>`;
+      }).join('');
+      return `<div class="ipanel"><div class="ipanel-h">${who}
+                <span class="t-${ptype.toLowerCase()}">${ptype}</span></div>${slots}</div>`;
+    }).join('');
+
+    const cells = state.bag.items.map((it, i) => {
+      const g = it.kind === 'DATA' ? bankGlyph(it.bank) : fluxGlyph(it.flux);
+      return `<div class="icell${state.invSel === i ? ' selct' : ''}" data-i="${i}"
+                   role="button" tabindex="0" aria-label="${it.label}">${g}</div>`;
+    });
+    cells.push(`<div class="icell argent" aria-label="ARGENT">\u25c6<span class="iqty">\u00d7${state.bag.argent}</span></div>`);
+    while (cells.length < 16 || cells.length % 8) cells.push('<div class="icell"></div>');
+
+    let insp = 'SELECT AN ITEM \u2014 ELIGIBLE SOCKETS AND BAYS SIGNAL.';
+    if (sel && sel.kind === 'DATA') {
+      const bk = B.banks[sel.bank];
+      insp = `<b>${sel.bank}</b> \u00b7 ${bk.type} DATA BANK \u00b7 ${bk.bays} BAY${bk.bays > 1 ? 'S' : ''}` +
+             ` \u00b7 ${B.operations[sel.bank].note} \u00b7 CLICK A GLOWING SOCKET TO SWAP.`;
+    } else if (sel && sel.kind === 'FLUX') {
+      insp = `<b>${sel.flux}</b> \u00b7 FLUX \u00b7 ${B.fluxes[sel.flux].note} CLICK A GLOWING BAY TO SEAT.`;
+    }
+    const cost = aggroLive()
+      ? 'FOES AWAKE \u2014 A REFIT SPENDS THAT DAEMON\u2019S ACTION THIS ROVND'
+      : 'FLOOR QVIET \u2014 REFITS ARE FREE';
+
+    invEl.innerHTML = `
+      <div class="invbox" role="dialog" aria-label="INVENTORY">
+        <div class="inv-h"><span>INVENTARIVM // VESSEL\u00b7CONFIGVRATION</span>
+          <button id="inv-close" aria-label="CLOSE INVENTORY">\u00d7 [I]</button></div>
+        <div class="iapex"><div class="ipanel-h">OPERATOR <span class="t-arc">ARCANVM</span></div>
+          <span class="ichip">PERCVSSIO <small>INTRINSIC\u00b7STRIKE</small></span>
+          <span class="ichip sealed">ATTVNED\u00b7SLOT <small>SEALED</small></span></div>
+        <div class="irig">${panels}</div>
+        <div class="iinsp">${insp}</div>
+        <div class="icost">${cost}</div>
+        <div class="igrid">${cells.join('')}</div>
+      </div>`;
+  }
+
+  invEl.addEventListener('click', e => {
+    if (e.target.closest('#inv-close')) { closeInv(); draw(); return; }
+    const cell = e.target.closest('.icell[data-i]');
+    if (cell) {
+      const i = +cell.dataset.i;
+      state.invSel = state.invSel === i ? null : i;
+      renderInv(); return;
+    }
+    const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
+    if (!sel) return;
+
+    const bay = e.target.closest('.ibay.elig');
+    if (bay && sel.kind === 'FLUX') {
+      const who = bay.dataset.who;
+      if (!payRefit(who)) { renderInv(); draw(); return; }
+      state.loadout[who][+bay.dataset.slot].fluxes[+bay.dataset.bay] = sel.flux;
+      state.bag.items.splice(state.invSel, 1); state.invSel = null;
+      log(sel.flux + ' SEATED.', 'good');
+      renderFanChips(); renderInv(); draw(); return;
+    }
+    const sock = e.target.closest('.isock.elig');
+    if (sock && sel.kind === 'DATA') {
+      const who = sock.dataset.who;
+      if (!payRefit(who)) { renderInv(); draw(); return; }
+      const sl = state.loadout[who][+sock.dataset.slot];
+      // Ride-along (sheet 24): fluxes travel with their bank, both ways.
+      const old = { kind: 'DATA', bank: sl.bank, label: sl.bank, sprite: 'databank',
+                    rarity: 'RARE', fluxes: sl.fluxes.slice() };
+      sl.bank = sel.bank;
+      sl.fluxes = (sel.fluxes || Array(B.banks[sel.bank].bays).fill(null)).slice();
+      state.bag.items[state.invSel] = old; state.invSel = null;
+      log(old.bank + ' VNSEATED \u2014 ' + sl.bank + ' SEATED.', 'good');
+      renderFanChips(); renderInv(); draw(); return;
+    }
+  });
+
+  // The HUD satchel line doubles as the inventory button.
+  document.getElementById('bag').addEventListener('click', () => {
+    if (state.modal) return;
+    openInv(); draw();
+  });
+
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
-                  moveInput, openAct, draw, opsFor, ALL_OPS, fanEl, interactable, answerExit, floatsEl };
+                  moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl };
 
   buildRoster();
   buildFan();

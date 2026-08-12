@@ -56,6 +56,9 @@
       ],
       argentMin: 4,
       argentMax: 12,
+      // DATA BANK sub-roll pool. Found banks leave the pool permanently
+      // (no duplicate drops); once empty, a DATA roll pays out as FLUX.
+      bankPool: ['LORICA', 'VAPOR'],
     },
 
     // Opening a cache costs a turn and always pays: argent plus one guaranteed
@@ -98,25 +101,69 @@
         note: 'Melee. One enemy, adjacent.',
       },
       ABRASIO: {
-        by: 'CALX', kind: 'sweep', targets: 'adjacent', range: 1,
+        kind: 'sweep', targets: 'adjacent', range: 1,
         pn: 3, mult: 1.3, fx: 'sweep', hitFx: 'strike',
         note: 'Melee sweep. Every enemy touching you.',
       },
       CONCRETIO: {
-        by: 'CALX', kind: 'hex', targets: 'foe', range: 3,
+        kind: 'hex', targets: 'foe', range: 3,
         pn: 4, atk: 2, cd: 4, fx: 'hex',
         note: 'Weakens one enemy. Permanent.',
       },
       FVLGVR: {
-        by: 'CINIS', kind: 'strike', targets: 'foe', range: 4,
+        kind: 'strike', targets: 'foe', range: 4,
         pn: 3, mult: 1, fx: 'bolt',
         note: 'Ranged strike. Four tiles.',
       },
       IMMOLATIO: {
-        by: 'CINIS', kind: 'strike', targets: 'foe', range: 2,
+        kind: 'strike', targets: 'foe', range: 2,
         pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
-        note: 'Heavy hit at two tiles. Burns CINIS.',
+        note: 'Heavy hit at two tiles. Burns the caster.',
       },
+      // Findable banks. Not in any default loadout; they enter play only as
+      // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
+      LORICA: {
+        kind: 'ward', targets: 'circle', range: 0,
+        pn: 4, def: 2, duration: 3, cd: 5, fx: 'hex',
+        note: 'All members +2 DEF for 3 turns.',
+      },
+      VAPOR: {
+        kind: 'splash', targets: 'foe', range: 3,
+        pn: 3, mult: 0.8, fx: 'bolt', hitFx: 'strike',
+        note: 'Bolt at 3. Also hits foes beside the target.',
+      },
+    },
+
+    // ------------------------------------------------------------- banks
+    // A DATA BANK *is* an operation: the archive that carries it. Daemons run
+    // whatever banks are seated in their two slots; the OPERATOR's PERCVSSIO
+    // is intrinsic (bare hands, not an archive) and has no bank entry.
+    // `type` locks a bank to daemons of that alchemical type. `bays` is how
+    // many FLUX cartridges it seats: workhorse ops get 2, spike ops get 1.
+    banks: {
+      ABRASIO:   { type: 'SAL',     bays: 2 },
+      CONCRETIO: { type: 'SAL',     bays: 1 },
+      FVLGVR:    { type: 'SVLPHVR', bays: 2 },
+      IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
+      LORICA:    { type: 'SAL',     bays: 1 },
+      VAPOR:     { type: 'SVLPHVR', bays: 2 },
+    },
+    defaultLoadout: {
+      CALX:  ['ABRASIO', 'CONCRETIO'],
+      CINIS: ['FVLGVR', 'IMMOLATIO'],
+    },
+
+    // ------------------------------------------------------------- fluxes
+    // A FLUX seats into a bank bay and modifies that operation only.
+    // Effects are resolved by fold() in src/game.js. `weight` drives the
+    // FLUX CELL drop sub-roll. FVLMINANS is deliberately greedy: power the
+    // body pays for. Strain will formalise this post-jam.
+    fluxes: {
+      VITRIOL:   { weight: 30, dmgBonus: 2,               note: '+2 damage.' },
+      NITRVM:    { weight: 22, pnDelta: -1,               note: '\u22121 PNEUMA cost. Floor 1.' },
+      VIVVM:     { weight: 20, rangeDelta: 1,             note: '+1 range.' },
+      ADAMANS:   { weight: 18, minDmg: 3,                 note: 'Minimum damage 3.' },
+      FVLMINANS: { weight: 10, dmgBonus: 5, vitaeCost: 2, note: '+5 damage. \u22122 VITAE per cast.' },
     },
   };
 })();
