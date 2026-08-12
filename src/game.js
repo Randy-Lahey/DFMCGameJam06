@@ -1057,21 +1057,21 @@
 
   // A tag over the token when there is something here to act on.
   function syncHint() {
-    // While the fan is collapsed for aiming, this tag is the only thing telling
-    // you which operation is armed, so it takes priority over the E prompt.
-    const aim = state.pending;
-    const it = aim ? null : interactable();
-    hintEl.classList.toggle('open', !!(aim || it));
-    hintEl.classList.toggle('aim', !!aim);
+    // This tag renders on the tile NORTH of the token, so it is only ever worth
+    // the occlusion when it is the sole route to an interaction. It used to
+    // also carry the armed operation while aiming, which laid a full-width bar
+    // across the row the player was aiming into and hid the reachable tiles.
+    // That readout moved to #armed in the action bar; this stays click-through
+    // chrome for caches and stairs, and closes entirely during aim.
+    const it = state.pending ? null : interactable();
+    hintEl.classList.toggle('open', !!it);
+    hintEl.classList.toggle('aim', false);
     hintEl.classList.toggle('locked', !!(it && it.locked));
     // Only interactive when there is actually something here to open. Any other
     // state must stay click-through, or the tag blocks the tile behind it.
-    hintEl.classList.toggle('actionable', !aim && !!it && !it.locked);
-    if (!aim && !it) return;
-    hintEl.innerHTML = aim
-      ? `<span class="k">\u2316</span> ${aim.member.name} \u00b7 ${aim.op.name}`
-      : it.locked ? it.text
-      : `<span class="k">E</span> ${it.text}`;
+    hintEl.classList.toggle('actionable', !!it && !it.locked);
+    if (!it) return;
+    hintEl.innerHTML = it.locked ? it.text : `<span class="k">E</span> ${it.text}`;
     const t = tokenRect();
     const w = hintEl.offsetWidth;
     hintEl.style.left = Math.min(Math.max(t.cx, w / 2 + 6),
@@ -1141,6 +1141,39 @@
 
   const modalEl = document.getElementById('modal');
   const winEl = document.getElementById('win');
+  const ctlEl = document.getElementById('controls');
+  const helpEl = document.getElementById('help');
+
+  // "Goes away forever" is a stored fact, not a session flag. Wrapped because
+  // localStorage throws outright in some privacy modes and on some file://
+  // origins, and the controls screen is not worth taking the boot down with it.
+  const SEEN_KEY = 'dw:controls-seen:v1';
+  function seenControls() {
+    try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return false; }
+  }
+  function markControlsSeen() {
+    try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* private mode */ }
+  }
+
+  function openControls() {
+    // Never displace a live exit prompt or the win screen.
+    if (state.modal || finished()) return;
+    state.modal = 'controls';
+  }
+  function closeControls() {
+    if (state.modal !== 'controls') return;
+    state.modal = null;
+    markControlsSeen();
+  }
+
+  helpEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    openControls(); draw();
+  });
+  document.getElementById('ctl-close').addEventListener('click', () => {
+    if (!tapOk()) return;
+    closeControls(); draw();
+  });
 
   modalEl.addEventListener('click', e => {
     const b = e.target.closest('[data-answer]');
@@ -1153,6 +1186,14 @@
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
     winEl.classList.toggle('open', state.over === 'WIN');
+
+    const ctlOpen = state.modal === 'controls';
+    ctlEl.classList.toggle('open', ctlOpen);
+    // First sight of the game gets BEGIN; every later visit is a reference
+    // lookup and CLOSE is the honest label for it.
+    document.getElementById('ctl-close').textContent =
+      seenControls() ? 'CLOSE' : 'BEGIN';
+    helpEl.classList.toggle('hide', !!state.modal || finished());
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
@@ -1189,6 +1230,7 @@
     syncFan();
     syncConfirm();
     syncCancel();
+    syncArmed();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -1267,6 +1309,12 @@
     const focused = document.activeElement;
     if (focused && focused.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
 
+    if (state.modal === 'controls') {
+      e.preventDefault();
+      if (k === 'escape' || k === 'enter' || k === ' ' || k === '?') closeControls();
+      draw();
+      return;
+    }
     if (state.modal === 'exit') {
       e.preventDefault();
       if (k === 'y' || k === 'enter') answerExit(true);
@@ -1275,6 +1323,9 @@
       return;
     }
     if (finished()) return;
+
+    // ? is a reference lookup, so it stays available mid-round.
+    if (k === '?') { e.preventDefault(); openControls(); draw(); return; }
 
     if (MOVES[k]) { e.preventDefault(); moveInput(...MOVES[k]); draw(); return; }
     if (k === ' ')      { e.preventDefault(); passOrHold(); draw(); return; }
@@ -1433,6 +1484,18 @@
     draw();
   });
 
+  // What is armed, shown in the action bar rather than over the board. The fan
+  // is collapsed and #confirm is hidden while pending, so without this the only
+  // on-screen trace of the chosen operation is the HUD prompt line.
+  const armedEl = document.getElementById('armed');
+  function syncArmed() {
+    const aim = !finished() && !state.modal && state.pending;
+    armedEl.classList.toggle('open', !!aim);
+    if (!aim) return;
+    armedEl.innerHTML =
+      `<span class="k">\u2316</span>${aim.member.name} \u00b7 ${aim.op.name}`;
+  }
+
   // One tap out of aiming, out of a staged step, out of the act round.
   const cancelEl = document.getElementById('cancel');
   function syncCancel() {
@@ -1483,5 +1546,8 @@
   window.addEventListener('orientationchange', () => setTimeout(redraw, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', redraw);
   log(`FLOOR 01 COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
+  // Set before the first draw so the overlay is up on the first painted frame,
+  // rather than flashing the board and then covering it.
+  if (!seenControls()) state.modal = 'controls';
   draw();
 })();

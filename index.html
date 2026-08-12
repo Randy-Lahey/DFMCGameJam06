@@ -68,9 +68,6 @@
     display:flex;justify-content:space-between;
   }
   .hud-label span{color:var(--gold);opacity:.9;letter-spacing:.2em}
-  .keys{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9px;opacity:.42;
-        letter-spacing:.14em;margin-top:auto}
-  .keys b{color:var(--cyan);font-weight:400}
 
   @media (max-width:900px){
     #body{grid-template-columns:1fr}
@@ -227,6 +224,34 @@
              opacity:.7;margin-bottom:26px}
   .win-stats div{display:flex;justify-content:space-between;gap:34px}
   .win-stats b{font-weight:400;color:var(--gold)}
+
+  /* ---- controls screen + its reopen handle ----
+     The legend used to live permanently in the HUD, four lines of 9px text at
+     .42 opacity that every player reads once and then pays for on every frame
+     of vertical space. It shows once, on first load, and is recallable. */
+  #help{
+    position:absolute;right:10px;bottom:10px;z-index:6;
+    width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+    font:inherit;font-size:15px;line-height:1;cursor:pointer;
+    color:var(--cyan);background:rgba(4,5,10,.9);
+    border:1px solid var(--edge-i);opacity:.55;
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    transition:opacity .18s ease,color .18s ease,border-color .18s ease;
+  }
+  #help:hover,#help:active{opacity:1;color:var(--gold);border-color:var(--gold)}
+  /* Nothing behind an overlay is reachable, and a live-looking button that
+     does nothing reads as a broken one. */
+  #help.hide{display:none}
+
+  .ctlbox{max-width:min(420px,92vw);padding:26px 26px 22px;text-align:left}
+  .ctl{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;
+       font-size:10px;letter-spacing:.14em;line-height:1.5}
+  .ctl dt{color:var(--cyan);white-space:nowrap;letter-spacing:.2em}
+  .ctl dd{margin:0;opacity:.8;text-transform:none;letter-spacing:.1em}
+  .ctl-rule{height:1px;background:var(--edge);opacity:.6;margin:18px 0 16px}
+  .ctl-note{font-size:9.5px;letter-spacing:.16em;color:var(--gold);
+            opacity:.85;line-height:1.6;margin-bottom:16px}
+  .ctlbox .dlg-actions{margin-top:20px}
 
   /* ---- interaction hint: tag above the token ----
      This tag is the ONLY touch route to chests and stairs, so when it has
@@ -410,7 +435,7 @@
   #actionbar{
     position:absolute;left:0;right:0;bottom:10px;z-index:5;
     display:flex;gap:10px;justify-content:center;align-items:center;
-    padding:0 12px;pointer-events:none;
+    padding:0 52px;pointer-events:none;
   }
   #actionbar button{pointer-events:auto;white-space:nowrap}
   #confirm{
@@ -440,6 +465,28 @@
     transition:color .2s ease, border-color .2s ease, background .2s ease;
   }
   #cancel.hot{color:var(--blood);border-color:var(--blood)}
+
+  /* ---- armed-operation readout ----
+     This used to be #hint, pinned to the tile north of the token — which on a
+     phone is a ~500px tag laid across the exact row you are aiming into. It
+     lives in the action bar instead: fixed spot, never over the board, and the
+     bar is empty during aim because #confirm hides itself while pending.
+     Shrinks and ellipsises so the row can never wrap CANCEL onto a second
+     line at 360px (that would push #toast underneath it). */
+  #armed{
+    min-height:44px;display:flex;align-items:center;
+    padding:0 14px;font-size:10.5px;letter-spacing:.2em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    min-width:0;flex-shrink:1;
+    color:var(--gold);background:rgba(4,5,10,.94);
+    border:1px solid var(--gold);pointer-events:none;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  }
+  #armed:not(.open){display:none}
+  #armed .k{
+    display:inline-block;min-width:13px;text-align:center;margin-right:7px;
+    border:1px solid var(--gold);padding:0 3px;flex:none;
+  }
 
   /* ---- refusal toast ----
      Every rejection path used to be log()-only, and the log is hidden under
@@ -502,13 +549,13 @@
     0%,100%{transform:none}33%{transform:translateX(-3px)}66%{transform:translateX(3px)}
   }
 
-  /* Touch gets its own legend, and loses the keycap glyphs — the hotkey
+  /* Touch gets its own control list, and loses the keycap glyphs — the hotkey
      numeral on every chip was a 13px grid column spent on an unusable
      affordance. */
-  .keys.touch{display:none}
+  .ctl.touch{display:none}
   @media (pointer:coarse){
-    .keys.kb{display:none}
-    .keys.touch{display:flex;opacity:.72;font-size:10px}
+    .ctl.kb{display:none}
+    .ctl.touch{display:grid}
     /* visibility, not display: display:none removes .hk from the grid flow,
        which shifts .cn into the zero-width first column and stacks it under
        the cost readout. */
@@ -544,7 +591,7 @@
     .hud-side{border-top:0;border-left:1px solid var(--edge);padding:6px 10px;gap:4px}
     #roster{padding:6px 10px;gap:6px}
     .unit{padding:5px 8px}
-    .keys{display:none}
+    #help{width:32px;height:32px;font-size:14px}
   }
 
   /* ---- focus ----
@@ -604,9 +651,11 @@
       <div id="toast" role="status" aria-live="polite"></div>
       <div id="inspect"></div>
       <div id="actionbar">
+        <div id="armed" role="status" aria-live="polite"></div>
         <button id="cancel"></button>
         <button id="confirm"></button>
       </div>
+      <button id="help" aria-label="CONTROLS" title="CONTROLS">?</button>
     </div>
 
     <aside>
@@ -624,17 +673,44 @@
       <div id="bag" class="bag"></div>
       <div id="effects" class="effects"></div>
       <div id="prompt" class="prompt" role="status" aria-live="polite"></div>
-      <div class="keys kb">
-        <span><b>WASD</b> MOVE</span><span><b>E</b> ACT</span>
-        <span><b>1-5</b> OPERATION</span><span><b>SPACE</b> COMMIT</span>
-        <span><b>ESC</b> CANCEL</span>
-      </div>
-      <div class="keys touch">
-        <span><b>TAP</b> TILE, THEN CONFIRM</span><span><b>TAP</b> NAMEPLATE TO ACT</span>
-        <span><b>HOLD</b> TILE TO INSPECT</span><span><b>TWO FINGERS</b> LOOK AROUND</span>
-      </div>
     </div>
   </footer>
+</div>
+
+<!-- controls: auto-shown once, recallable from the ? handle -->
+<div id="controls" class="overlay">
+  <div class="dialog ctlbox">
+    <div class="dlg-eyebrow">DAEMONWARE &middot; FLOOR 01</div>
+    <div class="ctl-note">
+      EACH ROUND, EVERY MEMBER EITHER MOVES OR ACTS &mdash; NEVER BOTH.
+      ENEMIES LOCK THEIR INTENT BEFORE YOU MOVE.
+    </div>
+
+    <dl class="ctl touch">
+      <dt>TAP TILE</dt><dd>Stage a step, then CONFIRM STEP.</dd>
+      <dt>TAP NAMEPLATE</dt><dd>Open that member's operations.</dd>
+      <dt>TAP ENEMY</dt><dd>Fire the armed operation at it.</dd>
+      <dt>HOLD TILE</dt><dd>Inspect it. Costs nothing, spends no round.</dd>
+      <dt>TWO FINGERS</dt><dd>Drag to pan, pinch to zoom the floor.</dd>
+      <dt>CANCEL</dt><dd>Backs out of anything, including a queued operation.</dd>
+      <dt>COMMIT ROUND</dt><dd>Resolves everyone at once. This ends the round.</dd>
+    </dl>
+
+    <dl class="ctl kb">
+      <dt>WASD</dt><dd>Move the circle one tile.</dd>
+      <dt>E</dt><dd>Act on this tile &mdash; open a cache, take the stairs.</dd>
+      <dt>1 &ndash; 5</dt><dd>Arm an operation for the selected member.</dd>
+      <dt>ENTER</dt><dd>Fire the armed operation at the hovered target.</dd>
+      <dt>SPACE</dt><dd>Commit the round, or hold ground.</dd>
+      <dt>ESC</dt><dd>Cancel aiming, a staged step, or the act round.</dd>
+    </dl>
+
+    <div class="ctl-rule"></div>
+    <div class="dlg-actions">
+      <button class="box yes" id="ctl-close">BEGIN</button>
+    </div>
+    <div class="dlg-keys">? REOPENS THIS &middot; ESC CLOSES</div>
+  </div>
 </div>
 
 <!-- exit confirmation -->
@@ -661,10 +737,10 @@
   </div>
 </div>
 
-<script src="data/floor01.js?v=38eb2433"></script>
-<script src="data/balance.js?v=38eb2433"></script>
-<script src="data/fxsheets.js?v=38eb2433"></script>
-<script src="src/sprites.js?v=38eb2433"></script>
-<script src="src/game.js?v=38eb2433"></script>
+<script src="data/floor01.js?v=ctl2b9f1"></script>
+<script src="data/balance.js?v=ctl2b9f1"></script>
+<script src="data/fxsheets.js?v=ctl2b9f1"></script>
+<script src="src/sprites.js?v=ctl2b9f1"></script>
+<script src="src/game.js?v=ctl2b9f1"></script>
 </body>
 </html>
