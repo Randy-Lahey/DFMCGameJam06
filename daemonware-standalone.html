@@ -1490,6 +1490,21 @@
     state.sel = next ? next.name : null;
   }
 
+  // Take back the last queued operation. Nothing has been spent yet — pneuma,
+  // vitae and cooldowns are all charged by applyOp during resolveRound, not at
+  // queue time — so this is a clean pop, not a refund. Unwinding the whole
+  // queue is what lets a player who has started an act round change their mind
+  // and move instead.
+  function undoQueued() {
+    const last = state.queued.pop();
+    if (!last) return;
+    state.acted = state.acted.filter(n => n !== last.member.name);
+    state.sel = last.member.name;
+    state.pending = null;
+    state.aiming = null;
+    log(`${last.member.name} TAKES BACK ${last.op.name}.`);
+  }
+
   // hotkey 0..4 across the flat ALL_OPS list
   function chooseOp(slot) {
     if (blocked()) return;
@@ -1573,13 +1588,15 @@
     moveInput(dc, dr);
   }
 
-  // The CANCEL button unwinds the whole state in one tap. ESC keeps its ladder
-  // (cancel below) because on desktop that is already the established feel.
+  // The CANCEL button unwinds one layer per tap: aiming, then a staged step,
+  // then queued operations one at a time, then the act round itself. ESC keeps
+  // its own ladder (cancel below) because that is the established desktop feel.
   function backOut() {
     if (state.pending) { state.pending = null; state.aiming = null; state.hover = null; return; }
     if (state.staged) { state.staged = null; return; }
+    if (state.queued.length) { undoQueued(); return; }
     state.sel = null;
-    if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
+    if (state.mode === 'act') { state.mode = 'move'; state.acted = []; }
   }
 
   // Keyboard fallback: ENTER fires at the nearest enemy in range.
@@ -1595,7 +1612,8 @@
     if (state.pending) { state.pending = null; state.aiming = null; state.hover = null; return; }
     if (state.staged) { state.staged = null; return; }
     if (state.sel) { state.sel = null; return; }
-    if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
+    if (state.queued.length) { undoQueued(); return; }
+    if (state.mode === 'act') { state.mode = 'move'; state.acted = []; }
   }
 
   // SPACE: at rest, hold the ground. Mid act round, commit what is queued and
@@ -2411,15 +2429,19 @@
   // One tap out of aiming, out of a staged step, out of the act round.
   const cancelEl = document.getElementById('cancel');
   function syncCancel() {
+    // Queued operations no longer suppress this. They cost nothing until
+    // COMMIT, so being unable to take one back was a trap: pick an operation
+    // by mistake and the act round was the only way out, with no way to
+    // change your mind and move instead.
     const show = !finished() && !state.modal &&
-      (!!state.pending || !!state.staged ||
-       (state.mode === 'act' && !state.queued.length));
+      (!!state.pending || !!state.staged || state.mode === 'act');
     cancelEl.classList.toggle('open', show);
     if (!show) return;
     cancelEl.classList.toggle('hot', !!state.pending);
     cancelEl.textContent =
       state.pending ? '\u00d7 CANCEL'
       : state.staged ? '\u00d7 CLEAR'
+      : state.queued.length ? '\u00d7 UNDO'
       : '\u00d7 BACK';
   }
   cancelEl.addEventListener('click', () => {
