@@ -19,8 +19,8 @@ At the descent prompt, `Y` / `N`.
 
 **Touch.** Tap an adjacent tile to line up a step, then `CONFIRM STEP` — a stray tap costs
 nothing until you confirm it. `HOLD GROUND` is the same button when nothing is staged. Tap a
-nameplate to open that member's operations; tap a chip, then tap an enemy or one of the target
-chips. `CANCEL` backs out of anything. The gold tag over the token opens caches and takes the
+nameplate to open that member's operations; tap a chip, then tap an enemy inside the range wash.
+`CANCEL` backs out of anything. The gold tag over the token opens caches and takes the
 descent. Long-press any tile to inspect it without spending the round; two fingers pan and pinch
 to look around the floor.
 

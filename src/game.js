@@ -1171,7 +1171,6 @@
     syncFan();
     syncConfirm();
     syncCancel();
-    syncTargets();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -1201,7 +1200,7 @@
     else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
       prompt.textContent = state.pending.member.name + (isCoarse()
-        ? ' \u2014 TAP AN ENEMY OR A TARGET CHIP \u00b7 CANCEL BACKS OUT'
+        ? ' \u2014 TAP AN ENEMY IN THE WASH \u00b7 CANCEL BACKS OUT'
         : ' \u2014 CLICK AN ENEMY \u00b7 ENTER HITS THE NEAREST \u00b7 ESC CANCELS');
     else if (isStuck())
       prompt.textContent = 'NO OPERATION AVAILABLE \u2014 COMMIT THE ROUND';
@@ -1433,31 +1432,6 @@
   cancelEl.addEventListener('click', () => {
     if (!tapOk()) return;
     backOut(); draw();
-  });
-
-  // While aiming, every valid foe as a chip, nearest first. Pixel-hunting a
-  // 44px enemy tile was the only way to fire on touch, and ENTER's "hit the
-  // nearest" shortcut existed but was keyboard-only — the prompt advertised it
-  // to players who had no ENTER key.
-  const targetsEl = document.getElementById('targets');
-  function syncTargets() {
-    const on = !!state.pending && !finished() && !state.modal;
-    targetsEl.classList.toggle('open', on);
-    if (!on) { targetsEl.innerHTML = ''; return; }
-    const list = validTargets(state.pending.op)
-      .slice().sort((a, b) => cheb(a, state.circle) - cheb(b, state.circle));
-    targetsEl.innerHTML = list.map((f, i) =>
-      `<button class="tgt${i === 0 ? ' near' : ''}" data-foe="${f.id}">
-         ${f.kind}<em>${f.hp}V · ${cheb(f, state.circle)}T</em>
-       </button>`).join('');
-  }
-  targetsEl.addEventListener('click', e => {
-    const btn = e.target.closest('.tgt');
-    if (!btn || !state.pending || !tapOk()) return;
-    const foe = foeById(+btn.dataset.foe);
-    if (!foe || foe.hp <= 0) return;
-    commitMember(state.pending.member, state.pending.op, foe.id);
-    draw();
   });
 
   // On touch, the "OPEN" tag over the token is the button for chests and

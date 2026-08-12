@@ -445,9 +445,9 @@
      Every rejection path used to be log()-only, and the log is hidden under
      900px, so a refused tap produced nothing at all — indistinguishable from
      a dropped input, which makes players tap again harder. */
-  /* above #targets, which occupies the 62px band while aiming */
+  /* clear of the action bar along the bottom */
   #toast{
-    position:absolute;left:50%;bottom:118px;z-index:7;
+    position:absolute;left:50%;bottom:66px;z-index:7;
     transform:translateX(-50%) translateY(6px);
     padding:8px 14px;max-width:min(92%,340px);text-align:center;
     font-size:10px;letter-spacing:.18em;line-height:1.4;
@@ -457,31 +457,6 @@
     opacity:0;transition:opacity .16s ease, transform .22s cubic-bezier(.16,.9,.24,1);
   }
   #toast.open{opacity:1;transform:translateX(-50%) translateY(0)}
-
-  /* ---- target chips while aiming ----
-     Firing used to mean pixel-hunting a 44px enemy tile. ENTER's "hit the
-     nearest" existed but was keyboard-only, and the prompt advertised it. */
-  #targets{
-    position:absolute;left:50%;bottom:62px;z-index:6;
-    transform:translateX(-50%) translateY(8px);
-    display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
-    max-width:min(94%,420px);
-    opacity:0;pointer-events:none;visibility:hidden;
-    transition:opacity .18s ease, transform .22s cubic-bezier(.16,.9,.24,1);
-  }
-  #targets.open{opacity:1;pointer-events:auto;visibility:visible;
-                transform:translateX(-50%) translateY(0)}
-  .tgt{
-    font:inherit;font-size:10px;letter-spacing:.16em;cursor:pointer;
-    min-height:44px;padding:0 14px;
-    display:flex;flex-direction:column;justify-content:center;gap:1px;
-    color:var(--bone);background:rgba(4,5,10,.94);
-    border:1px solid var(--edge-i);
-    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
-  }
-  .tgt em{font-style:normal;font-size:8.5px;letter-spacing:.1em;opacity:.75}
-  .tgt.near{border-color:var(--gold);color:var(--gold)}
-  .tgt:active{background:rgba(227,179,71,.28)}
 
   /* ---- long-press inspect card ----
      The safe, non-committal counterpart to a tap. Without it the only way to
@@ -591,7 +566,7 @@
 
   @media (prefers-reduced-motion:reduce){
     #fan,.grp,.chip,.vitae i,.pneuma i,.unit,#hint,
-    #confirm,#cancel,#toast,#targets,#inspect{transition-duration:.01ms!important}
+    #confirm,#cancel,#toast,#inspect{transition-duration:.01ms!important}
     /* the fan staggers its groups with transition-delay, which zeroing the
        duration does not touch */
     #fan.open .grp{transition-delay:0s!important}
@@ -627,7 +602,6 @@
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
       <div id="toast" role="status" aria-live="polite"></div>
-      <div id="targets" role="group" aria-label="Targets in range"></div>
       <div id="inspect"></div>
       <div id="actionbar">
         <button id="cancel"></button>
@@ -2190,7 +2164,6 @@
     syncFan();
     syncConfirm();
     syncCancel();
-    syncTargets();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -2220,7 +2193,7 @@
     else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
       prompt.textContent = state.pending.member.name + (isCoarse()
-        ? ' \u2014 TAP AN ENEMY OR A TARGET CHIP \u00b7 CANCEL BACKS OUT'
+        ? ' \u2014 TAP AN ENEMY IN THE WASH \u00b7 CANCEL BACKS OUT'
         : ' \u2014 CLICK AN ENEMY \u00b7 ENTER HITS THE NEAREST \u00b7 ESC CANCELS');
     else if (isStuck())
       prompt.textContent = 'NO OPERATION AVAILABLE \u2014 COMMIT THE ROUND';
@@ -2452,31 +2425,6 @@
   cancelEl.addEventListener('click', () => {
     if (!tapOk()) return;
     backOut(); draw();
-  });
-
-  // While aiming, every valid foe as a chip, nearest first. Pixel-hunting a
-  // 44px enemy tile was the only way to fire on touch, and ENTER's "hit the
-  // nearest" shortcut existed but was keyboard-only — the prompt advertised it
-  // to players who had no ENTER key.
-  const targetsEl = document.getElementById('targets');
-  function syncTargets() {
-    const on = !!state.pending && !finished() && !state.modal;
-    targetsEl.classList.toggle('open', on);
-    if (!on) { targetsEl.innerHTML = ''; return; }
-    const list = validTargets(state.pending.op)
-      .slice().sort((a, b) => cheb(a, state.circle) - cheb(b, state.circle));
-    targetsEl.innerHTML = list.map((f, i) =>
-      `<button class="tgt${i === 0 ? ' near' : ''}" data-foe="${f.id}">
-         ${f.kind}<em>${f.hp}V · ${cheb(f, state.circle)}T</em>
-       </button>`).join('');
-  }
-  targetsEl.addEventListener('click', e => {
-    const btn = e.target.closest('.tgt');
-    if (!btn || !state.pending || !tapOk()) return;
-    const foe = foeById(+btn.dataset.foe);
-    if (!foe || foe.hp <= 0) return;
-    commitMember(state.pending.member, state.pending.op, foe.id);
-    draw();
   });
 
   // On touch, the "OPEN" tag over the token is the button for chests and
