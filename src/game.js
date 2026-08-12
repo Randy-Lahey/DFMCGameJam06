@@ -492,6 +492,7 @@
     state.acted.push(member.name);
     state.pending = null;
     state.aiming = null;
+    state.hover = null;              // mouseleave is not reliable on touch
     const next = pendingMembers()[0];
     state.sel = next ? next.name : null;
   }
@@ -842,7 +843,8 @@
 
   function buildRoster() {
     rosterEl.innerHTML = state.circle.members.map(m => {
-      return `<div class="unit" data-member="${m.name}" style="--tint:var(--${m.tint})">
+      return `<div class="unit" data-member="${m.name}" style="--tint:var(--${m.tint})"
+                   role="button" tabindex="0" aria-label="${m.name}, ${m.role}">
                 <div class="unit-head">
                   <span class="unit-name">${m.name}</span>
                   <span class="unit-role">${m.type} \u00b7 ${m.role}</span>
@@ -877,11 +879,26 @@
       state.sel = state.sel === m.name ? null : m.name;   // tap again closes
       draw();
     });
+    rosterEl.addEventListener('keydown', activateOnKey);
+  }
+
+  // role="button" on a div is a promise that the keyboard can activate it.
+  // stopPropagation keeps the window-level handler from also firing, which
+  // would double-dispatch SPACE into passOrHold.
+  function activateOnKey(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const btn = e.target.closest('[role="button"]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    btn.click();
   }
 
   function syncRoster() {
     state.circle.members.forEach(m => {
       const c = cards[m.name];
+      c.el.setAttribute('aria-pressed', String(state.sel === m.name));
+      c.el.setAttribute('aria-disabled', String(!canAct(m)));
       c.el.classList.toggle('sel', state.sel === m.name);
       c.el.classList.toggle('acting', state.aiming === m.name);
       c.el.classList.toggle('done', state.mode === 'act' && hasActed(m));
@@ -895,9 +912,8 @@
     });
   }
 
-  // ---- floating operations fan, anchored over the party token ------------
-  // Built once so its CSS transitions survive; positioned in viewport pixels
-  // by inverting the SVG letterbox transform.
+  // ---- floating operations fan, anchored over the selected nameplate -----
+  // Built once so its CSS transitions survive; positioned in viewport pixels.
 
   const viewportEl = document.getElementById('viewport');
   const fanEl = document.getElementById('fan');
@@ -909,7 +925,7 @@
       const chips = (OPS_BY[m.name] || []).map(op => {
         const slot = ALL_OPS.findIndex(e => e.op.name === op.name);
         return `<div class="chip" data-slot="${slot}" data-op="${op.name}"
-                     title="${op.name} \u2014 ${op.note}">
+                     role="button" tabindex="0" aria-label="${op.name}. ${op.note}">
                   <span class="hk">${slot + 1}</span>
                   <span class="cn">${op.name}</span>
                   <span class="cc"></span>
@@ -934,6 +950,7 @@
       chooseOp(+chip.dataset.slot);
       draw();
     });
+    fanEl.addEventListener('keydown', activateOnKey);
   }
 
   // Any tile, in pixels relative to #viewport.
@@ -1019,7 +1036,7 @@
     state.floats.length = 0;
   }
 
-  // A small tag over the token when there is something here to press E on.
+  // A tag over the token when there is something here to act on.
   function syncHint() {
     // While the fan is collapsed for aiming, this tag is the only thing telling
     // you which operation is armed, so it takes priority over the E prompt.
@@ -1064,7 +1081,9 @@
           cd > 0 ? 'CD ' + cd
           : blind ? 'NO TARGET'
           : (op.pn ? op.pn + 'P' : '\u2014') + (op.vitaeCost ? ' +' + op.vitaeCost + 'V' : '');
-        chip.classList.toggle('locked', !usable(m, op) || !canAct(m));
+        const locked = !usable(m, op) || !canAct(m);
+        chip.setAttribute('aria-disabled', String(locked));
+        chip.classList.toggle('locked', locked);
         chip.classList.toggle('untargetable', blind && affordable(m, op));
         chip.classList.toggle('aiming', !!state.pending && state.pending.op.name === op.name);
       });
@@ -1073,12 +1092,21 @@
     // Anchor above the selected member's nameplate, clamped to the viewport.
     const card = cards[state.sel].el.getBoundingClientRect();
     const vp = viewportEl.getBoundingClientRect();
-    const w = fanEl.offsetWidth;
-    const cx = Math.min(Math.max(card.left + card.width / 2 - vp.left, w / 2 + 6),
+    const w = fanEl.offsetWidth, h = fanEl.offsetHeight;
+    const cardCx = card.left + card.width / 2 - vp.left;
+    const cx = Math.min(Math.max(cardCx, w / 2 + 6),
                         Math.max(w / 2 + 6, vp.width - w / 2 - 6));
-    fanEl.classList.remove('below');
+    // A five-chip group is taller than a landscape phone's map area, so it
+    // would render over the header. Flip below the nameplate when it will not
+    // fit above — which is what the .below variant was always for.
+    const top = card.top - vp.top - 8;
+    const below = top - h < 6;
+    fanEl.classList.toggle('below', below);
     fanEl.style.left = cx + 'px';
-    fanEl.style.top = (card.top - vp.top - 8) + 'px';
+    fanEl.style.top = (below ? Math.min(top + card.height + 16, vp.height - h - 6) : top) + 'px';
+    // The tether is pinned at left:50% of the fan, but the fan is clamped and
+    // the nameplate is not, so for the outer members it pointed at nothing.
+    fanEl.style.setProperty('--tether', (cardCx - cx) + 'px');
   }
 
   const modalEl = document.getElementById('modal');
@@ -1204,6 +1232,11 @@
 
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
+
+    // A focused button owns ENTER and SPACE. Without this the window handler
+    // preventDefaults them and the button's own activation never runs.
+    const focused = document.activeElement;
+    if (focused && focused.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
 
     if (state.modal === 'exit') {
       e.preventDefault();
@@ -1430,7 +1463,17 @@
 
   buildRoster();
   buildFan();
-  window.addEventListener('resize', () => draw());
+
+  // draw() rebuilds the whole SVG through innerHTML, and iOS fires resize
+  // repeatedly through a URL-bar animation, so coalesce to a frame.
+  // orientationchange gets a delay of its own: iOS can fire resize before
+  // layout settles, and updateCamera / tilePos / syncFan all read
+  // getBoundingClientRect, so an early read anchors everything to the old
+  // geometry until the next draw.
+  const redraw = () => requestAnimationFrame(draw);
+  window.addEventListener('resize', redraw);
+  window.addEventListener('orientationchange', () => setTimeout(redraw, 250));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', redraw);
   log(`FLOOR 01 COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
   draw();
 })();
