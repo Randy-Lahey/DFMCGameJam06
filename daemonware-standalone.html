@@ -3,12 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#04050A">
 <title>DAEMONWARE — FLOOR 01</title>
 <style>
   :root{
     --void:#04050A; --cyan:#46F0DC; --gold:#E3B347;
     --shell:#8B5BF2; --blood:#D6402A; --bone:#E7E2D2;
     --edge:rgba(70,240,220,.22);
+    /* --edge composites to ~1.6:1 on --void. Fine as a decorative rule, far
+       too weak as the only boundary of a control the player has to find. */
+    --edge-i:rgba(70,240,220,.5);
+    /* --shell reaches only 4.73:1 at full opacity, so it is not viable as a
+       text colour. Keep it for bars and fills; use this for type. */
+    --shell-txt:#A98BF7;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -19,7 +26,9 @@
     touch-action:manipulation;              /* no double-tap zoom delay */
     -webkit-tap-highlight-color:transparent;
   }
-  #app{height:100vh;display:grid;grid-template-rows:44px 1fr auto;min-height:0}
+  /* svh, not dvh: dvh resizes as the mobile toolbar hides/shows, and draw()
+     only re-runs on resize, so dvh causes the camera to jump mid-tap. */
+  #app{height:100vh;height:100svh;display:grid;grid-template-rows:44px 1fr auto;min-height:0}
 
   header{
     display:flex;align-items:center;justify-content:space-between;
@@ -27,9 +36,9 @@
     background:linear-gradient(180deg,rgba(70,240,220,.05),transparent);
   }
   .brand{color:var(--cyan);font-size:13px;letter-spacing:.4em}
-  .brand small{color:var(--bone);opacity:.4;letter-spacing:.25em;margin-left:12px}
+  .brand small{color:var(--bone);opacity:.62;letter-spacing:.25em;margin-left:12px}
   .turn{display:flex;align-items:baseline;gap:10px}
-  .turn .lbl{opacity:.45;letter-spacing:.3em;font-size:10px}
+  .turn .lbl{opacity:.7;letter-spacing:.3em;font-size:10px}
   .turn .val{color:var(--gold);font-size:22px;letter-spacing:.1em}
 
   #body{display:grid;grid-template-columns:1fr 300px;min-height:0}
@@ -65,9 +74,24 @@
 
   @media (max-width:900px){
     #body{grid-template-columns:1fr}
-    aside{display:none}
     #hud{grid-template-columns:1fr}
     .hud-side{border-left:0;border-top:1px solid var(--edge)}
+  }
+
+  /* At 375px a card is 111.7px wide but .unit-head needs ~158px and
+     .unit-meta ~98px — and .unit has a clip-path, so the overflow is not
+     merely ugly, the VITAE / PNEUMA readout is silently cut off. */
+  @media (max-width:600px){
+    header{overflow:hidden}
+    .brand{font-size:11px;letter-spacing:.24em}
+    .brand small{display:none}
+    .turn .val{font-size:18px}
+    .unit{padding:7px 8px}
+    .unit-head{flex-direction:column;align-items:flex-start;gap:1px}
+    .unit-name{font-size:10px;letter-spacing:.06em}
+    .unit-role{font-size:8px;letter-spacing:.04em;
+               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+    .unit-meta{font-size:10px;letter-spacing:0}
   }
   .block{padding:12px 14px;border-bottom:1px solid var(--edge)}
   h2{
@@ -80,14 +104,14 @@
   /* ---- unit card ---- */
   .unit{
     --tint:var(--cyan);
-    border:1px solid var(--edge);padding:8px 10px;
+    border:1px solid var(--edge-i);padding:8px 10px;
     background:rgba(70,240,220,.02);
     transition:border-color .2s ease,background .2s ease,opacity .2s ease;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
   }
   .unit-head{display:flex;justify-content:space-between;align-items:baseline}
   .unit-name{letter-spacing:.2em;font-size:11px;color:var(--tint)}
-  .unit-role{font-size:9px;opacity:.4;letter-spacing:.18em}
+  .unit-role{font-size:9px;opacity:.62;letter-spacing:.18em}
 
   /* ---- particles ---- */
   .p{
@@ -119,6 +143,8 @@
     from{background-position-x:0%;opacity:1}
     to  {background-position-x:100%;opacity:1}
   }
+  /* reduced-motion stand-in; still ends, so animationend still cleans up */
+  @keyframes fxhold{from{opacity:.55}to{opacity:0}}
 
   .ring{
     position:absolute;pointer-events:none;border:1px solid var(--bone);
@@ -144,13 +170,15 @@
     28% {opacity:1;transform:translate(-50%,-50%) translateY(-4px) scale(1)}
     100%{opacity:0;transform:translate(-50%,-50%) translateY(-42px) scale(1)}
   }
+  /* reduced-motion stand-in; still ends, so animationend still cleans up */
+  @keyframes floatstill{0%{opacity:0}12%{opacity:1}70%{opacity:1}100%{opacity:0}}
   .float.f-dmg   {color:var(--bone)}
   .float.f-hurt  {color:var(--blood);font-size:12.5px}
   .float.f-sever {color:var(--gold);font-size:10px;letter-spacing:.3em}
   .float.f-argent{color:var(--gold)}
-  .float.f-flux  {color:var(--shell)}
+  .float.f-flux  {color:var(--shell-txt)}
   .float.f-data  {color:var(--cyan)}
-  .float small{opacity:.6;font-size:8.5px;letter-spacing:.2em;margin-left:5px}
+  .float small{opacity:.75;font-size:8.5px;letter-spacing:.2em;margin-left:5px}
 
   /* ---- overlays: exit dialog + win screen ---- */
   .overlay{
@@ -173,21 +201,21 @@
 
   .dlg-eyebrow{font-size:9px;letter-spacing:.4em;color:var(--cyan);opacity:.7;margin-bottom:12px}
   .dlg-title{font-size:14px;letter-spacing:.16em;color:var(--bone);line-height:1.6}
-  .dlg-note{font-size:9.5px;letter-spacing:.16em;opacity:.45;margin-top:10px}
-  .dlg-actions{display:flex;gap:12px;justify-content:center;margin-top:22px}
-  .dlg-keys{font-size:9px;letter-spacing:.24em;opacity:.35;margin-top:14px}
+  .dlg-note{font-size:9.5px;letter-spacing:.16em;opacity:.7;margin-top:10px}
+  .dlg-actions{display:flex;gap:16px;justify-content:center;margin-top:22px}
+  .dlg-keys{font-size:9px;letter-spacing:.24em;opacity:.6;margin-top:14px}
 
   .box{
     font:inherit;letter-spacing:.28em;font-size:11px;cursor:pointer;
-    padding:9px 26px;color:var(--bone);background:transparent;
-    border:1px solid var(--edge);
+    min-height:44px;padding:12px 28px;color:var(--bone);background:transparent;
+    border:1px solid var(--edge-i);
     transition:background .15s ease,color .15s ease,border-color .15s ease;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
   }
-  .box:hover{background:rgba(70,240,220,.12)}
   .box.yes{border-color:var(--gold);color:var(--gold)}
-  .box.yes:hover{background:rgba(227,179,71,.18)}
-  .box.no{border-color:var(--edge)}
+  /* NO used to keep --edge (~1.6:1) while YES was gold (10.4:1), which made the
+     irreversible choice the visually dominant one. */
+  .box.no{border-color:var(--edge-i)}
 
   .winbox{padding:44px 60px;border-color:var(--gold)}
   .win-title{
@@ -200,10 +228,15 @@
   .win-stats div{display:flex;justify-content:space-between;gap:34px}
   .win-stats b{font-weight:400;color:var(--gold)}
 
-  /* ---- interaction hint: small tag above the token ---- */
+  /* ---- interaction hint: tag above the token ----
+     This tag is the ONLY touch route to chests and stairs, so when it has
+     something to act on it must be a real, finger-sized button. It stays
+     pointer-events:none in every other state, or it would eat taps aimed at
+     the tile behind it (the tag renders over the tile north of the token). */
   #hint{
     position:absolute;z-index:4;pointer-events:none;
-    padding:4px 8px;font-size:9.5px;letter-spacing:.2em;white-space:nowrap;
+    min-height:44px;display:flex;align-items:center;
+    padding:0 14px;font-size:11px;letter-spacing:.2em;white-space:nowrap;
     color:var(--gold);background:rgba(4,5,10,.94);
     border:1px solid var(--gold);
     clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
@@ -212,6 +245,8 @@
   }
   #hint.open{opacity:1;transform:translate(-50%,-100%) translateY(0);
              animation:hintbob 2.2s ease-in-out infinite}
+  #hint.open.actionable{pointer-events:auto;cursor:pointer}
+  #hint.open.actionable:active{background:var(--gold);color:var(--void)}
   #hint.aim{color:var(--gold);border-color:var(--gold)}
   #hint.locked{color:var(--blood);border-color:var(--blood);animation:none}
   #hint.aim .k{border-color:var(--gold);color:var(--gold)}
@@ -221,13 +256,14 @@
   }
   @keyframes hintbob{0%,100%{margin-top:0}50%{margin-top:-3px}}
 
-  /* ---- floating operations fan: hovers over the party token ---- */
+  /* ---- floating operations fan: anchored over the selected nameplate ---- */
   #fan{
     position:absolute;z-index:5;
     display:flex;gap:8px;align-items:flex-end;
     padding:8px 9px;
-    background:rgba(4,5,10,.92);
-    border:1px solid var(--edge);
+    /* opaque enough that the gold token underneath does not read through it */
+    background:rgba(4,5,10,.985);
+    border:1px solid var(--edge-i);
     box-shadow:0 0 0 1px rgba(4,5,10,.9), 0 8px 28px rgba(0,0,0,.65);
     clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
     opacity:0;pointer-events:none;
@@ -250,16 +286,17 @@
   }
   #fan.aiming .grp{transition-delay:0s}
 
-  /* a tether line from the fan down to the token */
+  /* a tether line from the fan down to the nameplate it belongs to */
   #fan::after{
-    content:'';position:absolute;left:50%;bottom:-9px;width:1px;height:9px;
-    background:var(--edge);
+    content:'';position:absolute;left:calc(50% + var(--tether,0px));
+    bottom:-9px;width:1px;height:9px;
+    background:var(--edge-i);
   }
   #fan.below::after{bottom:auto;top:-9px}
 
   .grp{
     --tint:var(--cyan);
-    display:grid;gap:3px;min-width:150px;align-content:start;
+    display:grid;gap:6px;min-width:150px;align-content:start;
     opacity:0;transform:translateY(6px);
     transition:opacity .24s ease, transform .28s cubic-bezier(.16,.9,.24,1);
   }
@@ -272,30 +309,31 @@
     border-bottom:1px solid var(--tint);padding-bottom:3px;margin-bottom:2px;
     display:flex;justify-content:space-between;align-items:baseline;
   }
-  .grp-name em{font-style:normal;font-size:8px;opacity:.5;letter-spacing:.12em}
-  .grp.done{opacity:.28}
+  .grp-name em{font-style:normal;font-size:8.5px;opacity:.8;letter-spacing:.12em}
+  .grp.done{opacity:.45}
   .grp.done .grp-name{border-bottom-style:dashed}
   .grp.acting .grp-name{color:var(--gold);border-bottom-color:var(--gold)}
 
   .chip{
     display:grid;grid-template-columns:13px 1fr auto;gap:2px 6px;align-items:center;
-    padding:5px 7px;cursor:pointer;font-size:10px;max-width:190px;
+    align-content:center;min-height:44px;
+    padding:9px 10px;cursor:pointer;font-size:10px;max-width:190px;
     border-left:2px solid var(--tint);
     background:rgba(231,226,210,.05);
     transition:background .14s ease, border-color .14s ease;
   }
-  .chip:hover{background:rgba(70,240,220,.14)}
   .chip .hk{color:var(--tint);opacity:.75;font-size:9px}
   .chip .cn{letter-spacing:.14em;white-space:nowrap}
-  .chip .cc{color:var(--shell);font-size:9px;letter-spacing:.06em}
+  .chip .cc{color:var(--shell-txt);font-size:9px;letter-spacing:.06em}
+  /* .42 was authored as a hover-reveal, and touch never gets the hover — so
+     the only text explaining an operation sat at ~3.3:1 while the player was
+     asked to spend pneuma on it. */
   .chip .cnote{
-    grid-column:2 / 4;font-size:8.5px;line-height:1.35;letter-spacing:.05em;
-    opacity:.42;text-transform:none;transition:opacity .14s ease;
+    grid-column:2 / 4;font-size:9px;line-height:1.4;letter-spacing:.05em;
+    opacity:.72;text-transform:none;transition:opacity .14s ease;
   }
-  .chip:hover .cnote{opacity:.8}
   .chip.aiming .cnote{opacity:.85;color:var(--gold)}
-  .chip.locked{opacity:.3;cursor:not-allowed;border-left-color:var(--bone)}
-  .chip.locked:hover{background:rgba(231,226,210,.05)}
+  .chip.locked{opacity:.55;cursor:not-allowed;border-left-color:var(--bone)}
   .chip.locked .cc{color:var(--blood)}
   .chip.aiming{
     background:rgba(227,179,71,.2);border-left-color:var(--gold);
@@ -315,6 +353,7 @@
   .prompt.warn{color:var(--gold);opacity:1;border-color:var(--gold)}
 
   /* card states */
+  .unit.sel{border-color:var(--gold);background:rgba(227,179,71,.06)}
   .unit.acting{border-color:var(--gold);background:rgba(227,179,71,.08)}
   .unit.done{opacity:.4}
   .unit.severed{opacity:.28;border-color:var(--blood)}
@@ -328,14 +367,15 @@
   .vitae i,.pneuma i{display:block;height:100%;background:var(--tint);
                      transition:width .25s cubic-bezier(.16,.9,.24,1)}
   .pneuma i{background:var(--shell)}
-  .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.5;margin-top:4px}
+  /* these are the live VITAE / PNEUMA numbers — they were at ~4.35:1 */
+  .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.78;margin-top:4px}
 
   /* ---- effects + prompt ---- */
   .bag{display:flex;flex-wrap:wrap;gap:5px}
   .bg{font-size:9px;letter-spacing:.16em;padding:2px 6px;
-      border:1px solid currentColor;opacity:.55}
+      border:1px solid currentColor;opacity:.85}
   .bg b{font-weight:400;opacity:1}
-  .bg.a{color:var(--gold)} .bg.f{color:var(--shell)} .bg.d{color:var(--cyan)}
+  .bg.a{color:var(--gold)} .bg.f{color:var(--shell-txt)} .bg.d{color:var(--cyan)}
   .bg.drop{color:var(--bone);border-style:dashed;opacity:.75}
 
   .effects{display:flex;flex-wrap:wrap;gap:5px}
@@ -344,8 +384,9 @@
   .eff b{color:var(--gold);font-weight:400}
   .eff.dim{border-color:var(--edge);opacity:.4}
 
-  .prompt{font-size:9.5px;letter-spacing:.2em;opacity:.5;
-          border-left:1px solid var(--edge);padding-left:8px;transition:color .2s,opacity .2s}
+  /* the only instruction text on screen once the record panel is hidden */
+  .prompt{font-size:10px;letter-spacing:.2em;opacity:.78;
+          border-left:1px solid var(--edge-i);padding-left:8px;transition:color .2s,opacity .2s}
   .prompt.hot{color:var(--gold);opacity:1;border-color:var(--gold)}
 
   /* ---- log ---- */
@@ -356,27 +397,163 @@
   #log .line.good{border-color:var(--gold);color:var(--gold)}
   #log .line.bad{border-color:var(--blood);color:var(--blood)}
 
-  /* ---- COMMIT ROUND: bottom-centre of the map, just above the nameplates ---- */
-  #confirm{
-    position:absolute;left:50%;bottom:10px;z-index:5;
-    transform:translateX(-50%) translateY(8px);
-    min-height:44px;padding:0 22px;
-    font:inherit;letter-spacing:.24em;font-size:10.5px;
-    color:var(--bone);background:rgba(4,5,10,.92);
-    border:1px solid var(--edge);cursor:pointer;
-    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-    opacity:0;pointer-events:none;
-    transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1),
-               color .2s ease, border-color .2s ease, background .2s ease;
+  /* ---- action bar: CANCEL and COMMIT, bottom-centre of the map ----
+     A flex row rather than two absolutely-positioned buttons, because on a
+     375px screen "COMMIT ROUND · 3 LEFT" beside "× BACK" collided and wrapped
+     to two lines. Buttons leave the flow entirely when closed, which also
+     takes them out of the tab order. */
+  #actionbar{
+    position:absolute;left:0;right:0;bottom:10px;z-index:5;
+    display:flex;gap:10px;justify-content:center;align-items:center;
+    padding:0 12px;pointer-events:none;
   }
-  #confirm.open{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+  #actionbar button{pointer-events:auto;white-space:nowrap}
+  #confirm{
+    min-height:44px;padding:0 20px;
+    font:inherit;letter-spacing:.2em;font-size:10.5px;
+    color:var(--bone);background:rgba(4,5,10,.94);
+    border:1px solid var(--edge-i);cursor:pointer;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    transition:color .2s ease, border-color .2s ease, background .2s ease;
+  }
+  #confirm:not(.open),#cancel:not(.open){display:none}
   #confirm.ready{
     color:var(--gold);border-color:var(--gold);background:rgba(227,179,71,.14);
     animation:nudge 1.15s ease-in-out infinite;
   }
 
-  /* touch devices need no keyboard legend */
-  @media (pointer:coarse){ .keys{display:none} }
+  /* ---- CANCEL / BACK: the one way out of every committed-looking state ----
+     Aiming used to be a dead end on touch — the fan collapsed to
+     pointer-events:none, COMMIT hid itself, taps on non-enemy tiles were
+     silently swallowed, and cancel() was bound to ESC only. */
+  #cancel{
+    min-height:44px;padding:0 16px;
+    font:inherit;letter-spacing:.2em;font-size:10.5px;
+    color:var(--bone);background:rgba(4,5,10,.94);
+    border:1px solid var(--edge-i);cursor:pointer;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    transition:color .2s ease, border-color .2s ease, background .2s ease;
+  }
+  #cancel.hot{color:var(--blood);border-color:var(--blood)}
+
+  /* ---- refusal toast ----
+     Every rejection path used to be log()-only, and the log is hidden under
+     900px, so a refused tap produced nothing at all — indistinguishable from
+     a dropped input, which makes players tap again harder. */
+  /* above #targets, which occupies the 62px band while aiming */
+  #toast{
+    position:absolute;left:50%;bottom:118px;z-index:7;
+    transform:translateX(-50%) translateY(6px);
+    padding:8px 14px;max-width:min(92%,340px);text-align:center;
+    font-size:10px;letter-spacing:.18em;line-height:1.4;
+    color:var(--gold);background:rgba(4,5,10,.96);
+    border:1px solid var(--gold);pointer-events:none;
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    opacity:0;transition:opacity .16s ease, transform .22s cubic-bezier(.16,.9,.24,1);
+  }
+  #toast.open{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---- target chips while aiming ----
+     Firing used to mean pixel-hunting a 44px enemy tile. ENTER's "hit the
+     nearest" existed but was keyboard-only, and the prompt advertised it. */
+  #targets{
+    position:absolute;left:50%;bottom:62px;z-index:6;
+    transform:translateX(-50%) translateY(8px);
+    display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
+    max-width:min(94%,420px);
+    opacity:0;pointer-events:none;visibility:hidden;
+    transition:opacity .18s ease, transform .22s cubic-bezier(.16,.9,.24,1);
+  }
+  #targets.open{opacity:1;pointer-events:auto;visibility:visible;
+                transform:translateX(-50%) translateY(0)}
+  .tgt{
+    font:inherit;font-size:10px;letter-spacing:.16em;cursor:pointer;
+    min-height:44px;padding:0 14px;
+    display:flex;flex-direction:column;justify-content:center;gap:1px;
+    color:var(--bone);background:rgba(4,5,10,.94);
+    border:1px solid var(--edge-i);
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+  }
+  .tgt em{font-style:normal;font-size:8.5px;letter-spacing:.1em;opacity:.75}
+  .tgt.near{border-color:var(--gold);color:var(--gold)}
+  .tgt:active{background:rgba(227,179,71,.28)}
+
+  /* ---- long-press inspect card ----
+     The safe, non-committal counterpart to a tap. Without it the only way to
+     learn about a tile is to tap it, and tapping spends the round. */
+  #inspect{
+    position:absolute;left:50%;top:50%;z-index:8;
+    transform:translate(-50%,-50%) scale(.97);
+    display:grid;gap:3px;padding:14px 18px;min-width:190px;
+    font-size:10px;letter-spacing:.14em;
+    color:var(--bone);background:rgba(4,5,10,.97);
+    border:1px solid var(--gold);cursor:pointer;
+    clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+    opacity:0;pointer-events:none;visibility:hidden;
+    transition:opacity .16s ease, transform .2s cubic-bezier(.16,.9,.24,1);
+  }
+  #inspect.open{opacity:1;pointer-events:auto;visibility:visible;
+                transform:translate(-50%,-50%) scale(1)}
+  #inspect b{font-weight:400;color:var(--gold);letter-spacing:.24em;font-size:11px;
+             margin-bottom:4px}
+  #inspect span{opacity:.8;font-size:9.5px}
+  #inspect span.bad{color:var(--blood);opacity:1}
+
+  /* ---- press feedback ----
+     -webkit-tap-highlight-color is transparent and every affordance was
+     :hover-only, so a tap gave nothing back at all. Hover is also wrapped,
+     because iOS leaves it stuck on the last-tapped element. */
+  @media (hover:hover){
+    .box:hover{background:rgba(70,240,220,.12)}
+    .box.yes:hover{background:rgba(227,179,71,.18)}
+    .chip:hover{background:rgba(70,240,220,.14)}
+    .chip.locked:hover{background:rgba(231,226,210,.05)}
+  }
+  @media (hover:none){
+    .chip:active{background:rgba(70,240,220,.28);border-left-color:var(--gold)}
+    .chip.locked:active{background:rgba(214,64,42,.18);animation:refuse .18s ease}
+    .box:active{background:rgba(70,240,220,.22)}
+    .box.yes:active{background:rgba(227,179,71,.30)}
+    #confirm:active{background:rgba(227,179,71,.28);border-color:var(--gold)}
+    #cancel:active{background:rgba(214,64,42,.22);border-color:var(--blood)}
+    .unit:active{border-color:var(--gold)}
+  }
+  @keyframes refuse{
+    0%,100%{transform:none}33%{transform:translateX(-3px)}66%{transform:translateX(3px)}
+  }
+
+  /* Touch gets its own legend, and loses the keycap glyphs — the hotkey
+     numeral on every chip was a 13px grid column spent on an unusable
+     affordance. */
+  .keys.touch{display:none}
+  @media (pointer:coarse){
+    .keys.kb{display:none}
+    .keys.touch{display:flex;opacity:.72;font-size:10px}
+    /* visibility, not display: display:none removes .hk from the grid flow,
+       which shifts .cn into the zero-width first column and stacks it under
+       the cost readout. */
+    .chip{grid-template-columns:0 1fr auto}
+    .chip .hk{visibility:hidden}
+    #hint .k{display:none}
+  }
+
+  /* Below 900px the record panel is hidden entirely, which removed the game's
+     only causal feedback — including STRIKES EMPTY AIR, the payoff line for
+     the whole intent-before-movement design. Two lines of it come back as a
+     ticker in the letterbox band under the map, where it occludes nothing. */
+  @media (max-width:900px){
+    #body{position:relative}
+    /* Top of the map, not the bottom: the bottom letterbox band is where
+       CANCEL and COMMIT live. */
+    aside{position:absolute;left:0;right:0;top:0;
+          border-left:0;pointer-events:none;z-index:3}
+    #logwrap{padding:6px 12px;
+             background:linear-gradient(180deg,rgba(4,5,10,.92) 40%,transparent)}
+    #logwrap h2{display:none}
+    #log{opacity:1;font-size:9.5px;line-height:1.6;overflow:hidden}
+    #log .line{opacity:.85}
+    #log .line:nth-child(n+3){display:none}
+  }
 
   /* landscape phones: reclaim vertical space for the map */
   @media (max-height:480px){
@@ -390,20 +567,43 @@
     .keys{display:none}
   }
 
-  /* notched devices: keep the HUD and header out of the hardware insets */
+  /* ---- focus ----
+     An outline would be clipped away: outlines paint outside the border box
+     and .box / #confirm / #cancel all carry clip-path. An inset shadow is not. */
+  :focus{outline:none}
+  :focus-visible{box-shadow:inset 0 0 0 2px var(--gold)}
+  .unit:focus-visible,.chip:focus-visible{box-shadow:inset 0 0 0 2px var(--gold)}
+
+  /* notched devices: keep the HUD, header and map out of the hardware insets.
+     updateCamera reads getBoundingClientRect, so the camera adapts on its own. */
   header{padding-left:max(16px, env(safe-area-inset-left));
          padding-right:max(16px, env(safe-area-inset-right))}
+  #viewport{padding-left:max(12px, env(safe-area-inset-left));
+            padding-right:max(12px, env(safe-area-inset-right))}
   #hud{padding-bottom:env(safe-area-inset-bottom);
        padding-left:env(safe-area-inset-left);
        padding-right:env(safe-area-inset-right)}
 
   @media (prefers-reduced-motion:reduce){
-    #fan,.grp,.chip,.vitae i,.pneuma i,.unit,#hint{transition-duration:.01ms!important}
+    #fan,.grp,.chip,.vitae i,.pneuma i,.unit,#hint,
+    #confirm,#cancel,#toast,#targets,#inspect{transition-duration:.01ms!important}
+    /* the fan staggers its groups with transition-delay, which zeroing the
+       duration does not touch */
+    #fan.open .grp{transition-delay:0s!important}
     #hint.open{animation:none}
     .overlay.open,.dialog,.winbox{animation:none}
-    .float{animation-duration:.6s}
-    .p,.ring,.fxsheet{animation-duration:.25s}
+    /* Fade in place: floatup translates 42px and scales three times. These
+       keep an animation rather than dropping to none, because both .float and
+       .fxsheet are removed from the DOM on animationend — kill the animation
+       and they accumulate forever. */
+    .float{animation:floatstill .9s linear forwards;
+           transform:translate(-50%,-50%)}
+    .p,.ring{animation-duration:.25s}
+    /* an 8-frame strip shortened to .25s plays at 32fps — flashier, not
+       calmer. Hold frame one and fade it. */
+    .fxsheet{animation:fxhold .3s linear forwards}
     #confirm.ready{animation:none}
+    .chip.locked:active{animation:none}
   }
 </style>
 </head>
@@ -421,7 +621,13 @@
       <div id="floaters"></div>
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
-      <button id="confirm"></button>
+      <div id="toast" role="status" aria-live="polite"></div>
+      <div id="targets" role="group" aria-label="Targets in range"></div>
+      <div id="inspect"></div>
+      <div id="actionbar">
+        <button id="cancel"></button>
+        <button id="confirm"></button>
+      </div>
     </div>
 
     <aside>
@@ -438,11 +644,15 @@
       <div class="hud-label">CIRCLE <span id="threat"></span></div>
       <div id="bag" class="bag"></div>
       <div id="effects" class="effects"></div>
-      <div id="prompt" class="prompt"></div>
-      <div class="keys">
+      <div id="prompt" class="prompt" role="status" aria-live="polite"></div>
+      <div class="keys kb">
         <span><b>WASD</b> MOVE</span><span><b>E</b> ACT</span>
         <span><b>1-5</b> OPERATION</span><span><b>SPACE</b> COMMIT</span>
         <span><b>ESC</b> CANCEL</span>
+      </div>
+      <div class="keys touch">
+        <span><b>TAP</b> TILE, THEN CONFIRM</span><span><b>TAP</b> NAMEPLATE TO ACT</span>
+        <span><b>HOLD</b> TILE TO INSPECT</span><span><b>TWO FINGERS</b> LOOK AROUND</span>
       </div>
     </div>
   </footer>
@@ -553,6 +763,19 @@
       variance: 1,      // +/- this much on every damage roll
       minDamage: 1,     // a hit always does something
       pneumaRegen: 1,   // per living member, per round, move or act
+    },
+
+    // Readability toggles. Not cosmetic — these change what the player knows
+    // when they commit, which changes how hard the floor plays.
+    ui: {
+      // Draw what each AWAKE foe has committed to this round: a chevron on the
+      // tile it will step to, a ring on the circle if it will attack. Sleeping
+      // foes stay hidden, so waking one is still a surprise.
+      //
+      // The turn model's whole point is that intents lock BEFORE movement, so
+      // stepping out of reach makes an attack whiff — a player who cannot see
+      // the intent cannot make that read. Set false to restore blind commits.
+      showFoeIntent: true,
     },
 
     // Party. Order here is display order in the CIRCLE panel and left-to-right
@@ -854,6 +1077,7 @@
     aiming: null,                  // member name currently picking a target
     pending: null,                 // { op, member } while aiming
     hover: null,                   // { c, r } under the cursor
+    staged: null,                  // { dc, dr } step awaiting CONFIRM (touch only)
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
     cd: {},                        // { opName: rounds remaining }
@@ -928,6 +1152,20 @@
   function log(text, tone) {
     state.log.unshift({ text, tone: tone || '' });
     if (state.log.length > 60) state.log.pop();
+  }
+
+  // A refusal the player must actually see. log() alone is not enough: the
+  // record panel is hidden below 900px, so on a phone a rejected tap produced
+  // no output at all. Looked up lazily because this runs before the DOM refs.
+  let toastTimer = 0;
+  function warn(text, tone) {
+    log(text, tone);
+    const el = document.getElementById('toast');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('open');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('open'), 2000);
   }
 
   // -------------------------------------------------------------- combat
@@ -1016,6 +1254,16 @@
     if (!foe.awake) return { kind: 'idle' };
     if (adjacent(foe, target)) return { kind: 'attack' };
     return { kind: 'step', ...stepToward(foe, target) };
+  }
+
+  // Display only. foeIntent() wakes foes and writes to the log, so it must never
+  // be called from the render path. This reads the same rules with no side
+  // effects, and only for foes that are already awake — waking one is still a
+  // surprise. Gated by BALANCE.ui.showFoeIntent.
+  function previewIntent(foe) {
+    if (foe.hp <= 0 || !foe.awake) return null;
+    if (adjacent(foe, state.circle)) return { kind: 'attack' };
+    return { kind: 'step', ...stepToward(foe, state.circle) };
   }
 
   function stepToward(foe, t) {
@@ -1145,7 +1393,8 @@
     for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
     state.turn++;
     state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
-    state.sel = null;
+    state.sel = null; state.staged = null; state.hover = null;
+    view.free = false;                       // snap the camera back to the party
     checkEnd();
   }
 
@@ -1186,6 +1435,10 @@
     hit.filter(x => x.m.hp === 0)
        .forEach(x => log(`${x.m.name} IS SEVERED BY THE ${label}.`, 'bad'));
   }
+
+  // Naming a key to a player who has no keyboard is worse than saying nothing.
+  const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
+  const actHint = () => isCoarse() ? 'TAP THE TAG ABOVE THE CIRCLE' : 'PRESS E';
 
   // The prop under the circle that E would act on, or null.
   function interactable() {
@@ -1233,11 +1486,11 @@
       log('THE CIRCLE TRIPS A CONCEALED ' + p.label + '.', 'bad');
     }
     if (p.kind === 'spikes') triggerSpikes(p.label);
-    if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. PRESS E.', 'good');
+    if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. ' + actHint() + '.', 'good');
     if (p.kind === 'stairs') {
       const left = liveFoes().length;
       if (left) log('THE ' + p.label + ' IS SEALED. ' + left + ' STILL STAND.', 'bad');
-      else log('THE ' + p.label + ' OPENS BELOW. PRESS E.', 'good');
+      else log('THE ' + p.label + ' OPENS BELOW. ' + actHint() + '.', 'good');
     }
   }
 
@@ -1253,6 +1506,7 @@
     state.acted.push(member.name);
     state.pending = null;
     state.aiming = null;
+    state.hover = null;              // mouseleave is not reliable on touch
     const next = pendingMembers()[0];
     state.sel = next ? next.name : null;
   }
@@ -1267,10 +1521,10 @@
     const op = entry.op;
     if (state.mode === 'move') state.mode = 'act';
     state.sel = m.name;
-    if (!affordable(m, op)) { log(`${m.name} CANNOT PAY FOR ${op.name}.`); return; }
+    if (!affordable(m, op)) { warn(`${m.name} CANNOT PAY FOR ${op.name}.`); return; }
 
     if (op.targets === 'circle') { commitMember(m, op); return; }
-    if (!validTargets(op).length) { log(`${op.name} HAS NO TARGET IN RANGE.`); return; }
+    if (!validTargets(op).length) { warn(`${op.name} HAS NO TARGET IN RANGE.`); return; }
     if (op.targets === 'adjacent') { commitMember(m, op); return; }   // no aiming
     state.pending = { op, member: m };
     state.aiming = m.name;
@@ -1290,17 +1544,63 @@
   function clickTile(c, r) {
     if (state.pending) {
       const foe = foeAt(c, r);
-      if (!foe) return;
-      if (cheb(foe, state.circle) > state.pending.op.range) return;
+      if (!foe) { warn('TAP AN ENEMY INSIDE THE WASH, OR CANCEL.'); return; }
+      if (cheb(foe, state.circle) > state.pending.op.range) {
+        warn(foe.kind + ' IS OUT OF RANGE.');
+        return;
+      }
       commitMember(state.pending.member, state.pending.op, foe.id);
       return;
     }
-    // Touch movement. An orthogonal neighbour steps there (same contract as
-    // WASD, via moveInput); the circle's own tile holds the ground (SPACE).
     if (state.mode === 'act') return;
+
     const dc = c - state.circle.c, dr = r - state.circle.r;
-    if (dc === 0 && dr === 0) { passOrHold(); return; }
-    if (Math.abs(dc) + Math.abs(dr) === 1) moveInput(dc, dr);
+
+    // The token's own tile used to hold the ground. It is the largest, most
+    // salient object on the board, so "tap the thing I care about" spent the
+    // round standing still and taking a free hit. HOLD is a labelled button now.
+    if (dc === 0 && dr === 0) { state.staged = null; return; }
+
+    if (Math.abs(dc) + Math.abs(dr) !== 1) {
+      // Diagonal and distant taps were silent, which reads as a dropped input.
+      state.staged = null;
+      if (walkable.has(key(c, r))) warn('THE CIRCLE STEPS ONE TILE, NOT DIAGONALLY.');
+      return;
+    }
+
+    // A mouse steps on click, as it always has. A finger stages the step and
+    // confirms it, because on touch a stray tap is both likely and irreversible:
+    // foe intents lock BEFORE movement, so a wasted round hands every awake foe
+    // a free approach and every adjacent foe a hit the right step would whiff.
+    if (!isCoarse()) { moveInput(dc, dr); return; }
+    if (state.staged && state.staged.dc === dc && state.staged.dr === dr) {
+      commitStaged();
+      return;
+    }
+    stageStep(dc, dr);
+  }
+
+  function stageStep(dc, dr) {
+    const nc = state.circle.c + dc, nr = state.circle.r + dr;
+    if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
+    if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
+    state.staged = { dc, dr };
+  }
+
+  function commitStaged() {
+    if (!state.staged) return;
+    const { dc, dr } = state.staged;
+    state.staged = null;
+    moveInput(dc, dr);
+  }
+
+  // The CANCEL button unwinds the whole state in one tap. ESC keeps its ladder
+  // (cancel below) because on desktop that is already the established feel.
+  function backOut() {
+    if (state.pending) { state.pending = null; state.aiming = null; state.hover = null; return; }
+    if (state.staged) { state.staged = null; return; }
+    state.sel = null;
+    if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
   }
 
   // Keyboard fallback: ENTER fires at the nearest enemy in range.
@@ -1313,7 +1613,8 @@
   }
 
   function cancel() {
-    if (state.pending) { state.pending = null; state.aiming = null; return; }
+    if (state.pending) { state.pending = null; state.aiming = null; state.hover = null; return; }
+    if (state.staged) { state.staged = null; return; }
     if (state.sel) { state.sel = null; return; }
     if (state.mode === 'act' && !state.queued.length) { state.mode = 'move'; state.acted = []; }
   }
@@ -1336,8 +1637,8 @@
   function moveInput(dc, dr) {
     if (blocked() || state.mode === 'act') return;
     const nc = state.circle.c + dc, nr = state.circle.r + dr;
-    if (foeAt(nc, nr)) { log('AN ENEMY BLOCKS THE WAY.'); return; }
-    if (!walkable.has(key(nc, nr))) return;
+    if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
+    if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
     resolveRound({ kind: 'step', dc, dr });
   }
 
@@ -1350,18 +1651,32 @@
   // shows everything and never moves. When it doesn't (phones), the viewBox
   // crops to what fits, centred on the circle, clamped to the floor edges.
   // `cam` is read back by tileFromEvent, so pointer math always matches.
-  const MIN_TILE_PX = 44;
+  //
+  // 44 is the accessibility floor, and adjacent tiles are contiguous with no
+  // gutter — a thumb 3mm off centre steps the wrong way. On a 375px phone it
+  // also wastes ~240px of letterbox. Coarse pointers get 64, which yields
+  // ~70px tiles through the same clamping.
+  const MIN_TILE_PX = window.matchMedia('(pointer:coarse)').matches ? 64 : 44;
   let cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
+
+  // Free look. The camera always cropped the floor on a phone and only ever
+  // followed the party, so enemy position — the input to the round's central
+  // decision — could simply be off screen with no way to look. Two fingers
+  // pan and pinch; committing anything recentres.
+  const view = { zoom: 1, ox: 0, oy: 0, free: false };
 
   function updateCamera() {
     const box = stage.getBoundingClientRect();
     if (!box.width || !box.height) return;                    // pre-layout: keep full floor
-    const fitC = Math.max(3, Math.floor(box.width / MIN_TILE_PX));
-    const fitR = Math.max(3, Math.floor(box.height / MIN_TILE_PX));
+    const px = MIN_TILE_PX * view.zoom;
+    const fitC = Math.max(3, Math.floor(box.width / px));
+    const fitR = Math.max(3, Math.floor(box.height / px));
     const w = Math.min(F.cols, fitC) * T;
     const h = Math.min(F.rows, fitR) * T;
-    const x = Math.max(0, Math.min((state.circle.c + .5) * T - w / 2, F.cols * T - w));
-    const y = Math.max(0, Math.min((state.circle.r + .5) * T - h / 2, F.rows * T - h));
+    const cx = view.free ? view.ox : (state.circle.c + .5) * T;
+    const cy = view.free ? view.oy : (state.circle.r + .5) * T;
+    const x = Math.max(0, Math.min(cx - w / 2, F.cols * T - w));
+    const y = Math.max(0, Math.min(cy - h / 2, F.rows * T - h));
     cam = { x, y, w, h };
     stage.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
   }
@@ -1464,6 +1779,68 @@
     }).join('');
   }
 
+  // The four legal steps, outlined. Nothing on the board used to say which
+  // tiles were the move buttons, so a diagonal tap did nothing with no feedback.
+  function moveLayer() {
+    if (state.mode !== 'move' || state.pending || finished() || !isCoarse()) return '';
+    return [[0, -1], [-1, 0], [0, 1], [1, 0]].map(([dc, dr]) => {
+      const c = state.circle.c + dc, r = state.circle.r + dr;
+      if (!walkable.has(key(c, r)) || foeAt(c, r)) return '';
+      if (state.staged && state.staged.dc === dc && state.staged.dr === dr) return '';
+      return `<polygon points="${plate(c, r, 9)}" fill="none" stroke="var(--cyan)"
+                       stroke-width="1.2" opacity=".35"/>`;
+    }).join('');
+  }
+
+  // What each awake foe has already committed to this round. The turn model's
+  // whole point is that intents lock before movement, so stepping out of reach
+  // makes an attack whiff — a player who cannot see the intent cannot make
+  // that read, and on touch the commit is a single irreversible tap.
+  function intentLayer() {
+    if (!B.ui || !B.ui.showFoeIntent || finished()) return '';
+    let g = '', struck = false;
+    for (const f of liveFoes()) {
+      const it = previewIntent(f);
+      if (!it) continue;
+      if (it.kind === 'attack') {
+        if (struck) continue;
+        struck = true;
+        g += `<polygon points="${plate(state.circle.c, state.circle.r, 5)}" fill="none"
+                       stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
+                       opacity=".75"/>`;
+        continue;
+      }
+      if (!it.dc && !it.dr) continue;
+      g += `<polygon points="${plate(f.c + it.dc, f.r + it.dr, 20)}"
+                     fill="var(--blood)" opacity=".3"/>`;
+    }
+    return g;
+  }
+
+  // Awake foes the camera has cropped away, pinned to the edge they sit beyond.
+  function edgeLayer() {
+    const x1 = cam.x + cam.w, y1 = cam.y + cam.h;
+    return liveFoes().filter(f => f.awake).map(f => {
+      const fx = f.c * T + T / 2, fy = f.r * T + T / 2;
+      if (fx > cam.x && fx < x1 && fy > cam.y && fy < y1) return '';
+      const px = Math.max(cam.x + 13, Math.min(fx, x1 - 13));
+      const py = Math.max(cam.y + 13, Math.min(fy, y1 - 13));
+      return `<circle cx="${px}" cy="${py}" r="5.5" fill="var(--blood)" opacity=".85"/>
+              <circle cx="${px}" cy="${py}" r="11" fill="none" stroke="var(--blood)"
+                      stroke-width="1" opacity=".45"/>`;
+    }).join('');
+  }
+
+  // Where a staged step would land, before it is paid for.
+  function stagedLayer() {
+    if (!state.staged) return '';
+    const c = state.circle.c + state.staged.dc, r = state.circle.r + state.staged.dr;
+    return `<polygon points="${plate(c, r, 3)}" fill="var(--gold)" opacity=".14"/>
+            <polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)"
+                     stroke-width="2" stroke-dasharray="6 4" opacity=".9"/>
+            <g transform="translate(${c * T},${r * T})" opacity=".38">${S.party()}</g>`;
+  }
+
   function circleLayer() {
     const { c, r } = state.circle;
     return `<polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
@@ -1480,7 +1857,8 @@
 
   function buildRoster() {
     rosterEl.innerHTML = state.circle.members.map(m => {
-      return `<div class="unit" data-member="${m.name}" style="--tint:var(--${m.tint})">
+      return `<div class="unit" data-member="${m.name}" style="--tint:var(--${m.tint})"
+                   role="button" tabindex="0" aria-label="${m.name}, ${m.role}">
                 <div class="unit-head">
                   <span class="unit-name">${m.name}</span>
                   <span class="unit-role">${m.type} \u00b7 ${m.role}</span>
@@ -1505,7 +1883,7 @@
     });
 
     rosterEl.addEventListener('click', e => {
-      if (blocked()) return;
+      if (blocked() || !tapOk()) return;
       const card = e.target.closest('.unit');
       if (!card) return;
       const m = byName(card.dataset.member);
@@ -1515,11 +1893,27 @@
       state.sel = state.sel === m.name ? null : m.name;   // tap again closes
       draw();
     });
+    rosterEl.addEventListener('keydown', activateOnKey);
+  }
+
+  // role="button" on a div is a promise that the keyboard can activate it.
+  // stopPropagation keeps the window-level handler from also firing, which
+  // would double-dispatch SPACE into passOrHold.
+  function activateOnKey(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const btn = e.target.closest('[role="button"]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    btn.click();
   }
 
   function syncRoster() {
     state.circle.members.forEach(m => {
       const c = cards[m.name];
+      c.el.setAttribute('aria-pressed', String(state.sel === m.name));
+      c.el.setAttribute('aria-disabled', String(!canAct(m)));
+      c.el.classList.toggle('sel', state.sel === m.name);
       c.el.classList.toggle('acting', state.aiming === m.name);
       c.el.classList.toggle('done', state.mode === 'act' && hasActed(m));
       c.el.classList.toggle('severed', m.hp <= 0);
@@ -1532,11 +1926,11 @@
     });
   }
 
-  // ---- floating operations fan, anchored over the party token ------------
-  // Built once so its CSS transitions survive; positioned in viewport pixels
-  // by inverting the SVG letterbox transform.
+  // ---- floating operations fan, anchored over the selected nameplate -----
+  // Built once so its CSS transitions survive; positioned in viewport pixels.
 
   const viewportEl = document.getElementById('viewport');
+  const actionbarEl = document.getElementById('actionbar');
   const fanEl = document.getElementById('fan');
   const hintEl = document.getElementById('hint');
   const groups = {};
@@ -1546,7 +1940,7 @@
       const chips = (OPS_BY[m.name] || []).map(op => {
         const slot = ALL_OPS.findIndex(e => e.op.name === op.name);
         return `<div class="chip" data-slot="${slot}" data-op="${op.name}"
-                     title="${op.name} \u2014 ${op.note}">
+                     role="button" tabindex="0" aria-label="${op.name}. ${op.note}">
                   <span class="hk">${slot + 1}</span>
                   <span class="cn">${op.name}</span>
                   <span class="cc"></span>
@@ -1567,9 +1961,11 @@
       const chip = e.target.closest('.chip');
       if (!chip) return;
       e.stopPropagation();
+      if (!tapOk()) return;
       chooseOp(+chip.dataset.slot);
       draw();
     });
+    fanEl.addEventListener('keydown', activateOnKey);
   }
 
   // Any tile, in pixels relative to #viewport.
@@ -1655,7 +2051,7 @@
     state.floats.length = 0;
   }
 
-  // A small tag over the token when there is something here to press E on.
+  // A tag over the token when there is something here to act on.
   function syncHint() {
     // While the fan is collapsed for aiming, this tag is the only thing telling
     // you which operation is armed, so it takes priority over the E prompt.
@@ -1664,6 +2060,9 @@
     hintEl.classList.toggle('open', !!(aim || it));
     hintEl.classList.toggle('aim', !!aim);
     hintEl.classList.toggle('locked', !!(it && it.locked));
+    // Only interactive when there is actually something here to open. Any other
+    // state must stay click-through, or the tag blocks the tile behind it.
+    hintEl.classList.toggle('actionable', !aim && !!it && !it.locked);
     if (!aim && !it) return;
     hintEl.innerHTML = aim
       ? `<span class="k">\u2316</span> ${aim.member.name} \u00b7 ${aim.op.name}`
@@ -1697,7 +2096,9 @@
           cd > 0 ? 'CD ' + cd
           : blind ? 'NO TARGET'
           : (op.pn ? op.pn + 'P' : '\u2014') + (op.vitaeCost ? ' +' + op.vitaeCost + 'V' : '');
-        chip.classList.toggle('locked', !usable(m, op) || !canAct(m));
+        const locked = !usable(m, op) || !canAct(m);
+        chip.setAttribute('aria-disabled', String(locked));
+        chip.classList.toggle('locked', locked);
         chip.classList.toggle('untargetable', blind && affordable(m, op));
         chip.classList.toggle('aiming', !!state.pending && state.pending.op.name === op.name);
       });
@@ -1706,12 +2107,26 @@
     // Anchor above the selected member's nameplate, clamped to the viewport.
     const card = cards[state.sel].el.getBoundingClientRect();
     const vp = viewportEl.getBoundingClientRect();
-    const w = fanEl.offsetWidth;
-    const cx = Math.min(Math.max(card.left + card.width / 2 - vp.left, w / 2 + 6),
+    const w = fanEl.offsetWidth, h = fanEl.offsetHeight;
+    const cardCx = card.left + card.width / 2 - vp.left;
+    const cx = Math.min(Math.max(cardCx, w / 2 + 6),
                         Math.max(w / 2 + 6, vp.width - w / 2 - 6));
-    fanEl.classList.remove('below');
+    // Keep clear of the action bar along the bottom of the map. COMMIT is
+    // visible during act rounds now, so anchoring straight to the nameplate
+    // would put the fan underneath it. Measured rather than a constant, so it
+    // survives the bar changing height. The 12 covers the fan's tether.
+    const barTop = actionbarEl.getBoundingClientRect().top - vp.top;
+    // A five-chip group is taller than a landscape phone's map area, so it
+    // would render over the header. Flip below the nameplate when it will not
+    // fit above — which is what the .below variant was always for.
+    const top = Math.min(card.top - vp.top - 8, barTop - 12);
+    const below = top - h < 6;
+    fanEl.classList.toggle('below', below);
     fanEl.style.left = cx + 'px';
-    fanEl.style.top = (card.top - vp.top - 8) + 'px';
+    fanEl.style.top = (below ? Math.min(top + card.height + 16, vp.height - h - 6) : top) + 'px';
+    // The tether is pinned at left:50% of the fan, but the fan is clamped and
+    // the nameplate is not, so for the outer members it pointed at nothing.
+    fanEl.style.setProperty('--tether', (cardCx - cx) + 'px');
   }
 
   const modalEl = document.getElementById('modal');
@@ -1755,13 +2170,16 @@
   function draw() {
     updateCamera();
     stage.innerHTML = backdrop() + floorLayer() + propLayer() + aimLayer()
-                    + dropLayer() + foeLayer() + circleLayer();
+                    + moveLayer() + intentLayer() + dropLayer() + foeLayer()
+                    + stagedLayer() + circleLayer() + edgeLayer();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
     document.getElementById('turn-value').textContent = String(state.turn).padStart(3, '0');
 
     syncRoster();
     syncFan();
     syncConfirm();
+    syncCancel();
+    syncTargets();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -1790,15 +2208,24 @@
     else if (state.over === 'SEVERED') prompt.textContent = 'THE WORK ENDS.';
     else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
-      prompt.textContent = state.pending.member.name + ' \u2014 CLICK AN ENEMY \u00b7 '
-                         + 'ENTER HITS THE NEAREST \u00b7 ESC CANCELS';
+      prompt.textContent = state.pending.member.name + (isCoarse()
+        ? ' \u2014 TAP AN ENEMY OR A TARGET CHIP \u00b7 CANCEL BACKS OUT'
+        : ' \u2014 CLICK AN ENEMY \u00b7 ENTER HITS THE NEAREST \u00b7 ESC CANCELS');
     else if (isStuck())
       prompt.textContent = 'NO OPERATION AVAILABLE \u2014 COMMIT THE ROUND';
     else if (state.mode === 'act')
-      prompt.textContent = 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND';
+      prompt.textContent = isCoarse()
+        ? 'TAP A NAMEPLATE \u2014 COMMIT ENDS THE ROUND'
+        : 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND';
+    else if (state.staged)
+      prompt.textContent = 'CONFIRM THE STEP, OR TAP ANOTHER TILE';
     else if (!canStep())
-      prompt.textContent = 'SURROUNDED \u2014 SPACE HOLDS, TAP A NAMEPLATE TO ACT';
-    else prompt.textContent = 'WASD OR TAP MOVES \u2014 TAP A NAMEPLATE OR E TO ACT';
+      prompt.textContent = isCoarse()
+        ? 'SURROUNDED \u2014 HOLD GROUND, OR TAP A NAMEPLATE TO ACT'
+        : 'SURROUNDED \u2014 SPACE HOLDS, TAP A NAMEPLATE TO ACT';
+    else prompt.textContent = isCoarse()
+      ? 'TAP A TILE TO STEP \u2014 TAP A NAMEPLATE TO ACT'
+      : 'WASD OR TAP MOVES \u2014 TAP A NAMEPLATE OR E TO ACT';
     prompt.className = 'prompt'
       + (state.pending ? ' hot' : '')
       + ((isStuck() || (state.mode === 'move' && !canStep() && !state.over)) ? ' warn' : '');
@@ -1809,10 +2236,27 @@
 
   // -------------------------------------------------------------- input
 
+  // One clock shared by EVERY pointer entry point. Same-element double-fire and
+  // cross-element fall-through (a control drops pointer-events while it is still
+  // fading, so the second tap lands on the map) are the same bug, and a shared
+  // clock is what fixes both. Keyboard paths are deliberately not gated.
+  let lastTap = 0;
+  function tapOk() {
+    const t = Date.now();
+    if (t - lastTap < 200) return false;
+    lastTap = t;
+    return true;
+  }
+
   const MOVES = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
 
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
+
+    // A focused button owns ENTER and SPACE. Without this the window handler
+    // preventDefaults them and the button's own activation never runs.
+    const focused = document.activeElement;
+    if (focused && focused.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
 
     if (state.modal === 'exit') {
       e.preventDefault();
@@ -1850,28 +2294,186 @@
   });
   stage.addEventListener('mouseleave', () => { if (state.hover) { state.hover = null; draw(); } });
   stage.addEventListener('click', e => {
+    // A long press already answered this gesture; the browser still sends the
+    // click, and letting it through would consume a round.
+    if (longPressed) { longPressed = false; return; }
+    if (!tapOk()) return;
+    hideInspect();
     const t = tileFromEvent(e);
     clickTile(t.c, t.r); draw();
   });
 
+  // ---- long press to inspect ---------------------------------------------
+  // The only safe, non-committal gesture on the board. Without it, the way to
+  // find out about a tile is to tap it, and tapping spends the round.
+
+  const inspectEl = document.getElementById('inspect');
+  let pressTimer = 0, pressAt = null, longPressed = false;
+
+  function endPress() { clearTimeout(pressTimer); pressTimer = 0; pressAt = null; }
+  function hideInspect() { inspectEl.classList.remove('open'); }
+
+  function showInspect(c, r) {
+    const foe = foeAt(c, r);
+    const prop = propAt(c, r);
+    let html;
+    if (foe) {
+      const it = previewIntent(foe);
+      html = `<b>${foe.kind}</b><span>${foe.type}</span>
+              <span>VITAE ${foe.hp}/${foe.vitae}</span>
+              <span>ATK ${foe.atk} · DEF ${foe.def}</span>
+              <span class="${foe.awake ? 'bad' : ''}">${
+                !foe.awake ? 'DORMANT'
+                : it && it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
+                : 'CLOSING IN'}</span>`;
+    } else if (c === state.circle.c && r === state.circle.r) {
+      html = '<b>THE CIRCLE</b>' + state.circle.members.map(m =>
+        `<span>${m.name} — V ${m.hp}/${m.vitae} · P ${m.pn}/${m.pneuma}</span>`).join('');
+    } else if (prop && (!prop.hidden || state.revealed.has(key(c, r)))) {
+      html = `<b>${prop.label}</b><span>${prop.kind.toUpperCase()}</span>`;
+    } else if (walkable.has(key(c, r))) {
+      html = `<b>FLOOR ${c},${r}</b><span>NOTHING HERE</span>`;
+    } else {
+      return;
+    }
+    inspectEl.innerHTML = html;
+    inspectEl.classList.add('open');
+  }
+
+  stage.addEventListener('pointerdown', e => {
+    endPress();
+    pressAt = { x: e.clientX, y: e.clientY };
+    pressTimer = setTimeout(() => {
+      pressTimer = 0;
+      longPressed = true;
+      const t = tileFromEvent(e);
+      showInspect(t.c, t.r);
+    }, 450);
+  });
+  stage.addEventListener('pointerup', endPress);
+  stage.addEventListener('pointercancel', endPress);
+  stage.addEventListener('pointermove', e => {
+    if (!pressTimer || !pressAt) return;
+    if (Math.abs(e.clientX - pressAt.x) > 10 || Math.abs(e.clientY - pressAt.y) > 10) endPress();
+  });
+  inspectEl.addEventListener('click', hideInspect);
+
+  // ---- two-finger pan and pinch -------------------------------------------
+  // Two fingers rather than one, so this never competes with a tap-to-step.
+
+  let pinch = null;
+  stage.addEventListener('touchstart', e => {
+    if (e.touches.length !== 2) return;
+    endPress();
+    const [a, b] = e.touches;
+    pinch = {
+      dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+      mx: (a.clientX + b.clientX) / 2,
+      my: (a.clientY + b.clientY) / 2,
+      zoom: view.zoom,
+    };
+    if (!view.free) {
+      view.free = true;
+      view.ox = (state.circle.c + .5) * T;
+      view.oy = (state.circle.r + .5) * T;
+    }
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    const [a, b] = e.touches;
+    const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const mx = (a.clientX + b.clientX) / 2, my = (a.clientY + b.clientY) / 2;
+    const box = stage.getBoundingClientRect();
+    const scale = Math.min(box.width / cam.w, box.height / cam.h);
+    view.ox -= (mx - pinch.mx) / scale;
+    view.oy -= (my - pinch.my) / scale;
+    view.zoom = Math.max(0.55, Math.min(2.2, pinch.zoom * (dist / pinch.dist)));
+    pinch.mx = mx; pinch.my = my;
+    draw();
+  }, { passive: true });
+
+  stage.addEventListener('touchend', () => { pinch = null; }, { passive: true });
+
+  // The primary action button. It used to hide whenever a member was selected \u2014
+  // but selecting a member is HOW you open the fan, so COMMIT vanished exactly
+  // when the prompt was telling the player to press it. It is now visible in
+  // move rounds too, because holding the ground is a real play and used to be
+  // reachable only by tapping your own token (or SPACE).
   const confirmEl = document.getElementById('confirm');
   function syncConfirm() {
-    const show = state.mode === 'act' && !finished() && !state.pending && !state.sel;
+    const show = !finished() && !state.modal && !state.pending;
     confirmEl.classList.toggle('open', show);
     if (!show) return;
-    const idle = pendingMembers().length, stuck = isStuck();
-    confirmEl.classList.toggle('ready', idle === 0 || stuck);
-    confirmEl.textContent =
-      stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
-      : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
-      : 'COMMIT ROUND';
-  }
-  confirmEl.addEventListener('click', () => { passOrHold(); draw(); });
 
-  // On touch, the "E \u2014 OPEN" tag over the token is the button for
-  // chests and stairs (the roster no longer routes to openAct).
+    if (state.mode === 'act') {
+      const idle = pendingMembers().length, stuck = isStuck();
+      confirmEl.classList.toggle('ready', idle === 0 || stuck);
+      confirmEl.textContent =
+        stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
+        : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
+        : 'COMMIT ROUND';
+      return;
+    }
+    confirmEl.classList.toggle('ready', !!state.staged);
+    confirmEl.textContent = state.staged ? 'CONFIRM STEP' : 'HOLD GROUND';
+  }
+  confirmEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    if (state.staged) commitStaged(); else passOrHold();
+    draw();
+  });
+
+  // One tap out of aiming, out of a staged step, out of the act round.
+  const cancelEl = document.getElementById('cancel');
+  function syncCancel() {
+    const show = !finished() && !state.modal &&
+      (!!state.pending || !!state.staged ||
+       (state.mode === 'act' && !state.queued.length));
+    cancelEl.classList.toggle('open', show);
+    if (!show) return;
+    cancelEl.classList.toggle('hot', !!state.pending);
+    cancelEl.textContent =
+      state.pending ? '\u00d7 CANCEL'
+      : state.staged ? '\u00d7 CLEAR'
+      : '\u00d7 BACK';
+  }
+  cancelEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    backOut(); draw();
+  });
+
+  // While aiming, every valid foe as a chip, nearest first. Pixel-hunting a
+  // 44px enemy tile was the only way to fire on touch, and ENTER's "hit the
+  // nearest" shortcut existed but was keyboard-only — the prompt advertised it
+  // to players who had no ENTER key.
+  const targetsEl = document.getElementById('targets');
+  function syncTargets() {
+    const on = !!state.pending && !finished() && !state.modal;
+    targetsEl.classList.toggle('open', on);
+    if (!on) { targetsEl.innerHTML = ''; return; }
+    const list = validTargets(state.pending.op)
+      .slice().sort((a, b) => cheb(a, state.circle) - cheb(b, state.circle));
+    targetsEl.innerHTML = list.map((f, i) =>
+      `<button class="tgt${i === 0 ? ' near' : ''}" data-foe="${f.id}">
+         ${f.kind}<em>${f.hp}V · ${cheb(f, state.circle)}T</em>
+       </button>`).join('');
+  }
+  targetsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.tgt');
+    if (!btn || !state.pending || !tapOk()) return;
+    const foe = foeById(+btn.dataset.foe);
+    if (!foe || foe.hp <= 0) return;
+    commitMember(state.pending.member, state.pending.op, foe.id);
+    draw();
+  });
+
+  // On touch, the "OPEN" tag over the token is the button for chests and
+  // stairs (the roster no longer routes to openAct).
   hintEl.addEventListener('click', () => {
-    if (state.pending) return;
+    if (!tapOk()) return;
+    const it = interactable();
+    if (state.pending || !it || it.locked) return;
     openAct(); draw();
   });
 
@@ -1881,7 +2483,17 @@
 
   buildRoster();
   buildFan();
-  window.addEventListener('resize', () => draw());
+
+  // draw() rebuilds the whole SVG through innerHTML, and iOS fires resize
+  // repeatedly through a URL-bar animation, so coalesce to a frame.
+  // orientationchange gets a delay of its own: iOS can fire resize before
+  // layout settles, and updateCamera / tilePos / syncFan all read
+  // getBoundingClientRect, so an early read anchors everything to the old
+  // geometry until the next draw.
+  const redraw = () => requestAnimationFrame(draw);
+  window.addEventListener('resize', redraw);
+  window.addEventListener('orientationchange', () => setTimeout(redraw, 250));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', redraw);
   log(`FLOOR 01 COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
   draw();
 })();

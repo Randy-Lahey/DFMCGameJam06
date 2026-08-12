@@ -11,11 +11,21 @@ Locally: open `index.html`, or `daemonware-standalone.html` for a single-file co
 
 ## Controls
 
-`WASD` move · `E` act, or interact with what you are standing on ·
+**Keyboard and mouse.** `WASD` move · `E` act, or interact with what you are standing on ·
 `1`-`5` operations · click an enemy to fire · `ENTER` hits the nearest ·
-`SPACE` commit the round · `ESC` cancel
+`SPACE` commit the round · `ESC` cancel. A click on an adjacent tile steps there immediately.
 
 At the descent prompt, `Y` / `N`.
+
+**Touch.** Tap an adjacent tile to line up a step, then `CONFIRM STEP` — a stray tap costs
+nothing until you confirm it. `HOLD GROUND` is the same button when nothing is staged. Tap a
+nameplate to open that member's operations; tap a chip, then tap an enemy or one of the target
+chips. `CANCEL` backs out of anything. The gold tag over the token opens caches and takes the
+descent. Long-press any tile to inspect it without spending the round; two fingers pan and pinch
+to look around the floor.
+
+The two schemes are deliberately different where the cost of a misinput differs — see the
+comment on `clickTile()` in `src/game.js`.
 
 ## Turn model
 

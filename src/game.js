@@ -916,6 +916,7 @@
   // Built once so its CSS transitions survive; positioned in viewport pixels.
 
   const viewportEl = document.getElementById('viewport');
+  const actionbarEl = document.getElementById('actionbar');
   const fanEl = document.getElementById('fan');
   const hintEl = document.getElementById('hint');
   const groups = {};
@@ -1096,10 +1097,15 @@
     const cardCx = card.left + card.width / 2 - vp.left;
     const cx = Math.min(Math.max(cardCx, w / 2 + 6),
                         Math.max(w / 2 + 6, vp.width - w / 2 - 6));
+    // Keep clear of the action bar along the bottom of the map. COMMIT is
+    // visible during act rounds now, so anchoring straight to the nameplate
+    // would put the fan underneath it. Measured rather than a constant, so it
+    // survives the bar changing height. The 12 covers the fan's tether.
+    const barTop = actionbarEl.getBoundingClientRect().top - vp.top;
     // A five-chip group is taller than a landscape phone's map area, so it
     // would render over the header. Flip below the nameplate when it will not
     // fit above — which is what the .below variant was always for.
-    const top = card.top - vp.top - 8;
+    const top = Math.min(card.top - vp.top - 8, barTop - 12);
     const below = top - h < 6;
     fanEl.classList.toggle('below', below);
     fanEl.style.left = cx + 'px';

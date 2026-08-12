@@ -261,7 +261,8 @@
     position:absolute;z-index:5;
     display:flex;gap:8px;align-items:flex-end;
     padding:8px 9px;
-    background:rgba(4,5,10,.92);
+    /* opaque enough that the gold token underneath does not read through it */
+    background:rgba(4,5,10,.985);
     border:1px solid var(--edge-i);
     box-shadow:0 0 0 1px rgba(4,5,10,.9), 0 8px 28px rgba(0,0,0,.65);
     clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);
@@ -396,21 +397,26 @@
   #log .line.good{border-color:var(--gold);color:var(--gold)}
   #log .line.bad{border-color:var(--blood);color:var(--blood)}
 
-  /* ---- COMMIT ROUND: bottom-centre of the map, just above the nameplates ---- */
+  /* ---- action bar: CANCEL and COMMIT, bottom-centre of the map ----
+     A flex row rather than two absolutely-positioned buttons, because on a
+     375px screen "COMMIT ROUND · 3 LEFT" beside "× BACK" collided and wrapped
+     to two lines. Buttons leave the flow entirely when closed, which also
+     takes them out of the tab order. */
+  #actionbar{
+    position:absolute;left:0;right:0;bottom:10px;z-index:5;
+    display:flex;gap:10px;justify-content:center;align-items:center;
+    padding:0 12px;pointer-events:none;
+  }
+  #actionbar button{pointer-events:auto;white-space:nowrap}
   #confirm{
-    position:absolute;left:50%;bottom:10px;z-index:5;
-    transform:translateX(-50%) translateY(8px);
-    min-height:44px;padding:0 22px;
-    font:inherit;letter-spacing:.24em;font-size:10.5px;
-    color:var(--bone);background:rgba(4,5,10,.92);
+    min-height:44px;padding:0 20px;
+    font:inherit;letter-spacing:.2em;font-size:10.5px;
+    color:var(--bone);background:rgba(4,5,10,.94);
     border:1px solid var(--edge-i);cursor:pointer;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-    opacity:0;pointer-events:none;visibility:hidden;
-    transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1),
-               color .2s ease, border-color .2s ease, background .2s ease;
+    transition:color .2s ease, border-color .2s ease, background .2s ease;
   }
-  #confirm.open{opacity:1;pointer-events:auto;visibility:visible;
-                transform:translateX(-50%) translateY(0)}
+  #confirm:not(.open),#cancel:not(.open){display:none}
   #confirm.ready{
     color:var(--gold);border-color:var(--gold);background:rgba(227,179,71,.14);
     animation:nudge 1.15s ease-in-out infinite;
@@ -421,25 +427,22 @@
      pointer-events:none, COMMIT hid itself, taps on non-enemy tiles were
      silently swallowed, and cancel() was bound to ESC only. */
   #cancel{
-    position:absolute;left:12px;bottom:10px;z-index:5;
-    min-height:44px;padding:0 18px;
-    font:inherit;letter-spacing:.24em;font-size:10.5px;
-    color:var(--bone);background:rgba(4,5,10,.92);
+    min-height:44px;padding:0 16px;
+    font:inherit;letter-spacing:.2em;font-size:10.5px;
+    color:var(--bone);background:rgba(4,5,10,.94);
     border:1px solid var(--edge-i);cursor:pointer;
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
-    opacity:0;pointer-events:none;visibility:hidden;
-    transform:translateY(8px);
-    transition:opacity .2s ease, transform .24s cubic-bezier(.16,.9,.24,1);
+    transition:color .2s ease, border-color .2s ease, background .2s ease;
   }
-  #cancel.open{opacity:1;pointer-events:auto;visibility:visible;transform:translateY(0)}
   #cancel.hot{color:var(--blood);border-color:var(--blood)}
 
   /* ---- refusal toast ----
      Every rejection path used to be log()-only, and the log is hidden under
      900px, so a refused tap produced nothing at all — indistinguishable from
      a dropped input, which makes players tap again harder. */
+  /* above #targets, which occupies the 62px band while aiming */
   #toast{
-    position:absolute;left:50%;bottom:62px;z-index:7;
+    position:absolute;left:50%;bottom:118px;z-index:7;
     transform:translateX(-50%) translateY(6px);
     padding:8px 14px;max-width:min(92%,340px);text-align:center;
     font-size:10px;letter-spacing:.18em;line-height:1.4;
@@ -526,8 +529,12 @@
   @media (pointer:coarse){
     .keys.kb{display:none}
     .keys.touch{display:flex;opacity:.72;font-size:10px}
+    /* visibility, not display: display:none removes .hk from the grid flow,
+       which shifts .cn into the zero-width first column and stacks it under
+       the cost readout. */
     .chip{grid-template-columns:0 1fr auto}
-    .chip .hk,#hint .k{display:none}
+    .chip .hk{visibility:hidden}
+    #hint .k{display:none}
   }
 
   /* Below 900px the record panel is hidden entirely, which removed the game's
@@ -617,8 +624,10 @@
       <div id="toast" role="status" aria-live="polite"></div>
       <div id="targets" role="group" aria-label="Targets in range"></div>
       <div id="inspect"></div>
-      <button id="cancel"></button>
-      <button id="confirm"></button>
+      <div id="actionbar">
+        <button id="cancel"></button>
+        <button id="confirm"></button>
+      </div>
     </div>
 
     <aside>
@@ -673,10 +682,10 @@
   </div>
 </div>
 
-<script src="data/floor01.js?v=1cc60384"></script>
-<script src="data/balance.js?v=1cc60384"></script>
-<script src="data/fxsheets.js?v=1cc60384"></script>
-<script src="src/sprites.js?v=1cc60384"></script>
-<script src="src/game.js?v=1cc60384"></script>
+<script src="data/floor01.js?v=4d88c998"></script>
+<script src="data/balance.js?v=4d88c998"></script>
+<script src="data/fxsheets.js?v=4d88c998"></script>
+<script src="src/sprites.js?v=4d88c998"></script>
+<script src="src/game.js?v=4d88c998"></script>
 </body>
 </html>
