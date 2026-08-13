@@ -10,7 +10,10 @@ const path = require('path');
 // ---------------------------------------------------------------- DOM stub
 function stubEl() {
   const t = {
-    style: {}, dataset: {},
+    // A bare object is not enough any more: the movement animation drives the
+    // actor layer through style.setProperty, which a plain {} does not have.
+    style: { setProperty() {}, removeProperty() {}, getPropertyValue() { return ''; } },
+    dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
   };
   return new Proxy(t, {

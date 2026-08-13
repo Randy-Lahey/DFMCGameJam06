@@ -414,46 +414,91 @@
 
   // ------------------------------------------------------------- rounds
 
+  // --- round phasing --------------------------------------------------------
+  // A round used to mutate everything — party step, every foe step, every
+  // attack, all damage — and hand a single finished state to draw(). That reads
+  // as a teleport, not as events. Phases run one step apart so each beat is
+  // visible. Input never waits on them: any input flushes the rest instantly,
+  // so mashing a direction walks at full speed with no animation at all.
+  let phaseQueue = [], phaseTimer = null;
+
+  const animating = () => phaseTimer !== null;
+
+  function runPhases(list) {
+    settle();
+    phaseQueue = list.filter(Boolean);
+    nextPhase();
+  }
+
+  function nextPhase() {
+    phaseTimer = null;
+    if (!phaseQueue.length) return;
+    phaseQueue.shift()();
+    draw();
+    if (phaseQueue.length) phaseTimer = setTimeout(nextPhase, STEP_MS);
+  }
+
+  // Run everything still owed, right now. Callers draw afterwards.
+  function settle() {
+    if (phaseTimer !== null) { clearTimeout(phaseTimer); phaseTimer = null; }
+    while (phaseQueue.length) phaseQueue.shift()();
+  }
+
   function resolveRound(move) {
     const foeIntents = state.foes.map(f => ({ foe: f, intent: foeIntent(f) }));
+    const foesStep = foeIntents.some(x => x.intent && x.intent.kind === 'step' && x.foe.hp > 0);
+    const partyActs = state.queued.length > 0;
 
-    // --- MOVEMENT -------------------------------------------------------
-    if (move && move.kind === 'step') {
-      state.circle.c += move.dc; state.circle.r += move.dr;
-      onEnter();
-      collectDrops();
-    }
-    if (move && move.kind === 'hold') log('THE CIRCLE HOLDS.');
+    runPhases([
+      // --- MOVEMENT ------------------------------------------------------
+      move && (() => {
+        if (move.kind === 'step') {
+          state.circle.c += move.dc; state.circle.r += move.dr;
+          onEnter();
+          collectDrops();
+        }
+        if (move.kind === 'hold') log('THE CIRCLE HOLDS.');
+      }),
 
-    for (const { foe, intent } of foeIntents) {
-      if (!intent || intent.kind !== 'step' || foe.hp <= 0) continue;
-      const nc = foe.c + intent.dc, nr = foe.r + intent.dr;
-      if (nc === state.circle.c && nr === state.circle.r) continue;
-      if (foeAt(nc, nr)) continue;
-      foe.c = nc; foe.r = nr;
-    }
+      foesStep && (() => {
+        for (const { foe, intent } of foeIntents) {
+          if (!intent || intent.kind !== 'step' || foe.hp <= 0) continue;
+          const nc = foe.c + intent.dc, nr = foe.r + intent.dr;
+          if (nc === state.circle.c && nr === state.circle.r) continue;
+          if (foeAt(nc, nr)) continue;
+          foe.c = nc; foe.r = nr;
+        }
+      }),
 
-    // --- ATTACK ---------------------------------------------------------
-    state.queued.forEach(applyOp);
-    state.queued = [];
+      // --- ATTACK --------------------------------------------------------
+      partyActs && (() => {
+        state.queued.forEach(applyOp);
+        state.queued = [];
+      }),
 
-    for (const { foe, intent } of foeIntents) {
-      if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
-      if (!adjacent(foe, state.circle)) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
-      strikeCircle(foe);
-    }
+      // --- FOE ATTACKS + UPKEEP ------------------------------------------
+      // Always last, always present: the round's bookkeeping lives here and
+      // must run even when nothing above did.
+      () => {
+        state.queued = [];
+        for (const { foe, intent } of foeIntents) {
+          if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
+          if (!adjacent(foe, state.circle)) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
+          strikeCircle(foe);
+        }
 
-    // --- UPKEEP ---------------------------------------------------------
-    living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
-    state.wards.forEach(w => { w.left--; });
-    state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
-    state.wards = state.wards.filter(w => w.left > 0);
-    for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
-    state.turn++;
-    state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
-    state.sel = null; state.staged = null; state.hover = null;
-    view.free = false;                       // snap the camera back to the party
-    checkEnd();
+        living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
+        state.wards.forEach(w => { w.left--; });
+        state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
+        state.wards = state.wards.filter(w => w.left > 0);
+        for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
+        state.turn++;
+        state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
+        state.sel = null; state.staged = null; state.hover = null;
+        view.free = false;                       // snap the camera back to the party
+        checkEnd();
+      },
+    ]);
   }
 
   // Leaving is a choice, not a state you fall into: CLEARED means the floor is
@@ -722,6 +767,40 @@
 
   const stage = document.getElementById('stage');
 
+  // Three fixed children of #stage. board and overlay are rebuilt via
+  // innerHTML each draw; #actors holds persistent nodes so the CSS
+  // transition on .actor can tween tile-to-tile moves (same trick as the
+  // roster cards — innerHTML rebuilds kill transitions).
+  const bgG      = document.getElementById('bg');
+  const boardG   = document.getElementById('board');
+  const actorsG  = document.getElementById('actors');
+  const overlayG = document.getElementById('overlay');
+
+  const actorNodes = {};                       // key -> persistent <g.actor>
+  function actorNode(key, onTop) {
+    let el = actorNodes[key];
+    if (!el) {
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      el.setAttribute('class', 'actor');
+      // Party is created first and kept last so it always draws above foes.
+      if (onTop || !actorNodes.party) actorsG.appendChild(el);
+      else actorsG.insertBefore(el, actorNodes.party);
+      actorNodes[key] = el;
+    }
+    return el;
+  }
+  // Writing innerHTML recreates the base64 <image> sprite inside, which can
+  // flash while the parent is mid-transition. The content only changes when
+  // HP or sprite state changes, so skip the write when the string is identical.
+  function setActorContent(el, html) {
+    if (el._html === html) return;
+    el._html = html;
+    el.innerHTML = html;
+  }
+  const placeActor = (el, c, r) => {
+    el.style.transform = `translate(${c * T}px,${r * T}px)`;
+  };
+
   // Camera. Guarantees tiles render at >= MIN_TILE_PX on screen so they are
   // tappable. When the whole floor fits at that size (desktop), the camera
   // shows everything and never moves. When it doesn't (phones), the viewBox
@@ -741,7 +820,41 @@
   // pan and pinch; committing anything recentres.
   const view = { zoom: 1, ox: 0, oy: 0, free: false };
 
-  function updateCamera() {
+  // Step duration. MUST match the #actors .actor transition in index.html,
+  // both in milliseconds and in curve (linear). The camera recentres on the
+  // circle, so if it snaps while the token tweens, the token slides backwards
+  // across the screen and then catches up — worse than no tween at all.
+  // One step's worth of time and shape, shared by three things that must agree:
+  // the token's CSS transition, the camera lerp, and the gap between round
+  // phases. Published as CSS vars so index.html cannot drift from this file.
+  // Discrete grid steps read better arriving than travelling, hence ease-out.
+  const STEP_MS = 140;
+  const CURVE = [.22, .61, .36, 1];
+  let camTween = null;
+  actorsG.style.setProperty('--step', STEP_MS + 'ms');
+  actorsG.style.setProperty('--ease', `cubic-bezier(${CURVE.join(',')})`);
+
+  // Same cubic-bezier the CSS transition uses, solved for y at a given x.
+  // Bisection, because exactness matters less than the two curves matching.
+  function ease(t) {
+    const [x1, y1, x2, y2] = CURVE;
+    const at = (a, b, u) => 3 * (1 - u) * (1 - u) * u * a + 3 * (1 - u) * u * u * b + u * u * u;
+    let lo = 0, hi = 1, u = t;
+    for (let i = 0; i < 20; i++) {
+      const x = at(x1, x2, u);
+      if (Math.abs(x - t) < 1e-4) break;
+      if (x < t) lo = u; else hi = u;
+      u = (lo + hi) / 2;
+    }
+    return at(y1, y2, u);
+  }
+
+  function applyCam(c) {
+    cam = c;
+    stage.setAttribute('viewBox', `${c.x} ${c.y} ${c.w} ${c.h}`);
+  }
+
+  function updateCamera(snap) {
     const box = stage.getBoundingClientRect();
     if (!box.width || !box.height) return;                    // pre-layout: keep full floor
     const px = MIN_TILE_PX * view.zoom;
@@ -753,10 +866,26 @@
     const cy = view.free ? view.oy : (state.circle.r + .5) * T;
     const x = Math.max(0, Math.min(cx - w / 2, F.cols * T - w));
     const y = Math.max(0, Math.min(cy - h / 2, F.rows * T - h));
-    cam = { x, y, w, h };
-    stage.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+
+    if (camTween) { cancelAnimationFrame(camTween); camTween = null; }
+
+    // Snap, never tween: first paint, resize/zoom (w or h changed), and
+    // free-look panning, which must track the finger with no lag.
+    if (snap || view.free || w !== cam.w || h !== cam.h) { applyCam({ x, y, w, h }); return; }
+    if (x === cam.x && y === cam.y) return;
+
+    const fx = cam.x, fy = cam.y, t0 = performance.now();
+    const step = now => {
+      const k = ease(Math.min(1, (now - t0) / STEP_MS));
+      applyCam({ x: fx + (x - fx) * k, y: fy + (y - fy) * k, w, h });
+      // Edge markers are positioned against cam, so they must repaint with it.
+      overlayG.innerHTML = edgeLayer();
+      camTween = (now - t0) < STEP_MS ? requestAnimationFrame(step) : null;
+    };
+    camTween = requestAnimationFrame(step);
   }
-  updateCamera();
+  updateCamera(true);
+  bgG.innerHTML = backdrop();     // depends only on floor dimensions: never changes
 
   function plate(c, r, inset) {
     const x = c * T + inset, y = r * T + inset, s = T - inset * 2;
@@ -824,18 +953,37 @@
     `<circle cx="${d.c * T + 32}" cy="${d.r * T + 44}" r="1.3" fill="var(--gold)" opacity=".65"/>`
   ).join('');
 
-  function foeLayer() {
-    return liveFoes().map(f => {
+  // Persistent actor nodes: inner content (sprite, bars, rings) is rebuilt
+  // each draw in LOCAL coordinates; only the outer transform carries the
+  // tile position, so the CSS transition tweens every step.
+  function syncActors() {
+    const seen = new Set();
+
+    for (const f of liveFoes()) {
+      const key = 'foe' + f.id;
+      seen.add(key);
       const pct = f.hp / f.vitae;
       const alert = f.awake
-        ? `<polygon points="${plate(f.c, f.r, 2)}" fill="none" stroke="var(--blood)"
+        ? `<polygon points="${plate(0, 0, 2)}" fill="none" stroke="var(--blood)"
                     stroke-width="1.4" opacity=".7"/>` : '';
-      const bar = `<rect x="${f.c * T + 14}" y="${f.r * T + 6}" width="36" height="3.5"
+      const bar = `<rect x="14" y="6" width="36" height="3.5"
                          fill="var(--void)" stroke="var(--blood)" stroke-width=".6" opacity=".8"/>
-                   <rect x="${f.c * T + 14}" y="${f.r * T + 6}" width="${36 * pct}" height="3.5"
+                   <rect x="14" y="6" width="${36 * pct}" height="3.5"
                          fill="var(--blood)"/>`;
-      return alert + `<g transform="translate(${f.c * T},${f.r * T})">${S[f.sprite]()}</g>` + bar;
-    }).join('');
+      const el = actorNode(key);
+      setActorContent(el, alert + S[f.sprite]() + bar);
+      placeActor(el, f.c, f.r);
+    }
+
+    seen.add('party');
+    const p = actorNode('party', true);
+    setActorContent(p, `<polygon points="${plate(0, 0, 1)}" fill="none"
+                            stroke="var(--gold)" stroke-width="2.4"/>`
+                + S.party() + vitaePips(0, 0));
+    placeActor(p, state.circle.c, state.circle.r);
+
+    for (const k in actorNodes)
+      if (!seen.has(k)) { actorNodes[k].remove(); delete actorNodes[k]; }
   }
 
   function vitaePips(c, r) {
@@ -915,12 +1063,6 @@
             <polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)"
                      stroke-width="2" stroke-dasharray="6 4" opacity=".9"/>
             <g transform="translate(${c * T},${r * T})" opacity=".38">${S.party()}</g>`;
-  }
-
-  function circleLayer() {
-    const { c, r } = state.circle;
-    return `<polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
-            <g transform="translate(${c * T},${r * T})">${S.party()}</g>` + vitaePips(c, r);
   }
 
   // ---- roster is built ONCE, then mutated ---------------------------------
@@ -1308,9 +1450,10 @@
 
   function draw() {
     updateCamera();
-    stage.innerHTML = backdrop() + floorLayer() + propLayer() + aimLayer()
-                    + moveLayer() + intentLayer() + dropLayer() + foeLayer()
-                    + stagedLayer() + circleLayer() + edgeLayer();
+    boardG.innerHTML = floorLayer() + propLayer() + aimLayer()
+                     + moveLayer() + intentLayer() + dropLayer() + stagedLayer();
+    syncActors();
+    overlayG.innerHTML = edgeLayer();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
     document.getElementById('turn-value').textContent = String(state.turn).padStart(3, '0');
 
@@ -1381,6 +1524,7 @@
   // clock is what fixes both. Keyboard paths are deliberately not gated.
   let lastTap = 0;
   function tapOk() {
+    if (animating()) settle();       // as does a tap; every pointer path runs this
     const t = Date.now();
     if (t - lastTap < 200) return false;
     lastTap = t;
@@ -1391,6 +1535,7 @@
 
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
+    if (animating()) settle();       // a keypress finishes the round in flight
 
     // A focused button owns ENTER and SPACE. Without this the window handler
     // preventDefaults them and the button's own activation never runs.
