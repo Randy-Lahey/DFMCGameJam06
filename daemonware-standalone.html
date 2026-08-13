@@ -44,6 +44,7 @@
   #body{display:grid;grid-template-columns:1fr 300px;min-height:0}
   #viewport{position:relative;min-width:0;min-height:0;padding:12px;display:flex}
   #stage{width:100%;height:100%;display:block;touch-action:none}
+  #actors .actor{transition:transform var(--step,140ms) var(--ease,ease-out)}
 
   aside{border-left:1px solid var(--edge);display:grid;
         grid-template-rows:1fr;min-height:0}
@@ -68,9 +69,6 @@
     display:flex;justify-content:space-between;
   }
   .hud-label span{color:var(--gold);opacity:.9;letter-spacing:.2em}
-  .keys{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9px;opacity:.42;
-        letter-spacing:.14em;margin-top:auto}
-  .keys b{color:var(--cyan);font-weight:400}
 
   @media (max-width:900px){
     #body{grid-template-columns:1fr}
@@ -227,6 +225,34 @@
              opacity:.7;margin-bottom:26px}
   .win-stats div{display:flex;justify-content:space-between;gap:34px}
   .win-stats b{font-weight:400;color:var(--gold)}
+
+  /* ---- controls screen + its reopen handle ----
+     The legend used to live permanently in the HUD, four lines of 9px text at
+     .42 opacity that every player reads once and then pays for on every frame
+     of vertical space. It shows once, on first load, and is recallable. */
+  #help{
+    position:absolute;right:10px;bottom:10px;z-index:6;
+    width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+    font:inherit;font-size:15px;line-height:1;cursor:pointer;
+    color:var(--cyan);background:rgba(4,5,10,.9);
+    border:1px solid var(--edge-i);opacity:.55;
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    transition:opacity .18s ease,color .18s ease,border-color .18s ease;
+  }
+  #help:hover,#help:active{opacity:1;color:var(--gold);border-color:var(--gold)}
+  /* Nothing behind an overlay is reachable, and a live-looking button that
+     does nothing reads as a broken one. */
+  #help.hide{display:none}
+
+  .ctlbox{max-width:min(420px,92vw);padding:26px 26px 22px;text-align:left}
+  .ctl{display:grid;grid-template-columns:auto 1fr;gap:9px 14px;
+       font-size:10px;letter-spacing:.14em;line-height:1.5}
+  .ctl dt{color:var(--cyan);white-space:nowrap;letter-spacing:.2em}
+  .ctl dd{margin:0;opacity:.8;text-transform:none;letter-spacing:.1em}
+  .ctl-rule{height:1px;background:var(--edge);opacity:.6;margin:18px 0 16px}
+  .ctl-note{font-size:9.5px;letter-spacing:.16em;color:var(--gold);
+            opacity:.85;line-height:1.6;margin-bottom:16px}
+  .ctlbox .dlg-actions{margin-top:20px}
 
   /* ---- interaction hint: tag above the token ----
      This tag is the ONLY touch route to chests and stairs, so when it has
@@ -410,7 +436,7 @@
   #actionbar{
     position:absolute;left:0;right:0;bottom:10px;z-index:5;
     display:flex;gap:10px;justify-content:center;align-items:center;
-    padding:0 12px;pointer-events:none;
+    padding:0 52px;pointer-events:none;
   }
   #actionbar button{pointer-events:auto;white-space:nowrap}
   #confirm{
@@ -440,6 +466,28 @@
     transition:color .2s ease, border-color .2s ease, background .2s ease;
   }
   #cancel.hot{color:var(--blood);border-color:var(--blood)}
+
+  /* ---- armed-operation readout ----
+     This used to be #hint, pinned to the tile north of the token — which on a
+     phone is a ~500px tag laid across the exact row you are aiming into. It
+     lives in the action bar instead: fixed spot, never over the board, and the
+     bar is empty during aim because #confirm hides itself while pending.
+     Shrinks and ellipsises so the row can never wrap CANCEL onto a second
+     line at 360px (that would push #toast underneath it). */
+  #armed{
+    min-height:44px;display:flex;align-items:center;
+    padding:0 14px;font-size:10.5px;letter-spacing:.2em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    min-width:0;flex-shrink:1;
+    color:var(--gold);background:rgba(4,5,10,.94);
+    border:1px solid var(--gold);pointer-events:none;
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  }
+  #armed:not(.open){display:none}
+  #armed .k{
+    display:inline-block;min-width:13px;text-align:center;margin-right:7px;
+    border:1px solid var(--gold);padding:0 3px;flex:none;
+  }
 
   /* ---- refusal toast ----
      Every rejection path used to be log()-only, and the log is hidden under
@@ -502,13 +550,13 @@
     0%,100%{transform:none}33%{transform:translateX(-3px)}66%{transform:translateX(3px)}
   }
 
-  /* Touch gets its own legend, and loses the keycap glyphs — the hotkey
+  /* Touch gets its own control list, and loses the keycap glyphs — the hotkey
      numeral on every chip was a 13px grid column spent on an unusable
      affordance. */
-  .keys.touch{display:none}
+  .ctl.touch{display:none}
   @media (pointer:coarse){
-    .keys.kb{display:none}
-    .keys.touch{display:flex;opacity:.72;font-size:10px}
+    .ctl.kb{display:none}
+    .ctl.touch{display:grid}
     /* visibility, not display: display:none removes .hk from the grid flow,
        which shifts .cn into the zero-width first column and stacks it under
        the cost readout. */
@@ -544,7 +592,7 @@
     .hud-side{border-top:0;border-left:1px solid var(--edge);padding:6px 10px;gap:4px}
     #roster{padding:6px 10px;gap:6px}
     .unit{padding:5px 8px}
-    .keys{display:none}
+    #help{width:32px;height:32px;font-size:14px}
   }
 
   /* ---- focus ----
@@ -597,16 +645,18 @@
   <div id="body">
     <div id="viewport">
       <svg id="stage" xmlns="http://www.w3.org/2000/svg"
-           preserveAspectRatio="xMidYMid meet"></svg>
+           preserveAspectRatio="xMidYMid meet"><g id="bg"></g><g id="board"></g><g id="actors"></g><g id="overlay"></g></svg>
       <div id="floaters"></div>
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
       <div id="toast" role="status" aria-live="polite"></div>
       <div id="inspect"></div>
       <div id="actionbar">
+        <div id="armed" role="status" aria-live="polite"></div>
         <button id="cancel"></button>
         <button id="confirm"></button>
       </div>
+      <button id="help" aria-label="CONTROLS" title="CONTROLS">?</button>
     </div>
 
     <aside>
@@ -624,17 +674,44 @@
       <div id="bag" class="bag"></div>
       <div id="effects" class="effects"></div>
       <div id="prompt" class="prompt" role="status" aria-live="polite"></div>
-      <div class="keys kb">
-        <span><b>WASD</b> MOVE</span><span><b>E</b> ACT</span>
-        <span><b>1-5</b> OPERATION</span><span><b>SPACE</b> COMMIT</span>
-        <span><b>ESC</b> CANCEL</span>
-      </div>
-      <div class="keys touch">
-        <span><b>TAP</b> TILE, THEN CONFIRM</span><span><b>TAP</b> NAMEPLATE TO ACT</span>
-        <span><b>HOLD</b> TILE TO INSPECT</span><span><b>TWO FINGERS</b> LOOK AROUND</span>
-      </div>
     </div>
   </footer>
+</div>
+
+<!-- controls: auto-shown once, recallable from the ? handle -->
+<div id="controls" class="overlay">
+  <div class="dialog ctlbox">
+    <div class="dlg-eyebrow">DAEMONWARE &middot; FLOOR 01</div>
+    <div class="ctl-note">
+      EACH ROUND, EVERY MEMBER EITHER MOVES OR ACTS &mdash; NEVER BOTH.
+      ENEMIES LOCK THEIR INTENT BEFORE YOU MOVE.
+    </div>
+
+    <dl class="ctl touch">
+      <dt>TAP TILE</dt><dd>Stage a step, then CONFIRM STEP.</dd>
+      <dt>TAP NAMEPLATE</dt><dd>Open that member's operations.</dd>
+      <dt>TAP ENEMY</dt><dd>Fire the armed operation at it.</dd>
+      <dt>HOLD TILE</dt><dd>Inspect it. Costs nothing, spends no round.</dd>
+      <dt>TWO FINGERS</dt><dd>Drag to pan, pinch to zoom the floor.</dd>
+      <dt>CANCEL</dt><dd>Backs out of anything, including a queued operation.</dd>
+      <dt>COMMIT ROUND</dt><dd>Resolves everyone at once. This ends the round.</dd>
+    </dl>
+
+    <dl class="ctl kb">
+      <dt>WASD</dt><dd>Move the circle one tile.</dd>
+      <dt>E</dt><dd>Act on this tile &mdash; open a cache, take the stairs.</dd>
+      <dt>1 &ndash; 5</dt><dd>Arm an operation for the selected member.</dd>
+      <dt>ENTER</dt><dd>Fire the armed operation at the hovered target.</dd>
+      <dt>SPACE</dt><dd>Commit the round, or hold ground.</dd>
+      <dt>ESC</dt><dd>Cancel aiming, a staged step, or the act round.</dd>
+    </dl>
+
+    <div class="ctl-rule"></div>
+    <div class="dlg-actions">
+      <button class="box yes" id="ctl-close">BEGIN</button>
+    </div>
+    <div class="dlg-keys">? REOPENS THIS &middot; ESC CLOSES</div>
+  </div>
 </div>
 
 <!-- exit confirmation -->
@@ -1335,46 +1412,91 @@
 
   // ------------------------------------------------------------- rounds
 
+  // --- round phasing --------------------------------------------------------
+  // A round used to mutate everything — party step, every foe step, every
+  // attack, all damage — and hand a single finished state to draw(). That reads
+  // as a teleport, not as events. Phases run one step apart so each beat is
+  // visible. Input never waits on them: any input flushes the rest instantly,
+  // so mashing a direction walks at full speed with no animation at all.
+  let phaseQueue = [], phaseTimer = null;
+
+  const animating = () => phaseTimer !== null;
+
+  function runPhases(list) {
+    settle();
+    phaseQueue = list.filter(Boolean);
+    nextPhase();
+  }
+
+  function nextPhase() {
+    phaseTimer = null;
+    if (!phaseQueue.length) return;
+    phaseQueue.shift()();
+    draw();
+    if (phaseQueue.length) phaseTimer = setTimeout(nextPhase, STEP_MS);
+  }
+
+  // Run everything still owed, right now. Callers draw afterwards.
+  function settle() {
+    if (phaseTimer !== null) { clearTimeout(phaseTimer); phaseTimer = null; }
+    while (phaseQueue.length) phaseQueue.shift()();
+  }
+
   function resolveRound(move) {
     const foeIntents = state.foes.map(f => ({ foe: f, intent: foeIntent(f) }));
+    const foesStep = foeIntents.some(x => x.intent && x.intent.kind === 'step' && x.foe.hp > 0);
+    const partyActs = state.queued.length > 0;
 
-    // --- MOVEMENT -------------------------------------------------------
-    if (move && move.kind === 'step') {
-      state.circle.c += move.dc; state.circle.r += move.dr;
-      onEnter();
-      collectDrops();
-    }
-    if (move && move.kind === 'hold') log('THE CIRCLE HOLDS.');
+    runPhases([
+      // --- MOVEMENT ------------------------------------------------------
+      move && (() => {
+        if (move.kind === 'step') {
+          state.circle.c += move.dc; state.circle.r += move.dr;
+          onEnter();
+          collectDrops();
+        }
+        if (move.kind === 'hold') log('THE CIRCLE HOLDS.');
+      }),
 
-    for (const { foe, intent } of foeIntents) {
-      if (!intent || intent.kind !== 'step' || foe.hp <= 0) continue;
-      const nc = foe.c + intent.dc, nr = foe.r + intent.dr;
-      if (nc === state.circle.c && nr === state.circle.r) continue;
-      if (foeAt(nc, nr)) continue;
-      foe.c = nc; foe.r = nr;
-    }
+      foesStep && (() => {
+        for (const { foe, intent } of foeIntents) {
+          if (!intent || intent.kind !== 'step' || foe.hp <= 0) continue;
+          const nc = foe.c + intent.dc, nr = foe.r + intent.dr;
+          if (nc === state.circle.c && nr === state.circle.r) continue;
+          if (foeAt(nc, nr)) continue;
+          foe.c = nc; foe.r = nr;
+        }
+      }),
 
-    // --- ATTACK ---------------------------------------------------------
-    state.queued.forEach(applyOp);
-    state.queued = [];
+      // --- ATTACK --------------------------------------------------------
+      partyActs && (() => {
+        state.queued.forEach(applyOp);
+        state.queued = [];
+      }),
 
-    for (const { foe, intent } of foeIntents) {
-      if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
-      if (!adjacent(foe, state.circle)) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
-      strikeCircle(foe);
-    }
+      // --- FOE ATTACKS + UPKEEP ------------------------------------------
+      // Always last, always present: the round's bookkeeping lives here and
+      // must run even when nothing above did.
+      () => {
+        state.queued = [];
+        for (const { foe, intent } of foeIntents) {
+          if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
+          if (!adjacent(foe, state.circle)) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
+          strikeCircle(foe);
+        }
 
-    // --- UPKEEP ---------------------------------------------------------
-    living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
-    state.wards.forEach(w => { w.left--; });
-    state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
-    state.wards = state.wards.filter(w => w.left > 0);
-    for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
-    state.turn++;
-    state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
-    state.sel = null; state.staged = null; state.hover = null;
-    view.free = false;                       // snap the camera back to the party
-    checkEnd();
+        living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
+        state.wards.forEach(w => { w.left--; });
+        state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
+        state.wards = state.wards.filter(w => w.left > 0);
+        for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
+        state.turn++;
+        state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
+        state.sel = null; state.staged = null; state.hover = null;
+        view.free = false;                       // snap the camera back to the party
+        checkEnd();
+      },
+    ]);
   }
 
   // Leaving is a choice, not a state you fall into: CLEARED means the floor is
@@ -1643,6 +1765,40 @@
 
   const stage = document.getElementById('stage');
 
+  // Three fixed children of #stage. board and overlay are rebuilt via
+  // innerHTML each draw; #actors holds persistent nodes so the CSS
+  // transition on .actor can tween tile-to-tile moves (same trick as the
+  // roster cards — innerHTML rebuilds kill transitions).
+  const bgG      = document.getElementById('bg');
+  const boardG   = document.getElementById('board');
+  const actorsG  = document.getElementById('actors');
+  const overlayG = document.getElementById('overlay');
+
+  const actorNodes = {};                       // key -> persistent <g.actor>
+  function actorNode(key, onTop) {
+    let el = actorNodes[key];
+    if (!el) {
+      el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      el.setAttribute('class', 'actor');
+      // Party is created first and kept last so it always draws above foes.
+      if (onTop || !actorNodes.party) actorsG.appendChild(el);
+      else actorsG.insertBefore(el, actorNodes.party);
+      actorNodes[key] = el;
+    }
+    return el;
+  }
+  // Writing innerHTML recreates the base64 <image> sprite inside, which can
+  // flash while the parent is mid-transition. The content only changes when
+  // HP or sprite state changes, so skip the write when the string is identical.
+  function setActorContent(el, html) {
+    if (el._html === html) return;
+    el._html = html;
+    el.innerHTML = html;
+  }
+  const placeActor = (el, c, r) => {
+    el.style.transform = `translate(${c * T}px,${r * T}px)`;
+  };
+
   // Camera. Guarantees tiles render at >= MIN_TILE_PX on screen so they are
   // tappable. When the whole floor fits at that size (desktop), the camera
   // shows everything and never moves. When it doesn't (phones), the viewBox
@@ -1662,7 +1818,41 @@
   // pan and pinch; committing anything recentres.
   const view = { zoom: 1, ox: 0, oy: 0, free: false };
 
-  function updateCamera() {
+  // Step duration. MUST match the #actors .actor transition in index.html,
+  // both in milliseconds and in curve (linear). The camera recentres on the
+  // circle, so if it snaps while the token tweens, the token slides backwards
+  // across the screen and then catches up — worse than no tween at all.
+  // One step's worth of time and shape, shared by three things that must agree:
+  // the token's CSS transition, the camera lerp, and the gap between round
+  // phases. Published as CSS vars so index.html cannot drift from this file.
+  // Discrete grid steps read better arriving than travelling, hence ease-out.
+  const STEP_MS = 140;
+  const CURVE = [.22, .61, .36, 1];
+  let camTween = null;
+  actorsG.style.setProperty('--step', STEP_MS + 'ms');
+  actorsG.style.setProperty('--ease', `cubic-bezier(${CURVE.join(',')})`);
+
+  // Same cubic-bezier the CSS transition uses, solved for y at a given x.
+  // Bisection, because exactness matters less than the two curves matching.
+  function ease(t) {
+    const [x1, y1, x2, y2] = CURVE;
+    const at = (a, b, u) => 3 * (1 - u) * (1 - u) * u * a + 3 * (1 - u) * u * u * b + u * u * u;
+    let lo = 0, hi = 1, u = t;
+    for (let i = 0; i < 20; i++) {
+      const x = at(x1, x2, u);
+      if (Math.abs(x - t) < 1e-4) break;
+      if (x < t) lo = u; else hi = u;
+      u = (lo + hi) / 2;
+    }
+    return at(y1, y2, u);
+  }
+
+  function applyCam(c) {
+    cam = c;
+    stage.setAttribute('viewBox', `${c.x} ${c.y} ${c.w} ${c.h}`);
+  }
+
+  function updateCamera(snap) {
     const box = stage.getBoundingClientRect();
     if (!box.width || !box.height) return;                    // pre-layout: keep full floor
     const px = MIN_TILE_PX * view.zoom;
@@ -1674,10 +1864,26 @@
     const cy = view.free ? view.oy : (state.circle.r + .5) * T;
     const x = Math.max(0, Math.min(cx - w / 2, F.cols * T - w));
     const y = Math.max(0, Math.min(cy - h / 2, F.rows * T - h));
-    cam = { x, y, w, h };
-    stage.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+
+    if (camTween) { cancelAnimationFrame(camTween); camTween = null; }
+
+    // Snap, never tween: first paint, resize/zoom (w or h changed), and
+    // free-look panning, which must track the finger with no lag.
+    if (snap || view.free || w !== cam.w || h !== cam.h) { applyCam({ x, y, w, h }); return; }
+    if (x === cam.x && y === cam.y) return;
+
+    const fx = cam.x, fy = cam.y, t0 = performance.now();
+    const step = now => {
+      const k = ease(Math.min(1, (now - t0) / STEP_MS));
+      applyCam({ x: fx + (x - fx) * k, y: fy + (y - fy) * k, w, h });
+      // Edge markers are positioned against cam, so they must repaint with it.
+      overlayG.innerHTML = edgeLayer();
+      camTween = (now - t0) < STEP_MS ? requestAnimationFrame(step) : null;
+    };
+    camTween = requestAnimationFrame(step);
   }
-  updateCamera();
+  updateCamera(true);
+  bgG.innerHTML = backdrop();     // depends only on floor dimensions: never changes
 
   function plate(c, r, inset) {
     const x = c * T + inset, y = r * T + inset, s = T - inset * 2;
@@ -1745,18 +1951,37 @@
     `<circle cx="${d.c * T + 32}" cy="${d.r * T + 44}" r="1.3" fill="var(--gold)" opacity=".65"/>`
   ).join('');
 
-  function foeLayer() {
-    return liveFoes().map(f => {
+  // Persistent actor nodes: inner content (sprite, bars, rings) is rebuilt
+  // each draw in LOCAL coordinates; only the outer transform carries the
+  // tile position, so the CSS transition tweens every step.
+  function syncActors() {
+    const seen = new Set();
+
+    for (const f of liveFoes()) {
+      const key = 'foe' + f.id;
+      seen.add(key);
       const pct = f.hp / f.vitae;
       const alert = f.awake
-        ? `<polygon points="${plate(f.c, f.r, 2)}" fill="none" stroke="var(--blood)"
+        ? `<polygon points="${plate(0, 0, 2)}" fill="none" stroke="var(--blood)"
                     stroke-width="1.4" opacity=".7"/>` : '';
-      const bar = `<rect x="${f.c * T + 14}" y="${f.r * T + 6}" width="36" height="3.5"
+      const bar = `<rect x="14" y="6" width="36" height="3.5"
                          fill="var(--void)" stroke="var(--blood)" stroke-width=".6" opacity=".8"/>
-                   <rect x="${f.c * T + 14}" y="${f.r * T + 6}" width="${36 * pct}" height="3.5"
+                   <rect x="14" y="6" width="${36 * pct}" height="3.5"
                          fill="var(--blood)"/>`;
-      return alert + `<g transform="translate(${f.c * T},${f.r * T})">${S[f.sprite]()}</g>` + bar;
-    }).join('');
+      const el = actorNode(key);
+      setActorContent(el, alert + S[f.sprite]() + bar);
+      placeActor(el, f.c, f.r);
+    }
+
+    seen.add('party');
+    const p = actorNode('party', true);
+    setActorContent(p, `<polygon points="${plate(0, 0, 1)}" fill="none"
+                            stroke="var(--gold)" stroke-width="2.4"/>`
+                + S.party() + vitaePips(0, 0));
+    placeActor(p, state.circle.c, state.circle.r);
+
+    for (const k in actorNodes)
+      if (!seen.has(k)) { actorNodes[k].remove(); delete actorNodes[k]; }
   }
 
   function vitaePips(c, r) {
@@ -1836,12 +2061,6 @@
             <polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)"
                      stroke-width="2" stroke-dasharray="6 4" opacity=".9"/>
             <g transform="translate(${c * T},${r * T})" opacity=".38">${S.party()}</g>`;
-  }
-
-  function circleLayer() {
-    const { c, r } = state.circle;
-    return `<polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)" stroke-width="2.4"/>
-            <g transform="translate(${c * T},${r * T})">${S.party()}</g>` + vitaePips(c, r);
   }
 
   // ---- roster is built ONCE, then mutated ---------------------------------
@@ -2050,21 +2269,21 @@
 
   // A tag over the token when there is something here to act on.
   function syncHint() {
-    // While the fan is collapsed for aiming, this tag is the only thing telling
-    // you which operation is armed, so it takes priority over the E prompt.
-    const aim = state.pending;
-    const it = aim ? null : interactable();
-    hintEl.classList.toggle('open', !!(aim || it));
-    hintEl.classList.toggle('aim', !!aim);
+    // This tag renders on the tile NORTH of the token, so it is only ever worth
+    // the occlusion when it is the sole route to an interaction. It used to
+    // also carry the armed operation while aiming, which laid a full-width bar
+    // across the row the player was aiming into and hid the reachable tiles.
+    // That readout moved to #armed in the action bar; this stays click-through
+    // chrome for caches and stairs, and closes entirely during aim.
+    const it = state.pending ? null : interactable();
+    hintEl.classList.toggle('open', !!it);
+    hintEl.classList.toggle('aim', false);
     hintEl.classList.toggle('locked', !!(it && it.locked));
     // Only interactive when there is actually something here to open. Any other
     // state must stay click-through, or the tag blocks the tile behind it.
-    hintEl.classList.toggle('actionable', !aim && !!it && !it.locked);
-    if (!aim && !it) return;
-    hintEl.innerHTML = aim
-      ? `<span class="k">\u2316</span> ${aim.member.name} \u00b7 ${aim.op.name}`
-      : it.locked ? it.text
-      : `<span class="k">E</span> ${it.text}`;
+    hintEl.classList.toggle('actionable', !!it && !it.locked);
+    if (!it) return;
+    hintEl.innerHTML = it.locked ? it.text : `<span class="k">E</span> ${it.text}`;
     const t = tokenRect();
     const w = hintEl.offsetWidth;
     hintEl.style.left = Math.min(Math.max(t.cx, w / 2 + 6),
@@ -2134,6 +2353,39 @@
 
   const modalEl = document.getElementById('modal');
   const winEl = document.getElementById('win');
+  const ctlEl = document.getElementById('controls');
+  const helpEl = document.getElementById('help');
+
+  // "Goes away forever" is a stored fact, not a session flag. Wrapped because
+  // localStorage throws outright in some privacy modes and on some file://
+  // origins, and the controls screen is not worth taking the boot down with it.
+  const SEEN_KEY = 'dw:controls-seen:v1';
+  function seenControls() {
+    try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return false; }
+  }
+  function markControlsSeen() {
+    try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* private mode */ }
+  }
+
+  function openControls() {
+    // Never displace a live exit prompt or the win screen.
+    if (state.modal || finished()) return;
+    state.modal = 'controls';
+  }
+  function closeControls() {
+    if (state.modal !== 'controls') return;
+    state.modal = null;
+    markControlsSeen();
+  }
+
+  helpEl.addEventListener('click', () => {
+    if (!tapOk()) return;
+    openControls(); draw();
+  });
+  document.getElementById('ctl-close').addEventListener('click', () => {
+    if (!tapOk()) return;
+    closeControls(); draw();
+  });
 
   modalEl.addEventListener('click', e => {
     const b = e.target.closest('[data-answer]');
@@ -2146,6 +2398,14 @@
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
     winEl.classList.toggle('open', state.over === 'WIN');
+
+    const ctlOpen = state.modal === 'controls';
+    ctlEl.classList.toggle('open', ctlOpen);
+    // First sight of the game gets BEGIN; every later visit is a reference
+    // lookup and CLOSE is the honest label for it.
+    document.getElementById('ctl-close').textContent =
+      seenControls() ? 'CLOSE' : 'BEGIN';
+    helpEl.classList.toggle('hide', !!state.modal || finished());
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
@@ -2172,9 +2432,10 @@
 
   function draw() {
     updateCamera();
-    stage.innerHTML = backdrop() + floorLayer() + propLayer() + aimLayer()
-                    + moveLayer() + intentLayer() + dropLayer() + foeLayer()
-                    + stagedLayer() + circleLayer() + edgeLayer();
+    boardG.innerHTML = floorLayer() + propLayer() + aimLayer()
+                     + moveLayer() + intentLayer() + dropLayer() + stagedLayer();
+    syncActors();
+    overlayG.innerHTML = edgeLayer();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
     document.getElementById('turn-value').textContent = String(state.turn).padStart(3, '0');
 
@@ -2182,6 +2443,7 @@
     syncFan();
     syncConfirm();
     syncCancel();
+    syncArmed();
     syncHint();
     syncOverlays();
     flushBursts();
@@ -2244,6 +2506,7 @@
   // clock is what fixes both. Keyboard paths are deliberately not gated.
   let lastTap = 0;
   function tapOk() {
+    if (animating()) settle();       // as does a tap; every pointer path runs this
     const t = Date.now();
     if (t - lastTap < 200) return false;
     lastTap = t;
@@ -2254,12 +2517,19 @@
 
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
+    if (animating()) settle();       // a keypress finishes the round in flight
 
     // A focused button owns ENTER and SPACE. Without this the window handler
     // preventDefaults them and the button's own activation never runs.
     const focused = document.activeElement;
     if (focused && focused.tagName === 'BUTTON' && (k === ' ' || k === 'enter')) return;
 
+    if (state.modal === 'controls') {
+      e.preventDefault();
+      if (k === 'escape' || k === 'enter' || k === ' ' || k === '?') closeControls();
+      draw();
+      return;
+    }
     if (state.modal === 'exit') {
       e.preventDefault();
       if (k === 'y' || k === 'enter') answerExit(true);
@@ -2268,6 +2538,9 @@
       return;
     }
     if (finished()) return;
+
+    // ? is a reference lookup, so it stays available mid-round.
+    if (k === '?') { e.preventDefault(); openControls(); draw(); return; }
 
     if (MOVES[k]) { e.preventDefault(); moveInput(...MOVES[k]); draw(); return; }
     if (k === ' ')      { e.preventDefault(); passOrHold(); draw(); return; }
@@ -2426,6 +2699,18 @@
     draw();
   });
 
+  // What is armed, shown in the action bar rather than over the board. The fan
+  // is collapsed and #confirm is hidden while pending, so without this the only
+  // on-screen trace of the chosen operation is the HUD prompt line.
+  const armedEl = document.getElementById('armed');
+  function syncArmed() {
+    const aim = !finished() && !state.modal && state.pending;
+    armedEl.classList.toggle('open', !!aim);
+    if (!aim) return;
+    armedEl.innerHTML =
+      `<span class="k">\u2316</span>${aim.member.name} \u00b7 ${aim.op.name}`;
+  }
+
   // One tap out of aiming, out of a staged step, out of the act round.
   const cancelEl = document.getElementById('cancel');
   function syncCancel() {
@@ -2476,6 +2761,9 @@
   window.addEventListener('orientationchange', () => setTimeout(redraw, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', redraw);
   log(`FLOOR 01 COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
+  // Set before the first draw so the overlay is up on the first painted frame,
+  // rather than flashing the board and then covering it.
+  if (!seenControls()) state.modal = 'controls';
   draw();
 })();
 
