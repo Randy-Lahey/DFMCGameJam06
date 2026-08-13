@@ -152,14 +152,17 @@
   // circle, and the intent/edge-marker/targeting systems all assume an awake
   // foe can be seen. Fog hides dormant foes and unexplored terrain only.
   let visible = new Set();
+  let frontier = new Set();
   function recomputeFOV() {
     const fog = B.ui.fog;
-    if (!fog || !fog.on) { visible = walkable; state.seen = walkable; return; }
+    if (!fog || !fog.on) {
+      visible = walkable; state.seen = walkable; frontier = new Set(); return;
+    }
     visible = new Set([key(state.circle.c, state.circle.r)]);
-    let frontier = [[state.circle.c, state.circle.r]];
-    for (let d = 0; d < fog.sight && frontier.length; d++) {
+    let wave = [[state.circle.c, state.circle.r]];
+    for (let d = 0; d < fog.sight && wave.length; d++) {
       const next = [];
-      for (const [c, r] of frontier)
+      for (const [c, r] of wave)
         for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) {
           if (!dc && !dr) continue;
           const k = key(c + dc, r + dr);
@@ -167,9 +170,28 @@
           visible.add(k);
           next.push([c + dc, r + dr]);
         }
-      frontier = next;
+      wave = next;
     }
     for (const k of visible) state.seen.add(k);
+
+    // Frontier: walkable tiles NOT yet seen that touch a tile you have seen.
+    // Unexplored floor and solid void rendered identically, so every heading
+    // looked like a dead end and there was nothing to walk towards. Keyed off
+    // `seen` rather than `visible` deliberately: the ring PERSISTS at the
+    // border of explored ground, so a branch you skipped is still legible from
+    // across the room. Swap to `visible` for a lantern edge that fades behind.
+    frontier = new Set();
+    for (const [c, r] of F.tiles) {
+      const k = key(c, r);
+      if (state.seen.has(k)) continue;
+      for (let dc = -1; dc <= 1; dc++) {
+        for (let dr = -1; dr <= 1; dr++) {
+          if (!dc && !dr) continue;
+          if (state.seen.has(key(c + dc, r + dr))) { frontier.add(k); break; }
+        }
+        if (frontier.has(k)) break;
+      }
+    }
   }
   const inSight = (c, r) => visible.has(key(c, r));
   const foeSeen = f => f.awake || inSight(f.c, f.r);
@@ -1016,7 +1038,13 @@
 
   const floorLayer = () => F.tiles.map(([c, r]) => {
     const k = key(c, r);
-    if (!state.seen.has(k)) return '';
+    if (!state.seen.has(k)) {
+      // Frontier: outline only, no fill and no contents. It says the floor
+      // carries on this way, not what is standing on it.
+      if (!frontier.has(k)) return '';
+      return `<polygon points="${plate(c, r, 3)}" fill="none" stroke="var(--cyan)"
+                       stroke-width=".9" stroke-dasharray="5 8" opacity=".22"/>`;
+    }
     const tile =
       `<polygon points="${plate(c, r, 3)}" fill="#0A1420" stroke="var(--cyan)" stroke-width="1.1" opacity=".85"/>
        <polygon points="${plate(c, r, 11)}" fill="none" stroke="var(--cyan)" stroke-width=".5" opacity=".16"/>`;
@@ -1183,6 +1211,12 @@
   mmEl.style.aspectRatio = `${F.cols} / ${F.rows}`;
   function syncMinimap() {
     let g = '';
+    // Unfollowed branches, drawn first so explored floor sits over them. At a
+    // glance this is what says the floor is not finished with you yet.
+    for (const k of frontier) {
+      const [c, r] = k.split(',').map(Number);
+      g += `<circle cx="${c + .5}" cy="${r + .5}" r=".17" fill="var(--bone)" opacity=".45"/>`;
+    }
     for (const [c, r] of F.tiles) {
       const k = key(c, r);
       if (!state.seen.has(k)) continue;
