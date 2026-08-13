@@ -1422,14 +1422,16 @@
 </script>
 <script>
 // DAEMONWARE — Floor 1 vertical slice.
-// Contains: floor render, single-token party, VITAE + PNEUMA, foes + pursuit
+// Contains: floor render, leader+trail party (PMD-style), VITAE + PNEUMA, foes + pursuit
 //           AI, simultaneous round resolution, five operations, click-to-target,
 //           drops + pickup, spike hazard, openable cache, exit dialog + win
 //           screen, particle bursts and floating combat text.
 // Does NOT contain: an inventory window, anything that SPENDS loot, floor 2.
 //
 // TURN MODEL — a round is MOVE *or* ACT, never both.
-//   MOVE: WASD steps the whole circle one tile. WASD NEVER attacks.
+//   MOVE: WASD steps the LEADER one tile; the daemons trail into the tiles
+//         the member ahead of them vacates (Mystery Dungeon snake). Stepping
+//         into a follower SWAPS with it. WASD NEVER attacks.
 //   ACT:  E opens the fan; 1-5 pick any op from any member who has not
 //         yet acted, in any order. SPACE commits the round early.
 // Either way the round then resolves in phases:
@@ -1526,10 +1528,13 @@
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
     cd: {},                        // { opName: rounds remaining }
+    // Members carry their OWN tiles now. There is deliberately no circle.c/r
+    // any more — a stale read of it must fail loudly, not silently target one
+    // ghost tile. Spawns are in command order: OPERATOR leads.
     circle: {
-      c: F.spawns[0].c, r: F.spawns[0].r,
-      members: Object.keys(B.party).map(name => ({
+      members: Object.keys(B.party).map((name, i) => ({
         name, ...B.party[name],
+        c: F.spawns[i].c, r: F.spawns[i].r,
         hp: B.party[name].vitae,
         pn: B.party[name].pneuma,
       })),
@@ -1560,6 +1565,15 @@
   const finished = () => state.over === 'SEVERED' || state.over === 'WIN';
   const blocked = () => finished() || !!state.modal;
   const byName = n => state.circle.members.find(m => m.name === n);
+  // The leader is the first LIVING member in command order. The OPERATOR dying
+  // ends the run (checkEnd), so in practice the leader is the OPERATOR.
+  const lead = () => living()[0];
+  const memberAt = (c, r) => living().find(m => m.c === c && m.r === r);
+  // Foes hunt the NEAREST living member; ties go to the frailest. This is the
+  // whole point of splitting the token: CINIS lagging the trail is now a
+  // choice foes get to punish.
+  const foeTarget = f => living().slice()
+    .sort((a, b) => cheb(f, a) - cheb(f, b) || a.hp - b.hp)[0];
   const hasActed = m => state.acted.includes(m.name);
   const canAct = m => m.hp > 0 && !hasActed(m);
   const pendingMembers = () => living().filter(m => !hasActed(m));
@@ -1581,8 +1595,10 @@
     if (!fog || !fog.on) {
       visible = walkable; state.seen = walkable; frontier = new Set(); return;
     }
-    visible = new Set([key(state.circle.c, state.circle.r)]);
-    let wave = [[state.circle.c, state.circle.r]];
+    // Seeded from EVERY living member: a daemon at the back of the trail must
+    // not stand in its own fog.
+    visible = new Set(living().map(m => key(m.c, m.r)));
+    let wave = living().map(m => [m.c, m.r]);
     for (let d = 0; d < fog.sight && wave.length; d++) {
       const next = [];
       for (const [c, r] of wave)
@@ -1730,7 +1746,10 @@
   }
 
   function collectDrops() {
-    const here = state.drops.filter(d => d.c === state.circle.c && d.r === state.circle.r);
+    // Leader-only pickup: followers walk the same path, so per-follower
+    // pickup would add nothing but double-fire bugs.
+    const L = lead();
+    const here = state.drops.filter(d => d.c === L.c && d.r === L.r);
     if (!here.length) return;
     state.drops = state.drops.filter(d => !here.includes(d));
     here.forEach(d => {
@@ -1764,14 +1783,16 @@
     }
   }
 
-  function strikeCircle(foe) {
-    const targets = living();
+  function strikeMember(foe) {
+    // Melee reaches whoever is actually beside the foe — no more hitting a
+    // member three tiles back through the shared token.
+    const targets = living().filter(m => adjacent(foe, m));
     if (!targets.length) return;
     const t = targets[Math.floor(Math.random() * targets.length)];
     const dmg = roll(foe.atk, defOf(t));
     t.hp -= dmg;
-    float(state.circle.c, state.circle.r, '-' + dmg, 'f-hurt', t.name);
-    burst(state.circle.c, state.circle.r, 'foe');
+    float(t.c, t.r, '-' + dmg, 'f-hurt', t.name);
+    burst(t.c, t.r, 'foe');
     if (t.hp <= 0) {
       t.hp = 0;
       log(`${foe.kind} SEVERS ${t.name} [${dmg}].`, 'bad');
@@ -1784,40 +1805,41 @@
 
   function foeIntent(foe, claimed) {
     if (foe.hp <= 0) return null;
-    const target = state.circle;
-    if (!foe.awake && cheb(foe, target) <= foe.aggro) {
+    if (!foe.awake && living().some(m => cheb(foe, m) <= foe.aggro)) {
       foe.awake = true;
       log(`${foe.kind} WAKES.`, 'bad');
     }
     if (!foe.awake) return { kind: 'idle' };
     if (foe.ai === 'skirmish') return skirmishIntent(foe, claimed);
-    // flank (default): claim a free tile beside the circle and path to it.
-    // `chase: true` marks pursuit -- resolveRound grants chasers a second
+    // flank (default): claim a free tile beside the hunted member and path to
+    // it. `chase: true` marks pursuit -- resolveRound grants chasers a second
     // step while they are still more than 2 tiles out.
+    const target = foeTarget(foe);
     if (adjacent(foe, target)) return { kind: 'attack' };
-    return { kind: 'step', chase: true, ...stepToward(foe, claimTile(foe, claimed), true) };
+    return { kind: 'step', chase: true, ...stepToward(foe, claimTile(foe, claimed, target), true) };
   }
 
-  // FLANK: each pursuer claims its own free orthogonal tile beside the circle,
-  // so foes envelop instead of queueing behind one another. `claimed` is a
-  // per-round Set so no two foes chase the same tile.
-  function claimTile(foe, claimed) {
+  // FLANK: each pursuer claims its own free orthogonal tile beside the member
+  // it hunts, so foes envelop instead of queueing behind one another.
+  // `claimed` is a per-round Set so no two foes chase the same tile.
+  function claimTile(foe, claimed, target) {
     const opts = [[0, -1], [-1, 0], [0, 1], [1, 0]]
-      .map(([dc, dr]) => ({ c: state.circle.c + dc, r: state.circle.r + dr }))
-      .filter(t => walkable.has(key(t.c, t.r)) && !claimed.has(key(t.c, t.r)))
+      .map(([dc, dr]) => ({ c: target.c + dc, r: target.r + dr }))
+      .filter(t => walkable.has(key(t.c, t.r)) && !claimed.has(key(t.c, t.r))
+                && !memberAt(t.c, t.r))
       .filter(t => { const o = foeAt(t.c, t.r); return !o || o === foe; })
       .sort((a, b) => cheb(foe, a) - cheb(foe, b));
-    if (!opts.length) return state.circle;
+    if (!opts.length) return target;
     claimed.add(key(opts[0].c, opts[0].r));
     return opts[0];
   }
 
-  // SKIRMISH: hangs back until the circle is pinned by another foe, commits
-  // then; withdraws when badly hurt; fights only when cornered.
+  // SKIRMISH: hangs back until its hunted member is pinned by another foe,
+  // commits then; withdraws when badly hurt; fights only when cornered.
   function skirmishIntent(foe, claimed) {
-    const t = state.circle;
+    const t = foeTarget(foe);
     if (foe.hp < foe.vitae * 0.5) {
-      const away = stepAway(foe);
+      const away = stepAway(foe, t);
       if (away) return { kind: 'step', ...away };
       return adjacent(foe, t) ? { kind: 'attack' } : { kind: 'idle' };
     }
@@ -1825,23 +1847,22 @@
       o !== foe && o.hp > 0 && o.awake && adjacent(o, t));
     if (pinned) {
       if (adjacent(foe, t)) return { kind: 'attack' };
-      return { kind: 'step', chase: true, ...stepToward(foe, claimTile(foe, claimed), true) };
+      return { kind: 'step', chase: true, ...stepToward(foe, claimTile(foe, claimed, t), true) };
     }
     if (cheb(foe, t) < 3) {
-      const away = stepAway(foe);
+      const away = stepAway(foe, t);
       if (away) return { kind: 'step', ...away };
       if (adjacent(foe, t)) return { kind: 'attack' };   // cornered
     }
     return { kind: 'idle' };
   }
 
-  // Step that opens distance from the circle. Null when boxed in.
-  function stepAway(foe) {
-    const t = state.circle;
+  // Step that opens distance from the hunted member. Null when boxed in.
+  function stepAway(foe, t) {
     const opts = [[0, -1], [-1, 0], [0, 1], [1, 0]]
       .map(([dc, dr]) => ({ dc, dr, c: foe.c + dc, r: foe.r + dr }))
       .filter(o => walkable.has(key(o.c, o.r)) && !foeAt(o.c, o.r)
-                && !(o.c === t.c && o.r === t.r)
+                && !memberAt(o.c, o.r)
                 && cheb(o, t) > cheb(foe, t))
       .sort((a, b) => cheb(b, t) - cheb(a, t));
     return opts.length ? { dc: opts[0].dc, dr: opts[0].dr } : null;
@@ -1853,8 +1874,9 @@
   // surprise. Gated by BALANCE.ui.showFoeIntent.
   function previewIntent(foe) {
     if (foe.hp <= 0 || !foe.awake) return null;
-    if (adjacent(foe, state.circle)) return { kind: 'attack' };
-    return { kind: 'step', ...stepToward(foe, state.circle) };
+    const t = foeTarget(foe);
+    if (adjacent(foe, t)) return { kind: 'attack', target: t };
+    return { kind: 'step', ...stepToward(foe, t) };
   }
 
   function stepToward(foe, t, enterOk) {
@@ -1866,7 +1888,7 @@
       const nc = foe.c + mc, nr = foe.r + mr;
       if (!walkable.has(key(nc, nr))) continue;
       if (!enterOk && nc === t.c && nr === t.r) continue;
-      if (nc === state.circle.c && nr === state.circle.r) continue;
+      if (memberAt(nc, nr)) continue;
       if (foeAt(nc, nr)) continue;
       return { dc: mc, dr: mr };
     }
@@ -1879,14 +1901,15 @@
   const cdLeft = op => state.cd[op.name] || 0;
   // An op with a legal cost but nothing in reach is a different failure from
   // one you cannot pay for, and the player needs to be able to tell them apart.
-  const noTarget = op => op.targets !== 'circle' && validTargets(op).length === 0;
-  const usable = (m, op) => affordable(m, op) && !noTarget(op);
+  const noTarget = (m, op) => op.targets !== 'circle' && validTargets(op, m).length === 0;
+  const usable = (m, op) => affordable(m, op) && !noTarget(m, op);
   // Nobody left who can do anything -> the only way out of the round is SPACE.
   const isStuck = () => state.mode === 'act' && !state.pending &&
     pendingMembers().every(m => opsFor(m).every(op => !usable(m, op)));
   // Every direction blocked by wall or enemy -> the only way out is SPACE too.
+  // A follower's tile counts as open: stepping into it swaps.
   const canStep = () => [[0,-1],[-1,0],[0,1],[1,0]].some(([dc, dr]) => {
-    const c = state.circle.c + dc, r = state.circle.r + dr;
+    const c = lead().c + dc, r = lead().r + dr;
     return walkable.has(key(c, r)) && !foeAt(c, r);
   });
   const affordable = (m, op) =>
@@ -1896,9 +1919,11 @@
   // and not merely on range: an unseen foe drawn no sprite, so a reticle over
   // it would sit on an empty black tile and give the position away louder than
   // the token ever did. NOTE: this makes `range` above fog.sight unreachable.
-  function validTargets(op) {
+  // Range is measured from the CASTER's tile: a trailing CINIS reaches two
+  // tiles less deep than the OPERATOR on point. Positioning is the build now.
+  function validTargets(op, m) {
     if (op.targets === 'circle') return [];
-    return liveFoes().filter(f => foeSeen(f) && cheb(f, state.circle) <= op.range);
+    return liveFoes().filter(f => foeSeen(f) && cheb(f, m) <= op.range);
   }
 
   function applyOp(entry) {
@@ -1915,14 +1940,14 @@
         return;
       }
       log(`${member.name} BURNS ${op.vitaeCost} VITAE.`);
-      float(state.circle.c, state.circle.r, '-' + op.vitaeCost, 'f-hurt', member.name);
-      burst(state.circle.c, state.circle.r, 'selfburn');
+      float(member.c, member.r, '-' + op.vitaeCost, 'f-hurt', member.name);
+      burst(member.c, member.r, 'selfburn');
     }
 
     if (op.kind === 'sweep') {
-      const hit = liveFoes().filter(f => cheb(f, state.circle) <= op.range);
+      const hit = liveFoes().filter(f => cheb(f, member) <= op.range);
       if (!hit.length) { log(`${op.name} SCOURS EMPTY AIR.`); return; }
-      burst(state.circle.c, state.circle.r, op.fx);
+      burst(member.c, member.r, op.fx);
       log(`${op.name} SCOURS ${hit.length} ${hit.length > 1 ? 'ENEMIES' : 'ENEMY'}.`);
       hit.forEach(f => strikeFoe(member, op, f));
       return;
@@ -1936,7 +1961,7 @@
 
     const foe = foeById(entry.targetId);
     if (!foe || foe.hp <= 0) { log(`${op.name} FINDS NOTHING.`); return; }
-    if (cheb(foe, state.circle) > op.range) {
+    if (cheb(foe, member) > op.range) {
       log(`${op.name} FALLS SHORT \u2014 ${foe.kind} MOVED.`);
       return;
     }
@@ -2005,17 +2030,18 @@
         for (const { foe, intent } of foeIntents) {
           if (!intent || intent.kind !== 'step' || foe.hp <= 0) continue;
           const nc = foe.c + intent.dc, nr = foe.r + intent.dr;
-          if (nc === state.circle.c && nr === state.circle.r) continue;
+          if (memberAt(nc, nr)) continue;
           if (foeAt(nc, nr)) continue;
           foe.c = nc; foe.r = nr;
         }
         // Chasers still more than 2 tiles out take a second step: closing
-        // speed 2 matches the circle's stepsPerRound, so pursuit cannot be
+        // speed 2 matches the party's stepsPerRound, so pursuit cannot be
         // kited forever. Skirmish retreats stay speed 1 -- catchable.
         for (const { foe, intent } of foeIntents) {
           if (!intent || !intent.chase || foe.hp <= 0) continue;
-          if (cheb(foe, state.circle) <= 2) continue;
-          const s = stepToward(foe, state.circle);
+          const t = foeTarget(foe);
+          if (!t || cheb(foe, t) <= 2) continue;
+          const s = stepToward(foe, t);
           foe.c += s.dc; foe.r += s.dr;
         }
       }),
@@ -2033,8 +2059,8 @@
         state.queued = [];
         for (const { foe, intent } of foeIntents) {
           if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
-          if (!adjacent(foe, state.circle)) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
-          strikeCircle(foe);
+          if (!living().some(m => adjacent(foe, m))) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
+          strikeMember(foe);
         }
 
         living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
@@ -2073,20 +2099,19 @@
     }
   }
 
-  // Hazards bite on EVERY entry. Revealing one is not the same as disarming it.
+  // Hazards bite on EVERY entry. Revealing one is not the same as disarming
+  // it. Only the LEADER triggers and takes it: followers walk the exact same
+  // path, so per-follower triggers would just triple every hazard -- a tax,
+  // not a tactic.
   function triggerSpikes(label) {
-    const pct = B.hazards.spikes.pct;
-    const hit = living().map(m => {
-      const dmg = Math.max(1, Math.round(m.vitae * pct));
-      m.hp = Math.max(0, m.hp - dmg);
-      float(state.circle.c, state.circle.r, '-' + dmg, 'f-hurt', m.name);
-      burst(state.circle.c, state.circle.r, 'spike');
-      return { m, dmg };
-    });
-    if (!hit.length) return;
-    log(label + ' BITES \u2014 ' + hit.map(x => `${x.m.name} ${x.dmg}`).join(', ') + '.', 'bad');
-    hit.filter(x => x.m.hp === 0)
-       .forEach(x => log(`${x.m.name} IS SEVERED BY THE ${label}.`, 'bad'));
+    const m = lead();
+    if (!m) return;
+    const dmg = Math.max(1, Math.round(m.vitae * B.hazards.spikes.pct));
+    m.hp = Math.max(0, m.hp - dmg);
+    float(m.c, m.r, '-' + dmg, 'f-hurt', m.name);
+    burst(m.c, m.r, 'spike');
+    log(label + ' BITES \u2014 ' + m.name + ' ' + dmg + '.', 'bad');
+    if (m.hp === 0) log(`${m.name} IS SEVERED BY THE ${label}.`, 'bad');
   }
 
   // Naming a key to a player who has no keyboard is worse than saying nothing.
@@ -2096,7 +2121,7 @@
   // The prop under the circle that E would act on, or null.
   function interactable() {
     if (blocked() || state.mode !== 'move') return null;
-    const p = propAt(state.circle.c, state.circle.r);
+    const p = propAt(lead().c, lead().r);
     if (!p) return null;
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
     if (p.kind === 'stairs') {
@@ -2131,7 +2156,7 @@
   }
 
   function onEnter() {
-    const p = propAt(state.circle.c, state.circle.r);
+    const p = propAt(lead().c, lead().r);
     if (!p) return;
     const k = key(p.c, p.r);
     if (p.hidden && !state.revealed.has(k)) {
@@ -2192,7 +2217,7 @@
     if (!affordable(m, op)) { warn(`${m.name} CANNOT PAY FOR ${op.name}.`); return; }
 
     if (op.targets === 'circle') { commitMember(m, op); return; }
-    if (!validTargets(op).length) { warn(`${op.name} HAS NO TARGET IN RANGE.`); return; }
+    if (!validTargets(op, m).length) { warn(`${op.name} HAS NO TARGET IN RANGE.`); return; }
     if (op.targets === 'adjacent') { commitMember(m, op); return; }   // no aiming
     state.pending = { op, member: m };
     state.aiming = m.name;
@@ -2213,7 +2238,7 @@
     if (state.pending) {
       const foe = foeAt(c, r);
       if (!foe) { warn('TAP AN ENEMY INSIDE THE WASH, OR CANCEL.'); return; }
-      if (cheb(foe, state.circle) > state.pending.op.range) {
+      if (cheb(foe, state.pending.member) > state.pending.op.range) {
         warn(foe.kind + ' IS OUT OF RANGE.');
         return;
       }
@@ -2222,7 +2247,7 @@
     }
     if (state.mode === 'act') return;
 
-    const dc = c - state.circle.c, dr = r - state.circle.r;
+    const dc = c - lead().c, dr = r - lead().r;
 
     // The token's own tile used to hold the ground. It is the largest, most
     // salient object on the board, so "tap the thing I care about" spent the
@@ -2249,7 +2274,7 @@
   }
 
   function stageStep(dc, dr) {
-    const nc = state.circle.c + dc, nr = state.circle.r + dr;
+    const nc = lead().c + dc, nr = lead().r + dr;
     if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
     if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
     state.staged = { dc, dr };
@@ -2276,8 +2301,9 @@
   // Keyboard fallback: ENTER fires at the nearest enemy in range.
   function confirmTarget() {
     if (!state.pending) return;
-    const near = validTargets(state.pending.op)
-      .slice().sort((a, b) => cheb(a, state.circle) - cheb(b, state.circle))[0];
+    const m = state.pending.member;
+    const near = validTargets(state.pending.op, m)
+      .slice().sort((a, b) => cheb(a, m) - cheb(b, m))[0];
     if (!near) return;
     commitMember(state.pending.member, state.pending.op, near.id);
   }
@@ -2305,15 +2331,33 @@
   }
 
   // WASD is movement only. Walking into an enemy is simply blocked.
+  // Walking into a FOLLOWER swaps with it; otherwise the leader steps and the
+  // trail cascades: each follower moves into the tile the member ahead of it
+  // just vacated. The chain is contiguous at spawn and both moves preserve
+  // that, so followers only ever step one tile.
   function moveInput(dc, dr) {
     if (blocked() || state.mode === 'act') return;
-    const nc = state.circle.c + dc, nr = state.circle.r + dr;
+    const L = lead();
+    const nc = L.c + dc, nr = L.r + dr;
     if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
     if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
     // The step lands NOW -- hazards and drops fire per tile -- and the round
     // resolves only when the step allowance is spent. With one step banked
     // the player may still open the act menu: move-then-act.
-    state.circle.c = nc; state.circle.r = nr;
+    const swap = memberAt(nc, nr);
+    if (swap) {
+      swap.c = L.c; swap.r = L.r;
+      L.c = nc; L.r = nr;
+    } else {
+      const chain = living();
+      let vc = L.c, vr = L.r;              // tile being vacated
+      L.c = nc; L.r = nr;
+      for (let i = 1; i < chain.length; i++) {
+        const f = chain[i], pc = f.c, pr = f.r;
+        f.c = vc; f.r = vr;
+        vc = pc; vr = pr;
+      }
+    }
     state.stepsUsed++;
     onEnter();
     collectDrops();
@@ -2340,9 +2384,11 @@
     if (!el) {
       el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       el.setAttribute('class', 'actor');
-      // Party is created first and kept last so it always draws above foes.
-      if (onTop || !actorNodes.party) actorsG.appendChild(el);
-      else actorsG.insertBefore(el, actorNodes.party);
+      // Party nodes are appended (onTop); foe nodes slide in beneath the
+      // first party node so members always draw above foes.
+      const anchor = Object.keys(actorNodes).find(k => k.startsWith('party-'));
+      if (onTop || !anchor) actorsG.appendChild(el);
+      else actorsG.insertBefore(el, actorNodes[anchor]);
       actorNodes[key] = el;
     }
     return el;
@@ -2420,8 +2466,8 @@
     const fitR = Math.max(3, Math.floor(box.height / px));
     const w = Math.min(F.cols, fitC) * T;
     const h = Math.min(F.rows, fitR) * T;
-    const cx = view.free ? view.ox : (state.circle.c + .5) * T;
-    const cy = view.free ? view.oy : (state.circle.r + .5) * T;
+    const cx = view.free ? view.ox : (lead().c + .5) * T;
+    const cy = view.free ? view.oy : (lead().r + .5) * T;
     const x = Math.max(0, Math.min(cx - w / 2, F.cols * T - w));
     const y = Math.max(0, Math.min(cy - h / 2, F.rows * T - h));
 
@@ -2497,10 +2543,10 @@
     const op = state.pending.op;
     let g = '';
     for (const [c, r] of F.tiles) {
-      if (!inSight(c, r) || cheb({ c, r }, state.circle) > op.range) continue;
+      if (!inSight(c, r) || cheb({ c, r }, state.pending.member) > op.range) continue;
       g += `<polygon points="${plate(c, r, 3)}" fill="var(--cyan)" opacity=".10"/>`;
     }
-    for (const f of validTargets(op)) {
+    for (const f of validTargets(op, state.pending.member)) {
       const hot = state.hover && state.hover.c === f.c && state.hover.r === f.r;
       g += reticle(f.c, f.r, hot ? 'var(--gold)' : 'var(--cyan)', hot ? 2.6 : 1.4, hot);
     }
@@ -2550,32 +2596,34 @@
       placeActor(el, f.c, f.r);
     }
 
-    seen.add('party');
-    const p = actorNode('party', true);
-    setActorContent(p, `<polygon points="${plate(0, 0, 1)}" fill="none"
-                            stroke="var(--gold)" stroke-width="2.4"/>`
-                + S.party() + vitaePips(0, 0));
-    placeActor(p, state.circle.c, state.circle.r);
+    // One node per living member. Created back-to-front (reverse command
+    // order) so the OPERATOR is appended last and draws topmost when tokens
+    // brush past each other mid-swap.
+    const chain = living();
+    [...chain].reverse().forEach(m => {
+      const k = 'party-' + m.name;
+      seen.add(k);
+      const el = actorNode(k, true);
+      const ring = m === chain[0]
+        ? `<polygon points="${plate(0, 0, 1)}" fill="none"
+                    stroke="var(--gold)" stroke-width="2.4"/>` : '';
+      setActorContent(el, ring + S[MEMBER_SPRITE[m.name]]() + memberBar(m));
+      placeActor(el, m.c, m.r);
+    });
 
     for (const k in actorNodes)
       if (!seen.has(k)) { actorNodes[k].remove(); delete actorNodes[k]; }
   }
 
-  function vitaePips(c, r) {
-    const BW = 16, GAP = 3, H = 3.4;
-    const x0 = c * T + (T - (BW * 3 + GAP * 2)) / 2;
-    const y0 = r * T + 2.5;
-    return state.circle.members.map((m, i) => {
-      const x = x0 + i * (BW + GAP);
-      const frame = `<rect x="${x}" y="${y0}" width="${BW}" height="${H}" fill="var(--void)"
-                           stroke="var(--${m.tint})" stroke-width=".7"
-                           opacity="${m.hp > 0 ? '.9' : '.3'}"/>`;
-      if (m.hp <= 0)
-        return frame + `<line x1="${x}" y1="${y0 + H / 2}" x2="${x + BW}" y2="${y0 + H / 2}"
-                              stroke="var(--blood)" stroke-width="1.5"/>`;
-      const w = BW * Math.max(0, m.hp / m.vitae);
-      return frame + `<rect x="${x}" y="${y0}" width="${w}" height="${H}" fill="var(--${m.tint})"/>`;
-    }).join('');
+  // Presentation-only mapping; the numbers bible stays numbers.
+  const MEMBER_SPRITE = { OPERATOR: 'hero', CALX: 'calx', CINIS: 'cinis' };
+
+  // Per-token VITAE bar in the member's own tint, same geometry as foe bars.
+  function memberBar(m) {
+    const w = 36 * Math.max(0, m.hp / m.vitae);
+    return `<rect x="14" y="6" width="36" height="3.5"
+                  fill="var(--void)" stroke="var(--${m.tint})" stroke-width=".6" opacity=".8"/>
+            <rect x="14" y="6" width="${w}" height="3.5" fill="var(--${m.tint})"/>`;
   }
 
   // The four legal steps, outlined. Nothing on the board used to say which
@@ -2583,7 +2631,7 @@
   function moveLayer() {
     if (state.mode !== 'move' || state.pending || finished() || !isCoarse()) return '';
     return [[0, -1], [-1, 0], [0, 1], [1, 0]].map(([dc, dr]) => {
-      const c = state.circle.c + dc, r = state.circle.r + dr;
+      const c = lead().c + dc, r = lead().r + dr;
       if (!walkable.has(key(c, r)) || foeAt(c, r)) return '';
       if (state.staged && state.staged.dc === dc && state.staged.dr === dr) return '';
       return `<polygon points="${plate(c, r, 9)}" fill="none" stroke="var(--cyan)"
@@ -2597,7 +2645,8 @@
   // that read, and on touch the commit is a single irreversible tap.
   function intentLayer() {
     if (!B.ui || !B.ui.showFoeIntent || finished()) return '';
-    let g = '', struck = false;
+    let g = '';
+    const struckTiles = new Set();
     for (const f of liveFoes()) {
       // An unseen foe telegraphs nothing: a chevron on a dark tile marks the
       // foe as surely as its token would. Anything close enough to strike the
@@ -2606,9 +2655,10 @@
       const it = previewIntent(f);
       if (!it) continue;
       if (it.kind === 'attack') {
-        if (struck) continue;
-        struck = true;
-        g += `<polygon points="${plate(state.circle.c, state.circle.r, 5)}" fill="none"
+        const k = key(it.target.c, it.target.r);
+        if (struckTiles.has(k)) continue;
+        struckTiles.add(k);
+        g += `<polygon points="${plate(it.target.c, it.target.r, 5)}" fill="none"
                        stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
                        opacity=".75"/>`;
         continue;
@@ -2670,9 +2720,9 @@
     for (const f of liveFoes())
       if (foeSeen(f))
         g += `<circle cx="${f.c + .5}" cy="${f.r + .5}" r=".33" fill="var(--blood)"/>`;
-    g += `<circle cx="${state.circle.c + .5}" cy="${state.circle.r + .5}" r=".4"
-                  fill="var(--gold)"/>
-          <circle cx="${state.circle.c + .5}" cy="${state.circle.r + .5}" r=".72"
+    for (const m of living())
+      g += `<circle cx="${m.c + .5}" cy="${m.r + .5}" r=".4" fill="var(--gold)"/>`;
+    g += `<circle cx="${lead().c + .5}" cy="${lead().r + .5}" r=".72"
                   fill="none" stroke="var(--gold)" stroke-width=".14" opacity=".55"/>`;
     if (cam.w < F.cols * T - 1 || cam.h < F.rows * T - 1)
       g += `<rect x="${cam.x / T}" y="${cam.y / T}" width="${cam.w / T}" height="${cam.h / T}"
@@ -2683,11 +2733,11 @@
   // Where a staged step would land, before it is paid for.
   function stagedLayer() {
     if (!state.staged) return '';
-    const c = state.circle.c + state.staged.dc, r = state.circle.r + state.staged.dr;
+    const c = lead().c + state.staged.dc, r = lead().r + state.staged.dr;
     return `<polygon points="${plate(c, r, 3)}" fill="var(--gold)" opacity=".14"/>
             <polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)"
                      stroke-width="2" stroke-dasharray="6 4" opacity=".9"/>
-            <g transform="translate(${c * T},${r * T})" opacity=".38">${S.party()}</g>`;
+            <g transform="translate(${c * T},${r * T})" opacity=".38">${S[MEMBER_SPRITE[lead().name]]()}</g>`;
   }
 
   // ---- roster is built ONCE, then mutated ---------------------------------
@@ -2835,7 +2885,7 @@
       vpw: vp.width,
     };
   }
-  const tokenRect = () => tilePos(state.circle.c, state.circle.r);
+  const tokenRect = () => tilePos(lead().c, lead().r);
 
   // Several hits can land on one tile in a round, so stack them by delay.
   const floatsEl = document.getElementById('floaters');
@@ -2945,7 +2995,7 @@
 
       g.chips.forEach(chip => {
         const op = { name: chip.dataset.op, ...B.operations[chip.dataset.op] };
-        const cd = cdLeft(op), blind = noTarget(op);
+        const cd = cdLeft(op), blind = noTarget(m, op);
         chip.querySelector('.cc').textContent =
           cd > 0 ? 'CD ' + cd
           : blind ? 'NO TARGET'
@@ -3262,9 +3312,11 @@
                 !foe.awake ? 'DORMANT'
                 : it && it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
                 : 'CLOSING IN'}</span>`;
-    } else if (c === state.circle.c && r === state.circle.r) {
-      html = '<b>THE CIRCLE</b>' + state.circle.members.map(m =>
-        `<span>${m.name} — V ${m.hp}/${m.vitae} · P ${m.pn}/${m.pneuma}</span>`).join('');
+    } else if (memberAt(c, r)) {
+      const m = memberAt(c, r);
+      html = `<b>${m.name}</b><span>${m.role}</span>` +
+        `<span>V ${m.hp}/${m.vitae} · P ${m.pn}/${m.pneuma}</span>` +
+        (m === lead() ? '<span>ON POINT</span>' : '<span>IN TRAIL</span>');
     } else if (prop && (!prop.hidden || state.revealed.has(key(c, r)))) {
       html = `<b>${prop.label}</b><span>${prop.kind.toUpperCase()}</span>`;
     } else if (walkable.has(key(c, r))) {
@@ -3310,8 +3362,8 @@
     };
     if (!view.free) {
       view.free = true;
-      view.ox = (state.circle.c + .5) * T;
-      view.oy = (state.circle.r + .5) * T;
+      view.ox = (lead().c + .5) * T;
+      view.oy = (lead().r + .5) * T;
     }
   }, { passive: true });
 
@@ -3781,7 +3833,8 @@
   satchelEl.addEventListener('click', openSatchel);
 
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
-                  moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl };
+                  moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
+                  lead, memberAt, foeTarget, validTargets, resolveRound };
 
   buildRoster();
   buildFan();
