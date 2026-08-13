@@ -194,7 +194,11 @@
     }
   }
   const inSight = (c, r) => visible.has(key(c, r));
-  const foeSeen = f => f.awake || inSight(f.c, f.r);
+  // A foe is on screen only while the circle can actually see its tile. Waking
+  // does NOT reveal it: aggro is 10-12 against a sight of 4, so an "awake foes
+  // pierce fog" rule meant every foe lit up two to three times further out than
+  // the circle can see, and enemies were effectively never fogged at all.
+  const foeSeen = f => inSight(f.c, f.r);
   recomputeFOV();
   const wardBonus = () => state.wards.reduce((s, w) => s + w.def, 0);
   const defOf = m => m.def + wardBonus();
@@ -465,8 +469,10 @@
   const affordable = (m, op) =>
     m.pn >= op.pn && (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
 
-  // Foes a given op could legally hit right now. foeSeen keeps a sleeping foe
-  // you have never laid eyes on from being sniped through the fog.
+  // Foes a given op could legally hit right now. Targeting is gated on sight
+  // and not merely on range: an unseen foe drawn no sprite, so a reticle over
+  // it would sit on an empty black tile and give the position away louder than
+  // the token ever did. NOTE: this makes `range` above fog.sight unreachable.
   function validTargets(op) {
     if (op.targets === 'circle') return [];
     return liveFoes().filter(f => foeSeen(f) && cheb(f, state.circle) <= op.range);
@@ -1105,7 +1111,7 @@
     const seen = new Set();
 
     for (const f of liveFoes()) {
-      if (!foeSeen(f)) continue;      // fogged AND dormant: node drops out below
+      if (!foeSeen(f)) continue;      // out of sight: node drops out below
       const key = 'foe' + f.id;
       seen.add(key);
       const pct = f.hp / f.vitae;
@@ -1170,6 +1176,10 @@
     if (!B.ui || !B.ui.showFoeIntent || finished()) return '';
     let g = '', struck = false;
     for (const f of liveFoes()) {
+      // An unseen foe telegraphs nothing: a chevron on a dark tile marks the
+      // foe as surely as its token would. Anything close enough to strike the
+      // circle is inside sight anyway, so the attack ring is unaffected.
+      if (!foeSeen(f)) continue;
       const it = previewIntent(f);
       if (!it) continue;
       if (it.kind === 'attack') {
@@ -1187,10 +1197,12 @@
     return g;
   }
 
-  // Awake foes the camera has cropped away, pinned to the edge they sit beyond.
+  // Foes the camera has cropped away, pinned to the edge they sit beyond. Only
+  // ones the circle can see: a marker for a foe hidden by fog is the same
+  // position leak as drawing its token, just parked on the frame instead.
   function edgeLayer() {
     const x1 = cam.x + cam.w, y1 = cam.y + cam.h;
-    return liveFoes().filter(f => f.awake).map(f => {
+    return liveFoes().filter(foeSeen).map(f => {
       const fx = f.c * T + T / 2, fy = f.r * T + T / 2;
       if (fx > cam.x && fx < x1 && fy > cam.y && fy < y1) return '';
       const px = Math.max(cam.x + 13, Math.min(fx, x1 - 13));
