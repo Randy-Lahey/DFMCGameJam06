@@ -239,6 +239,25 @@
     transition:opacity .18s ease,color .18s ease,border-color .18s ease;
   }
   #help:hover,#help:active{opacity:1;color:var(--gold);border-color:var(--gold)}
+  /* The satchel needs a real target on touch: the HUD bag readout is a
+     10px-tall line in a corner and nobody would guess it opens anything. */
+  #satchel{
+    position:absolute;right:10px;bottom:54px;z-index:6;
+    width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+    font:inherit;line-height:1;cursor:pointer;padding:0;
+    color:var(--cyan);background:rgba(4,5,10,.9);
+    border:1px solid var(--edge-i);opacity:.62;
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    transition:opacity .18s ease,color .18s ease,border-color .18s ease;
+  }
+  #satchel svg{width:19px;height:19px}
+  #satchel:hover,#satchel:active{opacity:1;color:var(--gold);border-color:var(--gold)}
+  #satchel.hide{display:none}
+  /* Unfitted loot is the only reason to open the panel mid-floor, so the dot
+     is the prompt: it lights when something is waiting to be seated. */
+  #satchel .dot{position:absolute;top:4px;right:4px;width:6px;height:6px;
+    border-radius:50%;background:var(--gold);box-shadow:0 0 6px rgba(227,179,71,.9)}
+  #satchel .dot[hidden]{display:none}
   /* Nothing behind an overlay is reachable, and a live-looking button that
      does nothing reads as a broken one. */
   #help.hide{display:none}
@@ -401,7 +420,8 @@
   .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.78;margin-top:4px}
 
   /* ---- effects + prompt ---- */
-  .bag{display:flex;flex-wrap:wrap;gap:5px}
+  .bag{display:flex;flex-wrap:wrap;gap:5px;cursor:pointer}
+  .bag:hover{color:var(--gold)}
   .bg{font-size:9px;letter-spacing:.16em;padding:2px 6px;
       border:1px solid currentColor;opacity:.85}
   .bg b{font-weight:400;opacity:1}
@@ -592,6 +612,8 @@
     #roster{padding:6px 10px;gap:6px}
     .unit{padding:5px 8px}
     #help{width:32px;height:32px;font-size:14px}
+    #satchel{width:32px;height:32px;bottom:48px}
+    #satchel svg{width:17px;height:17px}
   }
 
   /* ---- focus ----
@@ -879,6 +901,12 @@
         <button id="cancel"></button>
         <button id="confirm"></button>
       </div>
+      <button id="satchel" aria-label="OPEN SATCHEL" title="SATCHEL [I]">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+             stroke-width="1.6"><path d="M4 7h16v13H4z"/><path d="M8 7V4h8v3"/>
+          <path d="M7 11h10M7 15h10"/></svg>
+        <span class="dot" hidden></span>
+      </button>
       <button id="help" aria-label="CONTROLS" title="CONTROLS">?</button>
     </div>
 
@@ -916,6 +944,7 @@
       <dt>TAP ENEMY</dt><dd>Fire the armed operation at it.</dd>
       <dt>HOLD TILE</dt><dd>Inspect it. Costs nothing, spends no round.</dd>
       <dt>TWO FINGERS</dt><dd>Drag to pan, pinch to zoom the floor.</dd>
+      <dt>SATCHEL</dt><dd>Open the rig: seat fluxes, swap data banks.</dd>
       <dt>CANCEL</dt><dd>Backs out of anything, including a queued operation.</dd>
       <dt>COMMIT ROUND</dt><dd>Resolves everyone at once. This ends the round.</dd>
     </dl>
@@ -2568,6 +2597,7 @@
   const winEl = document.getElementById('win');
   const ctlEl = document.getElementById('controls');
   const helpEl = document.getElementById('help');
+  const satchelEl = document.getElementById('satchel');
 
   // "Goes away forever" is a stored fact, not a session flag. Wrapped because
   // localStorage throws outright in some privacy modes and on some file://
@@ -2619,6 +2649,10 @@
     document.getElementById('ctl-close').textContent =
       seenControls() ? 'CLOSE' : 'BEGIN';
     helpEl.classList.toggle('hide', !!state.modal || finished());
+    // Same rule as the ? handle: a live-looking button behind an overlay, or
+    // after the run is decided, reads as a broken one.
+    satchelEl.classList.toggle('hide', !!state.modal || finished());
+    satchelEl.querySelector('.dot').hidden = !state.bag.items.length;
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
@@ -3331,11 +3365,12 @@
     }
   });
 
-  // The HUD satchel line doubles as the inventory button.
-  document.getElementById('bag').addEventListener('click', () => {
-    if (state.modal) return;
-    openInv(); draw();
-  });
+  // Two ways in. The HUD line is the desktop-native one — it sits right next
+  // to the counts it opens — but it is a 10px readout in a corner, so touch
+  // gets the viewport handle beside the ? button instead.
+  const openSatchel = () => { if (state.modal || finished()) return; openInv(); draw(); };
+  document.getElementById('bag').addEventListener('click', openSatchel);
+  satchelEl.addEventListener('click', openSatchel);
 
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl };

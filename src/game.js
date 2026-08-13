@@ -1226,6 +1226,7 @@
   const winEl = document.getElementById('win');
   const ctlEl = document.getElementById('controls');
   const helpEl = document.getElementById('help');
+  const satchelEl = document.getElementById('satchel');
 
   // "Goes away forever" is a stored fact, not a session flag. Wrapped because
   // localStorage throws outright in some privacy modes and on some file://
@@ -1277,6 +1278,10 @@
     document.getElementById('ctl-close').textContent =
       seenControls() ? 'CLOSE' : 'BEGIN';
     helpEl.classList.toggle('hide', !!state.modal || finished());
+    // Same rule as the ? handle: a live-looking button behind an overlay, or
+    // after the run is decided, reads as a broken one.
+    satchelEl.classList.toggle('hide', !!state.modal || finished());
+    satchelEl.querySelector('.dot').hidden = !state.bag.items.length;
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
@@ -1989,11 +1994,12 @@
     }
   });
 
-  // The HUD satchel line doubles as the inventory button.
-  document.getElementById('bag').addEventListener('click', () => {
-    if (state.modal) return;
-    openInv(); draw();
-  });
+  // Two ways in. The HUD line is the desktop-native one — it sits right next
+  // to the counts it opens — but it is a 10px readout in a corner, so touch
+  // gets the viewport handle beside the ? button instead.
+  const openSatchel = () => { if (state.modal || finished()) return; openInv(); draw(); };
+  document.getElementById('bag').addEventListener('click', openSatchel);
+  satchelEl.addEventListener('click', openSatchel);
 
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl };
