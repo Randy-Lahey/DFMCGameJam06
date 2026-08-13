@@ -57,11 +57,13 @@
       { kind: 'spikes', c: 0, r: 3, hidden: true,  label: 'SPIKE ARRAY' },
     ],
 
-    // Party spawns, in command order.
+    // Party spawns, in command order. The OPERATOR takes the point tile —
+    // travel is north toward the stairs — with both daemons behind, so the
+    // formation reads leader-first from the very first frame.
     spawns: [
+      { c: 8, r: 10 },
       { c: 8, r: 11 },
       { c: 9, r: 11 },
-      { c: 8, r: 10 },
     ],
 
     // Foe placements. `kind` keys into BALANCE.foes.

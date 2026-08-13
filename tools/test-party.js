@@ -86,27 +86,29 @@ ok(lead() === M[0], 'OPERATOR leads');
 ok(state.circle.c === undefined && state.circle.r === undefined,
    'circle.c/r is gone -- stale reads cannot silently succeed');
 
-// ------------------------------------------------------------- swap
-// The spawn pocket is a 2-wide corridor: the leader is boxed in by its own
-// followers, so the FIRST legal move is a swap. L(8,11) steps north into
-// CINIS(8,10): they must trade tiles.
-const cinis = M[2];
-moveInput(0, -1);
-ok(pos(M[0]) === '8,10' && pos(cinis) === '8,11', 'stepping into a follower swaps');
-ok(new Set(M.map(pos)).size === 3, 'swap never stacks members');
-
 // ------------------------------------------------------------- trail
-// L(8,10) steps north to free floor (8,9): CALX takes the leader's vacated
-// (8,10), CINIS takes CALX's vacated (9,11).
+// The OPERATOR spawns on point with both daemons behind, so the first move
+// is a clean cascade, not a swap. L(8,10) steps north to free floor (8,9):
+// CALX takes the leader's vacated (8,10), CINIS takes CALX's vacated (8,11).
 moveInput(0, -1);
 ok(pos(M[0]) === '8,9',  'leader stepped onto free floor');
 ok(pos(M[1]) === '8,10', 'follower 1 took the vacated tile');
-ok(pos(M[2]) === '9,11', 'follower 2 took follower 1\'s vacated tile');
+ok(pos(M[2]) === '8,11', 'follower 2 took follower 1\'s vacated tile');
 ok(new Set(M.map(pos)).size === 3, 'trail never stacks members');
 // One more step: the chain snakes cleanly up the corridor.
 moveInput(0, -1);
 ok(pos(M[0]) === '8,8' && pos(M[1]) === '8,9' && pos(M[2]) === '8,10',
    'chain snakes tile-by-tile up the corridor');
+
+// ------------------------------------------------------------- swap
+// Stepping back INTO a follower trades tiles. L(8,8) steps south into
+// CALX(8,9): they must swap, and only they.
+moveInput(0, 1);
+ok(pos(M[0]) === '8,9' && pos(M[1]) === '8,8', 'stepping into a follower swaps');
+ok(pos(M[2]) === '8,10', 'the other follower does not move on a swap');
+ok(new Set(M.map(pos)).size === 3, 'swap never stacks members');
+moveInput(0, -1);   // swap back: leader on point again for the sections below
+ok(pos(M[0]) === '8,8' && pos(M[1]) === '8,9', 'swapping back restores the chain');
 
 // ------------------------------------------------------------- targeting
 // Plant a foe next to CINIS's tile: it must hunt CINIS, not the leader.
