@@ -230,6 +230,16 @@
      The legend used to live permanently in the HUD, four lines of 9px text at
      .42 opacity that every player reads once and then pays for on every frame
      of vertical space. It shows once, on first load, and is recallable. */
+  /* PMD-style minimap. pointer-events:none so it can never eat a tap; the
+     top-right corner is empty on both layouts (satchel/help sit bottom-right).
+     viewBox and aspect-ratio are set from floor dimensions by game.js. */
+  #minimap{
+    position:absolute;top:18px;right:16px;z-index:5;pointer-events:none;
+    width:min(172px,28vw);
+    background:rgba(4,5,10,.62);border:1px solid var(--edge-i);
+    clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+    padding:4px;opacity:.9;
+  }
   #help{
     position:absolute;right:10px;bottom:10px;z-index:6;
     width:36px;height:36px;display:flex;align-items:center;justify-content:center;
@@ -892,6 +902,7 @@
     <div id="viewport">
       <svg id="stage" xmlns="http://www.w3.org/2000/svg"
            preserveAspectRatio="xMidYMid meet"><g id="bg"></g><g id="board"></g><g id="actors"></g><g id="overlay"></g></svg>
+      <svg id="minimap" aria-hidden="true"></svg>
       <div id="floaters"></div>
       <div id="fan" class="fan"></div>
       <div id="hint" class="hint"></div>
@@ -993,10 +1004,10 @@
 </div>
 
 <div id="inv" aria-hidden="false"></div>
-<script src="data/floor01.js?v=729b11b0"></script>
-<script src="data/balance.js?v=729b11b0"></script>
-<script src="data/fxsheets.js?v=729b11b0"></script>
-<script src="src/sprites.js?v=729b11b0"></script>
-<script src="src/game.js?v=729b11b0"></script>
+<script src="data/floor01.js?v=c3cb7e72"></script>
+<script src="data/balance.js?v=c3cb7e72"></script>
+<script src="data/fxsheets.js?v=c3cb7e72"></script>
+<script src="src/sprites.js?v=c3cb7e72"></script>
+<script src="src/game.js?v=c3cb7e72"></script>
 </body>
 </html>

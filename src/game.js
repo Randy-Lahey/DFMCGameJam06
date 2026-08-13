@@ -122,6 +122,7 @@
     drops: [],                     // [{ id, kind, label, sprite, c, r, amount }]
     bag: { argent: 0, items: [] },  // items: [{ kind, label, sprite }]
     revealed: new Set(),
+    seen: new Set(),               // fog of war: tiles ever inside sight
     log: [],
   };
   let dropSeq = 0;
@@ -139,6 +140,40 @@
   const hasActed = m => state.acted.includes(m.name);
   const canAct = m => m.hp > 0 && !hasActed(m);
   const pendingMembers = () => living().filter(m => !hasActed(m));
+
+  // -------------------------------------------------------------- fog of war
+  // Sight spreads by BFS through floor tiles (8-way) from the circle, depth
+  // <= fog.sight. BFS rather than raw Chebyshev radius so light cannot cross
+  // a void: walls here are the ABSENCE of tiles, and a radius test would show
+  // floor on the far side of a gap. Recomputed at the top of every draw() —
+  // 93 tiles, so cheapness beats bookkeeping about when the circle moved.
+  //
+  // AWAKE foes ignore fog on purpose (see balance.js): they have engaged the
+  // circle, and the intent/edge-marker/targeting systems all assume an awake
+  // foe can be seen. Fog hides dormant foes and unexplored terrain only.
+  let visible = new Set();
+  function recomputeFOV() {
+    const fog = B.ui.fog;
+    if (!fog || !fog.on) { visible = walkable; state.seen = walkable; return; }
+    visible = new Set([key(state.circle.c, state.circle.r)]);
+    let frontier = [[state.circle.c, state.circle.r]];
+    for (let d = 0; d < fog.sight && frontier.length; d++) {
+      const next = [];
+      for (const [c, r] of frontier)
+        for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) {
+          if (!dc && !dr) continue;
+          const k = key(c + dc, r + dr);
+          if (!walkable.has(k) || visible.has(k)) continue;
+          visible.add(k);
+          next.push([c + dc, r + dr]);
+        }
+      frontier = next;
+    }
+    for (const k of visible) state.seen.add(k);
+  }
+  const inSight = (c, r) => visible.has(key(c, r));
+  const foeSeen = f => f.awake || inSight(f.c, f.r);
+  recomputeFOV();
   const wardBonus = () => state.wards.reduce((s, w) => s + w.def, 0);
   const defOf = m => m.def + wardBonus();
 
@@ -408,10 +443,11 @@
   const affordable = (m, op) =>
     m.pn >= op.pn && (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
 
-  // Foes a given op could legally hit right now.
+  // Foes a given op could legally hit right now. foeSeen keeps a sleeping foe
+  // you have never laid eyes on from being sniped through the fog.
   function validTargets(op) {
     if (op.targets === 'circle') return [];
-    return liveFoes().filter(f => cheb(f, state.circle) <= op.range);
+    return liveFoes().filter(f => foeSeen(f) && cheb(f, state.circle) <= op.range);
   }
 
   function applyOp(entry) {
@@ -949,8 +985,10 @@
     const step = now => {
       const k = ease(Math.min(1, (now - t0) / STEP_MS));
       applyCam({ x: fx + (x - fx) * k, y: fy + (y - fy) * k, w, h });
-      // Edge markers are positioned against cam, so they must repaint with it.
+      // Edge markers and the minimap crop rect are positioned against cam,
+      // so both must repaint with it.
       overlayG.innerHTML = edgeLayer();
+      syncMinimap();
       camTween = (now - t0) < STEP_MS ? requestAnimationFrame(step) : null;
     };
     camTween = requestAnimationFrame(step);
@@ -976,16 +1014,24 @@
     return g;
   }
 
-  const floorLayer = () => F.tiles.map(([c, r]) =>
-    `<polygon points="${plate(c, r, 3)}" fill="#0A1420" stroke="var(--cyan)" stroke-width="1.1" opacity=".85"/>
-     <polygon points="${plate(c, r, 11)}" fill="none" stroke="var(--cyan)" stroke-width=".5" opacity=".16"/>`).join('');
+  const floorLayer = () => F.tiles.map(([c, r]) => {
+    const k = key(c, r);
+    if (!state.seen.has(k)) return '';
+    const tile =
+      `<polygon points="${plate(c, r, 3)}" fill="#0A1420" stroke="var(--cyan)" stroke-width="1.1" opacity=".85"/>
+       <polygon points="${plate(c, r, 11)}" fill="none" stroke="var(--cyan)" stroke-width=".5" opacity=".16"/>`;
+    return visible.has(k) ? tile : `<g opacity="${B.ui.fog.memory}">${tile}</g>`;
+  }).join('');
 
   const propLayer = () => F.props.map(p => {
-    if (p.hidden && !state.revealed.has(key(p.c, p.r))) return '';
+    const k = key(p.c, p.r);
+    if (!state.seen.has(k)) return '';
+    if (p.hidden && !state.revealed.has(k)) return '';
     let spr = p.kind;
     if (p.kind === 'chest' && p.opened) spr = 'chestOpen';
     if (p.kind === 'stairs' && liveFoes().length) spr = 'stairsSealed';
-    return `<g transform="translate(${p.c * T},${p.r * T})">${S[spr]()}</g>`;
+    const g = `<g transform="translate(${p.c * T},${p.r * T})">${S[spr]()}</g>`;
+    return visible.has(k) ? g : `<g opacity="${B.ui.fog.memory * 2}">${g}</g>`;
   }).join('');
 
   // Range wash + reticles, drawn under the tokens so sprites stay readable.
@@ -994,7 +1040,7 @@
     const op = state.pending.op;
     let g = '';
     for (const [c, r] of F.tiles) {
-      if (cheb({ c, r }, state.circle) > op.range) continue;
+      if (!inSight(c, r) || cheb({ c, r }, state.circle) > op.range) continue;
       g += `<polygon points="${plate(c, r, 3)}" fill="var(--cyan)" opacity=".10"/>`;
     }
     for (const f of validTargets(op)) {
@@ -1018,7 +1064,7 @@
   // Drops draw at 40% scale about the sprite's optical centre, so they read as
   // pickups on the floor rather than as another actor standing on the tile.
   const DROP_SCALE = 0.4;
-  const dropLayer = () => state.drops.map(d =>
+  const dropLayer = () => state.drops.filter(d => inSight(d.c, d.r)).map(d =>
     `<g transform="translate(${d.c * T},${d.r * T}) translate(32,34)
                    scale(${DROP_SCALE}) translate(-32,-34)" opacity=".95">${S[d.sprite]()}</g>` +
     `<circle cx="${d.c * T + 32}" cy="${d.r * T + 44}" r="1.3" fill="var(--gold)" opacity=".65"/>`
@@ -1031,6 +1077,7 @@
     const seen = new Set();
 
     for (const f of liveFoes()) {
+      if (!foeSeen(f)) continue;      // fogged AND dormant: node drops out below
       const key = 'foe' + f.id;
       seen.add(key);
       const pct = f.hp / f.vitae;
@@ -1124,6 +1171,44 @@
               <circle cx="${px}" cy="${py}" r="11" fill="none" stroke="var(--blood)"
                       stroke-width="1" opacity=".45"/>`;
     }).join('');
+  }
+
+  // PMD-style minimap: explored floor, landmarks, seen foes, the circle, and
+  // — when the camera is cropping the floor (phones) — the crop rectangle, so
+  // free-look finally shows WHERE you are looking. Coordinates are in raw tile
+  // units; the viewBox set at boot does all scaling. pointer-events:none in
+  // CSS, so it can never eat a tap. Rebuilt each draw; ~100 rects.
+  const mmEl = document.getElementById('minimap');
+  mmEl.setAttribute('viewBox', `0 0 ${F.cols} ${F.rows}`);
+  mmEl.style.aspectRatio = `${F.cols} / ${F.rows}`;
+  function syncMinimap() {
+    let g = '';
+    for (const [c, r] of F.tiles) {
+      const k = key(c, r);
+      if (!state.seen.has(k)) continue;
+      g += `<rect x="${c + .08}" y="${r + .08}" width=".84" height=".84"
+                  fill="var(--cyan)" opacity="${visible.has(k) ? .34 : .13}"/>`;
+    }
+    for (const p of F.props) {
+      const k = key(p.c, p.r);
+      if (!state.seen.has(k)) continue;
+      if (p.hidden && !state.revealed.has(k)) continue;
+      const col = p.kind === 'stairs' ? 'var(--gold)'
+                : p.kind === 'chest' ? 'var(--shell)' : 'var(--blood)';
+      g += `<rect x="${p.c + .22}" y="${p.r + .22}" width=".56" height=".56"
+                  fill="${col}" opacity=".95"/>`;
+    }
+    for (const f of liveFoes())
+      if (foeSeen(f))
+        g += `<circle cx="${f.c + .5}" cy="${f.r + .5}" r=".33" fill="var(--blood)"/>`;
+    g += `<circle cx="${state.circle.c + .5}" cy="${state.circle.r + .5}" r=".4"
+                  fill="var(--gold)"/>
+          <circle cx="${state.circle.c + .5}" cy="${state.circle.r + .5}" r=".72"
+                  fill="none" stroke="var(--gold)" stroke-width=".14" opacity=".55"/>`;
+    if (cam.w < F.cols * T - 1 || cam.h < F.rows * T - 1)
+      g += `<rect x="${cam.x / T}" y="${cam.y / T}" width="${cam.w / T}" height="${cam.h / T}"
+                  fill="none" stroke="var(--bone)" stroke-width=".12" opacity=".6"/>`;
+    mmEl.innerHTML = g;
   }
 
   // Where a staged step would land, before it is paid for.
@@ -1520,11 +1605,13 @@
   }
 
   function draw() {
+    recomputeFOV();
     updateCamera();
     boardG.innerHTML = floorLayer() + propLayer() + aimLayer()
                      + moveLayer() + intentLayer() + dropLayer() + stagedLayer();
     syncActors();
     overlayG.innerHTML = edgeLayer();
+    syncMinimap();
     stage.style.cursor = state.pending ? 'crosshair' : 'default';
     document.getElementById('turn-value').textContent = String(state.turn).padStart(3, '0');
 
@@ -1691,10 +1778,13 @@
   function hideInspect() { inspectEl.classList.remove('open'); }
 
   function showInspect(c, r) {
+    // Fog: an unseen tile yields nothing, and a fogged dormant foe reads as
+    // bare remembered floor rather than confirming what sits there now.
+    if (!state.seen.has(key(c, r))) return;
     const foe = foeAt(c, r);
     const prop = propAt(c, r);
     let html;
-    if (foe) {
+    if (foe && foeSeen(foe)) {
       const it = previewIntent(foe);
       html = `<b>${foe.kind}</b><span>${foe.type}</span>
               <span>VITAE ${foe.hp}/${foe.vitae}</span>

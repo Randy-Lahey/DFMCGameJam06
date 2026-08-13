@@ -35,6 +35,13 @@
       // stepping out of reach makes an attack whiff — a player who cannot see
       // the intent cannot make that read. Set false to restore blind commits.
       showFoeIntent: false,
+
+      // Fog of war. Sight spreads by BFS through floor tiles (8-way), so it
+      // cannot cross a void — corridors stay blind corners. Terrain you have
+      // seen persists at `memory` opacity. AWAKE foes ignore fog: they have
+      // engaged the circle and are hunting it, so intents, edge markers and
+      // targeting keep working; fog hides dormant foes and unexplored floor.
+      fog: { on: true, sight: 4, memory: 0.3 },
     },
 
     // Party. Order here is display order in the CIRCLE panel and left-to-right
