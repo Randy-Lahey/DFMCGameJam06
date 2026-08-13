@@ -84,7 +84,9 @@
     },
 
     // Foes. `aggro` is Chebyshev distance at which they wake and pursue.
-    // Distances doubled with the 2x floor re-carve (20x12); melee stays range 1.
+    // Operation ranges were divided by 4 so reach sits inside what the circle
+    // can actually see (fog.sight 4). NOTE: aggro was NOT rescaled -- foes
+    // still wake at 10-12, well outside sight.
     // `ai` picks the movement brain in game.js:
     //   flank    -> pursuers each claim their own free tile beside the circle,
     //               enveloping it; they take 2 steps while more than 2 away
@@ -120,19 +122,19 @@
         note: 'Melee sweep. Every enemy touching you.',
       },
       CONCRETIO: {
-        kind: 'hex', targets: 'foe', range: 6,
+        kind: 'hex', targets: 'foe', range: 2,
         pn: 4, atk: 2, cd: 4, fx: 'hex',
         note: 'Weakens one enemy. Permanent.',
       },
       FVLGVR: {
-        kind: 'strike', targets: 'foe', range: 8,
+        kind: 'strike', targets: 'foe', range: 2,
         pn: 3, mult: 1, fx: 'bolt',
-        note: 'Ranged strike. Eight tiles.',
+        note: 'Ranged strike. Two tiles.',
       },
       IMMOLATIO: {
-        kind: 'strike', targets: 'foe', range: 4,
+        kind: 'strike', targets: 'foe', range: 1,
         pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
-        note: 'Heavy hit at four. Burns the caster.',
+        note: 'Heavy hit, adjacent. Burns the caster.',
       },
       // Findable banks. Not in any default loadout; they enter play only as
       // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
@@ -142,9 +144,9 @@
         note: 'All members +2 DEF for 3 turns.',
       },
       VAPOR: {
-        kind: 'splash', targets: 'foe', range: 6,
+        kind: 'splash', targets: 'foe', range: 2,
         pn: 3, mult: 0.8, fx: 'bolt', hitFx: 'strike',
-        note: 'Bolt at 6. Also hits foes beside the target.',
+        note: 'Bolt at 2. Also hits foes beside the target.',
       },
     },
 
