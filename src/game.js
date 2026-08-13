@@ -35,7 +35,7 @@
   const F = window.FLOOR01;
   const B = window.BALANCE;
   const S = window.SPRITES;
-  const T = 64, CH = 9;
+  const T = 64, CH = 0;
 
   const key = (c, r) => c + ',' + r;
   const walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
@@ -1079,10 +1079,10 @@
 
   function backdrop() {
     let g = `<rect width="${F.cols * T}" height="${F.rows * T}" fill="var(--void)"/>`;
-    for (let x = 0; x <= F.cols * T; x += 32)
-      g += `<line x1="${x}" y1="0" x2="${x}" y2="${F.rows * T}" stroke="var(--cyan)" stroke-width=".5" opacity=".05"/>`;
-    for (let y = 0; y <= F.rows * T; y += 32)
-      g += `<line x1="0" y1="${y}" x2="${F.cols * T}" y2="${y}" stroke="var(--cyan)" stroke-width=".5" opacity=".05"/>`;
+    for (let x = 0; x <= F.cols * T; x += T)
+      g += `<line x1="${x}" y1="0" x2="${x}" y2="${F.rows * T}" stroke="var(--cyan)" stroke-width=".5" opacity=".08"/>`;
+    for (let y = 0; y <= F.rows * T; y += T)
+      g += `<line x1="0" y1="${y}" x2="${F.cols * T}" y2="${y}" stroke="var(--cyan)" stroke-width=".5" opacity=".08"/>`;
     for (let i = 0; i < 70; i++)
       g += `<circle cx="${(i * 97) % (F.cols * T)}" cy="${(i * 61) % (F.rows * T)}" r=".9"
                     fill="var(--bone)" opacity="${0.05 + (i % 5) * 0.03}"/>`;
@@ -1099,8 +1099,8 @@
                        stroke-width=".9" stroke-dasharray="5 8" opacity=".22"/>`;
     }
     const tile =
-      `<polygon points="${plate(c, r, 3)}" fill="#0A1420" stroke="var(--cyan)" stroke-width="1.1" opacity=".85"/>
-       <polygon points="${plate(c, r, 11)}" fill="none" stroke="var(--cyan)" stroke-width=".5" opacity=".16"/>`;
+      `<polygon points="${plate(c, r, 3)}" fill="#071019" stroke="var(--cyan)" stroke-width=".7" opacity=".75"/>
+       <polygon points="${plate(c, r, 8)}" fill="none" stroke="var(--cyan)" stroke-width=".5" opacity=".16"/>`;
     return visible.has(k) ? tile : `<g opacity="${B.ui.fog.memory}">${tile}</g>`;
   }).join('');
 
