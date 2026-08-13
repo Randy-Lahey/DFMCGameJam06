@@ -101,6 +101,7 @@
     pending: null,                 // { op, member } while aiming
     hover: null,                   // { c, r } under the cursor
     staged: null,                  // { dc, dr } step awaiting CONFIRM (touch only)
+    fluxPick: null,                // { who, slot, bay } inline picker on an empty bay (inv)
     stepsUsed: 0,                  // tiles walked this round, of combat.stepsPerRound
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
@@ -2062,7 +2063,7 @@
     invEl.classList.add('show');
   }
   function closeInv() {
-    state.modal = null; state.invSel = null;
+    state.modal = null; state.invSel = null; state.fluxPick = null;
     invEl.classList.remove('show');
   }
 
@@ -2199,6 +2200,25 @@
     ];
   }
 
+  // Inline picker under a tapped empty bay: every distinct flux in the
+  // satchel as one chip, one-per-bank duplicates barred, plus a close X.
+  // Touch-native seating; the satchel-select route stays as-is beside it.
+  function fluxPicker(sl) {
+    const counts = {};
+    state.bag.items.forEach(it => {
+      if (it.kind === 'FLUX') counts[it.flux] = (counts[it.flux] || 0) + 1; });
+    const chips = Object.entries(counts).map(([id, n]) => {
+      const dup = sl.fluxes.includes(id);
+      return `<div class="ifp-chip${dup ? ' dup' : ''}${id === 'FVLMINANS' ? ' blood' : ''}"
+                   role="button" tabindex="0"${dup ? '' : ` data-fp-flux="${id}"`}
+                   aria-label="SEAT ${id}">${fluxGlyph(id)}<span>${id}</span>${
+                     dup ? '<em>IN BANK</em>' : n > 1 ? `<em>\u00d7${n}</em>` : ''}</div>`;
+    }).join('');
+    return `<div class="ifpick">${chips}
+        <div class="ifp-chip ifp-x" role="button" tabindex="0" data-fp-close="1"
+             aria-label="CLOSE PICKER">\u00d7</div></div>`;
+  }
+
   function invShell() {
     invEl.innerHTML = `<div class="invbox" role="dialog" aria-label="INVENTORY">
         <div class="invbg">${INV_BG}</div><div class="invmain"></div></div>`;
@@ -2219,13 +2239,19 @@
         // already running that flux. Duplicates across different banks stay
         // legal — stacking the same rider inside one bank is what's out.
         const dup = sel && sel.kind === 'FLUX' && sl.fluxes.includes(sel.flux);
-        const bays = sl.fluxes.map((f, fi) => f
+        const fp = state.fluxPick;
+        const bays = sl.fluxes.map((f, fi) => {
+          const cell = f
           ? `<div class="ibay seated${f === 'FVLMINANS' ? ' blood' : ''}"
                   data-who="${who}" data-slot="${si}" data-bay="${fi}"
                   role="button" tabindex="0" aria-label="VNSEAT ${f}"
                   >${fluxGlyph(f)}${f}<span class="ipull">\u00d7</span></div>`
           : `<div class="ibay empty${sel && sel.kind === 'FLUX' && !dup ? ' elig' : ''}"
-                  data-who="${who}" data-slot="${si}" data-bay="${fi}">\u2014 BAY \u2014</div>`).join('');
+                  data-who="${who}" data-slot="${si}" data-bay="${fi}"
+                  role="button" tabindex="0" aria-label="SEAT FLVX \u00b7 BAY ${ROMAN[fi]}">\u2014 BAY \u2014</div>`;
+          return fp && fp.who === who && fp.slot === si && fp.bay === fi
+            ? cell + fluxPicker(sl) : cell;
+        }).join('');
         const lamps = sl.fluxes.map(f =>
           `<span class="ilamp${f ? (f === 'FVLMINANS' ? ' blood' : '') : ' off'}"></span>
            <span class="iline"></span>`).join('');
@@ -2351,6 +2377,33 @@
 
   invEl.addEventListener('click', e => {
     if (e.target.closest('#inv-close')) { closeInv(); draw(); return; }
+
+    // Picker branches sit first so a chip tap never falls through to the
+    // bay handlers underneath it.
+    const fpChip = e.target.closest('[data-fp-flux]');
+    if (fpChip && state.fluxPick) {
+      const { who, slot, bay } = state.fluxPick;
+      const flux = fpChip.dataset.fpFlux;
+      const i = state.bag.items.findIndex(it => it.kind === 'FLUX' && it.flux === flux);
+      state.fluxPick = null;
+      if (i >= 0 && payRefit(who)) {
+        state.loadout[who][slot].fluxes[bay] = flux;
+        state.bag.items.splice(i, 1); state.invSel = null;
+        log(flux + ' SEATED.', 'good');
+      }
+      renderFanChips(); renderInv(); draw(); return;
+    }
+    if (e.target.closest('[data-fp-close]')) {
+      state.fluxPick = null; renderInv(); return;
+    }
+    // Anything else inside the picker box (a barred dup chip, the padding)
+    // is inert: the picker stays open.
+    if (e.target.closest('.ifpick')) return;
+    // Any other tap dismisses an open picker; branches below re-render on
+    // their own, this flag covers the paths that return without one.
+    const hadPick = !!state.fluxPick;
+    state.fluxPick = null;
+
     const cell = e.target.closest('.icell[data-i]');
     if (cell) {
       const i = +cell.dataset.i;
@@ -2375,7 +2428,20 @@
     }
 
     const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
-    if (!sel) return;
+
+    // Empty bay with no flux armed: open the inline picker on that bay.
+    const open = e.target.closest('.ibay.empty');
+    if (open && !(sel && sel.kind === 'FLUX')) {
+      if (!state.bag.items.some(it => it.kind === 'FLUX')) {
+        log('NO FLVX CELLS IN SATCHEL.', 'bad');
+        if (hadPick) renderInv();
+        return;
+      }
+      state.fluxPick = { who: open.dataset.who,
+                         slot: +open.dataset.slot, bay: +open.dataset.bay };
+      renderInv(); return;
+    }
+    if (!sel) { if (hadPick) renderInv(); return; }
 
     const bay = e.target.closest('.ibay.empty.elig');
     if (bay && sel.kind === 'FLUX') {
@@ -2400,6 +2466,7 @@
       log(old.bank + ' VNSEATED \u2014 ' + sl.bank + ' SEATED.', 'good');
       renderFanChips(); renderInv(); draw(); return;
     }
+    if (hadPick) renderInv();
   });
 
   // Two ways in. The HUD line is the desktop-native one — it sits right next
