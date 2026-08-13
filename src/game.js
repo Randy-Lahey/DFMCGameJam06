@@ -99,6 +99,7 @@
     pending: null,                 // { op, member } while aiming
     hover: null,                   // { c, r } under the cursor
     staged: null,                  // { dc, dr } step awaiting CONFIRM (touch only)
+    stepsUsed: 0,                  // tiles walked this round, of combat.stepsPerRound
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
     cd: {},                        // { opName: rounds remaining }
@@ -297,7 +298,7 @@
 
   // ------------------------------------------------------------- foe AI
 
-  function foeIntent(foe) {
+  function foeIntent(foe, claimed) {
     if (foe.hp <= 0) return null;
     const target = state.circle;
     if (!foe.awake && cheb(foe, target) <= foe.aggro) {
@@ -305,8 +306,61 @@
       log(`${foe.kind} WAKES.`, 'bad');
     }
     if (!foe.awake) return { kind: 'idle' };
+    if (foe.ai === 'skirmish') return skirmishIntent(foe, claimed);
+    // flank (default): claim a free tile beside the circle and path to it.
+    // `chase: true` marks pursuit -- resolveRound grants chasers a second
+    // step while they are still more than 2 tiles out.
     if (adjacent(foe, target)) return { kind: 'attack' };
-    return { kind: 'step', ...stepToward(foe, target) };
+    return { kind: 'step', chase: true, ...stepToward(foe, claimTile(foe, claimed), true) };
+  }
+
+  // FLANK: each pursuer claims its own free orthogonal tile beside the circle,
+  // so foes envelop instead of queueing behind one another. `claimed` is a
+  // per-round Set so no two foes chase the same tile.
+  function claimTile(foe, claimed) {
+    const opts = [[0, -1], [-1, 0], [0, 1], [1, 0]]
+      .map(([dc, dr]) => ({ c: state.circle.c + dc, r: state.circle.r + dr }))
+      .filter(t => walkable.has(key(t.c, t.r)) && !claimed.has(key(t.c, t.r)))
+      .filter(t => { const o = foeAt(t.c, t.r); return !o || o === foe; })
+      .sort((a, b) => cheb(foe, a) - cheb(foe, b));
+    if (!opts.length) return state.circle;
+    claimed.add(key(opts[0].c, opts[0].r));
+    return opts[0];
+  }
+
+  // SKIRMISH: hangs back until the circle is pinned by another foe, commits
+  // then; withdraws when badly hurt; fights only when cornered.
+  function skirmishIntent(foe, claimed) {
+    const t = state.circle;
+    if (foe.hp < foe.vitae * 0.5) {
+      const away = stepAway(foe);
+      if (away) return { kind: 'step', ...away };
+      return adjacent(foe, t) ? { kind: 'attack' } : { kind: 'idle' };
+    }
+    const pinned = state.foes.some(o =>
+      o !== foe && o.hp > 0 && o.awake && adjacent(o, t));
+    if (pinned) {
+      if (adjacent(foe, t)) return { kind: 'attack' };
+      return { kind: 'step', chase: true, ...stepToward(foe, claimTile(foe, claimed), true) };
+    }
+    if (cheb(foe, t) < 3) {
+      const away = stepAway(foe);
+      if (away) return { kind: 'step', ...away };
+      if (adjacent(foe, t)) return { kind: 'attack' };   // cornered
+    }
+    return { kind: 'idle' };
+  }
+
+  // Step that opens distance from the circle. Null when boxed in.
+  function stepAway(foe) {
+    const t = state.circle;
+    const opts = [[0, -1], [-1, 0], [0, 1], [1, 0]]
+      .map(([dc, dr]) => ({ dc, dr, c: foe.c + dc, r: foe.r + dr }))
+      .filter(o => walkable.has(key(o.c, o.r)) && !foeAt(o.c, o.r)
+                && !(o.c === t.c && o.r === t.r)
+                && cheb(o, t) > cheb(foe, t))
+      .sort((a, b) => cheb(b, t) - cheb(a, t));
+    return opts.length ? { dc: opts[0].dc, dr: opts[0].dr } : null;
   }
 
   // Display only. foeIntent() wakes foes and writes to the log, so it must never
@@ -319,7 +373,7 @@
     return { kind: 'step', ...stepToward(foe, state.circle) };
   }
 
-  function stepToward(foe, t) {
+  function stepToward(foe, t, enterOk) {
     const dc = Math.sign(t.c - foe.c), dr = Math.sign(t.r - foe.r);
     const tries = Math.abs(t.c - foe.c) >= Math.abs(t.r - foe.r)
       ? [[dc, 0], [0, dr]] : [[0, dr], [dc, 0]];
@@ -327,7 +381,8 @@
       if (!mc && !mr) continue;
       const nc = foe.c + mc, nr = foe.r + mr;
       if (!walkable.has(key(nc, nr))) continue;
-      if (nc === t.c && nr === t.r) continue;
+      if (!enterOk && nc === t.c && nr === t.r) continue;
+      if (nc === state.circle.c && nr === state.circle.r) continue;
       if (foeAt(nc, nr)) continue;
       return { dc: mc, dr: mr };
     }
@@ -445,18 +500,17 @@
   }
 
   function resolveRound(move) {
-    const foeIntents = state.foes.map(f => ({ foe: f, intent: foeIntent(f) }));
+    const claimed = new Set();
+    const foeIntents = state.foes.map(f => ({ foe: f, intent: foeIntent(f, claimed) }));
     const foesStep = foeIntents.some(x => x.intent && x.intent.kind === 'step' && x.foe.hp > 0);
     const partyActs = state.queued.length > 0;
 
     runPhases([
       // --- MOVEMENT ------------------------------------------------------
+      // Steps are applied the moment they are input (moveInput), so foes read
+      // the circle's final position -- there is no whiff window to dodge into,
+      // which is coherent now that intents are no longer telegraphed.
       move && (() => {
-        if (move.kind === 'step') {
-          state.circle.c += move.dc; state.circle.r += move.dr;
-          onEnter();
-          collectDrops();
-        }
         if (move.kind === 'hold') log('THE CIRCLE HOLDS.');
       }),
 
@@ -467,6 +521,15 @@
           if (nc === state.circle.c && nr === state.circle.r) continue;
           if (foeAt(nc, nr)) continue;
           foe.c = nc; foe.r = nr;
+        }
+        // Chasers still more than 2 tiles out take a second step: closing
+        // speed 2 matches the circle's stepsPerRound, so pursuit cannot be
+        // kited forever. Skirmish retreats stay speed 1 -- catchable.
+        for (const { foe, intent } of foeIntents) {
+          if (!intent || !intent.chase || foe.hp <= 0) continue;
+          if (cheb(foe, state.circle) <= 2) continue;
+          const s = stepToward(foe, state.circle);
+          foe.c += s.dc; foe.r += s.dr;
         }
       }),
 
@@ -492,7 +555,7 @@
         state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
         state.wards = state.wards.filter(w => w.left > 0);
         for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
-        state.turn++;
+        state.turn++; state.stepsUsed = 0;
         state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
         state.sel = null; state.staged = null; state.hover = null;
         view.free = false;                       // snap the camera back to the party
@@ -750,7 +813,7 @@
       state.pending = null; state.aiming = null;
       resolveRound(null);
     } else {
-      resolveRound({ kind: 'hold' });
+      resolveRound({ kind: state.stepsUsed ? 'moved' : 'hold' });
     }
   }
 
@@ -760,7 +823,15 @@
     const nc = state.circle.c + dc, nr = state.circle.r + dr;
     if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
     if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
-    resolveRound({ kind: 'step', dc, dr });
+    // The step lands NOW -- hazards and drops fire per tile -- and the round
+    // resolves only when the step allowance is spent. With one step banked
+    // the player may still open the act menu: move-then-act.
+    state.circle.c = nc; state.circle.r = nr;
+    state.stepsUsed++;
+    onEnter();
+    collectDrops();
+    if (living().length === 0) { resolveRound(null); return; }
+    if (state.stepsUsed >= B.combat.stepsPerRound) resolveRound({ kind: 'moved' });
   }
 
   // ------------------------------------------------------------- render
@@ -1505,6 +1576,10 @@
       prompt.textContent = isCoarse()
         ? 'SURROUNDED \u2014 HOLD GROUND, OR TAP A NAMEPLATE TO ACT'
         : 'SURROUNDED \u2014 SPACE HOLDS, TAP A NAMEPLATE TO ACT';
+    else if (state.stepsUsed > 0)
+      prompt.textContent = isCoarse()
+        ? 'ONE STEP LEFT \u2014 TAP A TILE OR A NAMEPLATE \u00b7 HOLD ENDS'
+        : 'ONE STEP LEFT \u2014 WASD, E ACTS, SPACE HOLDS';
     else prompt.textContent = isCoarse()
       ? 'TAP A TILE TO STEP \u2014 TAP A NAMEPLATE TO ACT'
       : 'WASD OR TAP MOVES \u2014 TAP A NAMEPLATE OR E TO ACT';

@@ -19,6 +19,7 @@
 
     combat: {
       variance: 1,      // +/- this much on every damage roll
+      stepsPerRound: 2, // tiles the circle may walk before foes respond
       minDamage: 1,     // a hit always does something
       pneumaRegen: 1,   // per living member, per round, move or act
     },
@@ -33,7 +34,7 @@
       // The turn model's whole point is that intents lock BEFORE movement, so
       // stepping out of reach makes an attack whiff — a player who cannot see
       // the intent cannot make that read. Set false to restore blind commits.
-      showFoeIntent: true,
+      showFoeIntent: false,
     },
 
     // Party. Order here is display order in the CIRCLE panel and left-to-right
@@ -76,9 +77,15 @@
     },
 
     // Foes. `aggro` is Chebyshev distance at which they wake and pursue.
+    // Distances doubled with the 2x floor re-carve (20x12); melee stays range 1.
+    // `ai` picks the movement brain in game.js:
+    //   flank    -> pursuers each claim their own free tile beside the circle,
+    //               enveloping it; they take 2 steps while more than 2 away
+    //   skirmish -> hangs back ~3 tiles, commits when another foe pins the
+    //               circle, withdraws below half VITAE, fights when cornered
     foes: {
-      TESTA:   { vitae: 14, atk: 4, def: 2, aggro: 5, type: 'QLIPHOTH', sprite: 'testa' },
-      SILIQVA: { vitae: 10, atk: 6, def: 0, aggro: 6, type: 'QLIPHOTH', sprite: 'siliqva' },
+      TESTA:   { vitae: 14, atk: 4, def: 2, aggro: 10, ai: 'flank',    type: 'QLIPHOTH', sprite: 'testa' },
+      SILIQVA: { vitae: 10, atk: 6, def: 0, aggro: 12, ai: 'skirmish', type: 'QLIPHOTH', sprite: 'siliqva' },
     },
 
     // OPERATIONS.
@@ -106,19 +113,19 @@
         note: 'Melee sweep. Every enemy touching you.',
       },
       CONCRETIO: {
-        kind: 'hex', targets: 'foe', range: 3,
+        kind: 'hex', targets: 'foe', range: 6,
         pn: 4, atk: 2, cd: 4, fx: 'hex',
         note: 'Weakens one enemy. Permanent.',
       },
       FVLGVR: {
-        kind: 'strike', targets: 'foe', range: 4,
+        kind: 'strike', targets: 'foe', range: 8,
         pn: 3, mult: 1, fx: 'bolt',
-        note: 'Ranged strike. Four tiles.',
+        note: 'Ranged strike. Eight tiles.',
       },
       IMMOLATIO: {
-        kind: 'strike', targets: 'foe', range: 2,
+        kind: 'strike', targets: 'foe', range: 4,
         pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
-        note: 'Heavy hit at two tiles. Burns the caster.',
+        note: 'Heavy hit at four. Burns the caster.',
       },
       // Findable banks. Not in any default loadout; they enter play only as
       // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
@@ -128,9 +135,9 @@
         note: 'All members +2 DEF for 3 turns.',
       },
       VAPOR: {
-        kind: 'splash', targets: 'foe', range: 3,
+        kind: 'splash', targets: 'foe', range: 6,
         pn: 3, mult: 0.8, fx: 'bolt', hitFx: 'strike',
-        note: 'Bolt at 3. Also hits foes beside the target.',
+        note: 'Bolt at 6. Also hits foes beside the target.',
       },
     },
 
