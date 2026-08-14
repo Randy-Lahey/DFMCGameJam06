@@ -1983,18 +1983,29 @@
   // move rounds too, because holding the ground is a real play and used to be
   // reachable only by tapping your own token (or SPACE).
   const confirmEl = document.getElementById('confirm');
+  const appipsEl = document.getElementById('appips');
   function syncConfirm() {
     const show = !finished() && !state.modal && !state.pending;
     confirmEl.classList.toggle('open', show);
+    // Pips live and die with the act round: one plate per action in the
+    // shared pool, hollowed as it is spent. Undo re-fills them for free.
+    const pips = show && state.mode === 'act';
+    appipsEl.classList.toggle('open', pips);
+    if (pips) {
+      const total = B.combat.actionsPerRound, left = actionsLeft();
+      appipsEl.innerHTML = Array.from({ length: total },
+        (_, i) => `<i${i < left ? '' : ' class="spent"'}></i>`).join('');
+      appipsEl.setAttribute('aria-label', left + ' OF ' + total + ' ACTIONS REMAINING');
+    }
     if (!show) return;
 
     if (state.mode === 'act') {
-      const idle = pendingMembers().length, stuck = isStuck();
-      confirmEl.classList.toggle('ready', idle === 0 || stuck);
+      const left = actionsLeft(), stuck = isStuck();
+      confirmEl.classList.toggle('ready', left === 0 || stuck);
       confirmEl.textContent =
-        stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
-        : idle ? 'COMMIT ROUND \u00b7 ' + idle + ' LEFT'
-        : 'COMMIT ROUND';
+        left === 0 ? 'COMMIT ROUND'
+        : stuck ? 'NOTHING TO DO \u2014 COMMIT ROUND'
+        : 'COMMIT ROUND \u00b7 ' + left + ' LEFT';
       return;
     }
     confirmEl.classList.toggle('ready', !!state.staged);
@@ -2500,6 +2511,11 @@
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
                   canAct, actionsLeft };
+
+  // The controls screen quotes the shared-pool size. Injected from the bible
+  // at boot so the modal cannot drift from data/balance.js.
+  const ctlActions = document.getElementById('ctl-actions');
+  if (ctlActions) ctlActions.textContent = B.combat.actionsPerRound;
 
   buildRoster();
   buildFan();

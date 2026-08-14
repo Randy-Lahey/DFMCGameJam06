@@ -469,6 +469,21 @@
     padding:0 52px;pointer-events:none;
   }
   #actionbar button{pointer-events:auto;white-space:nowrap}
+  /* ---- action pips: the circle's shared pool, one plate per action ----
+     Filled gold = still to spend, hollow = spent. Rendered only in act mode
+     (display toggled from syncConfirm, same lifecycle as COMMIT). Diamonds
+     are 45deg-rotated squares so no glyph/font dependency. */
+  #appips{display:none;gap:7px;align-items:center;pointer-events:none}
+  #appips.open{display:flex}
+  #appips i{
+    width:9px;height:9px;transform:rotate(45deg);
+    background:var(--gold);border:1px solid var(--gold);
+    box-shadow:0 0 6px rgba(227,179,71,.45);
+  }
+  #appips i.spent{
+    background:transparent;border-color:var(--edge-i);box-shadow:none;
+    opacity:.55;
+  }
   #confirm{
     min-height:44px;padding:0 20px;
     font:inherit;letter-spacing:.2em;font-size:10.5px;
@@ -929,6 +944,7 @@
       <div id="inspect"></div>
       <div id="actionbar">
         <div id="armed" role="status" aria-live="polite"></div>
+        <div id="appips" role="status" aria-label="ACTIONS REMAINING"></div>
         <button id="cancel"></button>
         <button id="confirm"></button>
       </div>
@@ -965,7 +981,9 @@
   <div class="dialog ctlbox">
     <div class="dlg-eyebrow">DAEMONWARE &middot; FLOOR 01</div>
     <div class="ctl-note">
-      EACH ROUND, EVERY MEMBER EITHER MOVES OR ACTS &mdash; NEVER BOTH.
+      EACH ROUND THE CIRCLE MOVES OR ACTS &mdash; NEVER BOTH.
+      THE CIRCLE SHARES <span id="ctl-actions">2</span> ACTIONS A ROUND ACROSS
+      ITS MEMBERS: WHO ACTS IS THE DECISION.
       ENEMIES LOCK THEIR INTENT BEFORE YOU MOVE.
     </div>
 
@@ -1023,10 +1041,10 @@
 </div>
 
 <div id="inv" aria-hidden="false"></div>
-<script src="data/floor01.js?v=a2b27d09"></script>
-<script src="data/balance.js?v=a2b27d09"></script>
-<script src="data/fxsheets.js?v=a2b27d09"></script>
-<script src="src/sprites.js?v=a2b27d09"></script>
-<script src="src/game.js?v=a2b27d09"></script>
+<script src="data/floor01.js?v=8cc9baef"></script>
+<script src="data/balance.js?v=8cc9baef"></script>
+<script src="data/fxsheets.js?v=8cc9baef"></script>
+<script src="src/sprites.js?v=8cc9baef"></script>
+<script src="src/game.js?v=8cc9baef"></script>
 </body>
 </html>
