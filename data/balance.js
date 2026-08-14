@@ -23,6 +23,11 @@
     combat: {
       variance: 1,      // +/- this much on every damage roll
       stepsPerRound: 2, // tiles the circle may walk before foes respond
+      // Operations the WHOLE CIRCLE may queue per round, shared across
+      // members. Three stand, two act: who sits out is the decision. In-combat
+      // refits spend from this same pool. Movement is NOT in the pool. Set to
+      // 3 to restore one-act-per-member.
+      actionsPerRound: 2,
       minDamage: 1,     // a hit always does something
       pneumaRegen: 1,   // per living member, per round, move or act
     },

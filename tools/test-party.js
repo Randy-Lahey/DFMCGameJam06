@@ -145,5 +145,25 @@ if (dFar > op.range)
 else
   ok(true, '(geometry: trailing member also in range; skip)');
 
+// ------------------------------------------------------------- action pool
+// The circle shares combat.actionsPerRound actions per round: with three
+// standing and two spent, the third can no longer act; refunding one (undo
+// pops state.acted) reopens the gate.
+const { canAct, actionsLeft } = window.__DW;
+state.foes.forEach(f => { f.hp = 0; });
+M.forEach(m => { m.hp = m.vitae; });
+state.acted = [];
+ok(actionsLeft() === B.combat.actionsPerRound,
+   'fresh round: full shared pool');
+ok(M.every(m => canAct(m)), 'everyone may act while the pool is open');
+state.acted = [M[0].name, M[1].name];
+ok(actionsLeft() === 0, 'two spent: pool empty');
+ok(!canAct(M[2]), 'third member locked out by the SHARED pool, not by acting');
+state.acted = [M[0].name];
+ok(actionsLeft() === 1 && canAct(M[2]),
+   'refunding an action reopens the gate');
+ok(!canAct(M[0]), 'a spent member stays spent while the pool is open');
+state.acted = [];
+
 console.log(`test-party: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

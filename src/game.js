@@ -10,7 +10,10 @@
 //         the member ahead of them vacates (Mystery Dungeon snake). Stepping
 //         into a follower SWAPS with it. WASD NEVER attacks.
 //   ACT:  E opens the fan; 1-5 pick any op from any member who has not
-//         yet acted, in any order. SPACE commits the round early.
+//         yet acted, in any order — but the CIRCLE shares
+//         combat.actionsPerRound (2) actions per round, so with three
+//         standing, someone sits out. Who acts is the decision.
+//         SPACE commits the round early.
 // Either way the round then resolves in phases:
 //   1. every foe commits an intent, read off PRE-MOVE positions
 //   2. MOVEMENT phase   — circle steps (move rounds), then foes step
@@ -153,7 +156,12 @@
   const foeTarget = f => living().slice()
     .sort((a, b) => cheb(f, a) - cheb(f, b) || a.hp - b.hp)[0];
   const hasActed = m => state.acted.includes(m.name);
-  const canAct = m => m.hp > 0 && !hasActed(m);
+  // The circle shares combat.actionsPerRound actions per round. `acted` holds
+  // every member who has spent one (queued op or in-combat refit), so its
+  // length IS the spend; undoQueued pops it, refunding the pool for free.
+  const actionsLeft = () =>
+    Math.max(0, B.combat.actionsPerRound - state.acted.length);
+  const canAct = m => m.hp > 0 && !hasActed(m) && actionsLeft() > 0;
   const pendingMembers = () => living().filter(m => !hasActed(m));
 
   // -------------------------------------------------------------- fog of war
@@ -763,7 +771,7 @@
     state.pending = null;
     state.aiming = null;
     state.hover = null;              // mouseleave is not reliable on touch
-    const next = pendingMembers()[0];
+    const next = pendingMembers().find(canAct);   // null once the pool is spent
     state.sel = next ? next.name : null;
   }
 
@@ -788,7 +796,11 @@
     const entry = allOps()[slot];
     if (!entry) return;
     const m = byName(entry.owner);
-    if (!m || !canAct(m)) return;
+    if (!m || m.hp <= 0 || hasActed(m)) return;
+    if (!canAct(m)) {   // alive, unspent member -> the shared pool is empty
+      warn('THE CIRCLE HAS SPENT ITS ' + B.combat.actionsPerRound + ' ACTIONS.');
+      return;
+    }
     const op = entry.op;
     if (state.mode === 'move') state.mode = 'act';
     state.sel = m.name;
@@ -1748,12 +1760,16 @@
       prompt.textContent = state.pending.member.name + (isCoarse()
         ? ' \u2014 TAP AN ENEMY IN THE WASH \u00b7 CANCEL BACKS OUT'
         : ' \u2014 CLICK AN ENEMY \u00b7 ENTER HITS THE NEAREST \u00b7 ESC CANCELS');
+    else if (state.mode === 'act' && actionsLeft() === 0)
+      prompt.textContent = 'ALL ' + B.combat.actionsPerRound +
+        ' ACTIONS SPENT \u2014 COMMIT THE ROUND';
     else if (isStuck())
       prompt.textContent = 'NO OPERATION AVAILABLE \u2014 COMMIT THE ROUND';
     else if (state.mode === 'act')
-      prompt.textContent = isCoarse()
+      prompt.textContent = 'ACTIONS ' + state.acted.length + '/' +
+        B.combat.actionsPerRound + ' \u2014 ' + (isCoarse()
         ? 'TAP A NAMEPLATE \u2014 COMMIT ENDS THE ROUND'
-        : 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND';
+        : 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND');
     else if (state.staged)
       prompt.textContent = 'CONFIRM THE STEP, OR TAP ANOTHER TILE';
     else if (!canStep())
@@ -2048,6 +2064,10 @@
     if (!aggroLive()) return true;
     if (state.acted.includes(who)) {
       log(who + ' HAS ALREADY ACTED \u2014 REFIT NEXT ROVND.', 'bad');
+      return false;
+    }
+    if (actionsLeft() === 0) {
+      log('NO ACTION LEFT IN THE ROVND TO REFIT ' + who + '.', 'bad');
       return false;
     }
     state.queued = state.queued.filter(q => q.member.name !== who);
@@ -2478,7 +2498,8 @@
 
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
-                  lead, memberAt, foeTarget, validTargets, resolveRound };
+                  lead, memberAt, foeTarget, validTargets, resolveRound,
+                  canAct, actionsLeft };
 
   buildRoster();
   buildFan();
