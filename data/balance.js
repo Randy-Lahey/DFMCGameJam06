@@ -4,15 +4,18 @@
 // Damage model (deliberately trivial for the slice):
 //     dmg = max(minDamage, atk - def + rand(-variance, +variance))
 //
-// Derived, at current values:
-//     CALX     -> TESTA    2 +/-1   => 7 hits   (ABRASIO, but hits up to 8)
-//     CALX     -> SILIQVA  4 +/-1   => 3 hits
+// Derived, at current values (lethality pass: foes fall in 1-3, fell in 3-9):
+//     OPERATOR -> TESTA    5 +/-1   => 2 hits to sever
+//     OPERATOR -> SILIQVA  7 +/-1   => 1 hit
+//     CALX     -> TESTA    1 (min)  => 4-5 hits (CALX wards, others sever)
+//     CALX     -> SILIQVA  3 +/-1   => 2 hits
+//     CINIS    -> TESTA    4 +/-1   => 2 hits
 //     SPIKES   -> OPERATOR 7   CALX 8   CINIS 5   (30% of max, each entry)
-//     OPERATOR -> TESTA    5 +/-1   =>  3 hits to sever
-//     OPERATOR -> SILIQVA  7 +/-1   =>  2 hits to sever
-//     TESTA    -> OPERATOR 2 +/-1   => 12 hits
-//     TESTA    -> CALX     1 (min)  => 26 hits   (CALX is the wall)
-//     SILIQVA  -> CINIS    5 +/-1   =>  4 hits   (CINIS is glass)
+//     TESTA    -> OPERATOR 5 +/-1   => 5 hits
+//     TESTA    -> CALX     3 +/-1   => 9 hits   (CALX is still the wall)
+//     TESTA    -> CINIS    6 +/-1   => 3 hits   (CINIS is glass)
+//     SILIQVA  -> OPERATOR 6 +/-1   => 4 hits
+//     SILIQVA  -> CINIS    7 +/-1   => 3 hits
 
 (function () {
   window.BALANCE = {
@@ -34,7 +37,7 @@
       // The turn model's whole point is that intents lock BEFORE movement, so
       // stepping out of reach makes an attack whiff — a player who cannot see
       // the intent cannot make that read. Set false to restore blind commits.
-      showFoeIntent: false,
+      showFoeIntent: true,
 
       // Fog of war. Sight spreads by BFS through floor tiles (8-way), so it
       // cannot cross a void — corridors stay blind corners. Terrain you have
@@ -85,16 +88,18 @@
 
     // Foes. `aggro` is Chebyshev distance at which they wake and pursue.
     // Operation ranges were divided by 4 so reach sits inside what the circle
-    // can actually see (fog.sight 4). NOTE: aggro was NOT rescaled -- foes
-    // still wake at 10-12, well outside sight.
+    // can actually see (fog.sight 4). Aggro is now rescaled to match: TESTA
+    // wakes at sight+1, SILIQVA one further out (it hangs back anyway, so a
+    // whiff of ambush survives). Lethality pass: shallow foe VITAE, hard foe
+    // ATK -- fights are short and every swing matters, both directions.
     // `ai` picks the movement brain in game.js:
     //   flank    -> pursuers each claim their own free tile beside the circle,
     //               enveloping it; they take 2 steps while more than 2 away
     //   skirmish -> hangs back ~3 tiles, commits when another foe pins the
     //               circle, withdraws below half VITAE, fights when cornered
     foes: {
-      TESTA:   { vitae: 14, atk: 4, def: 2, aggro: 10, ai: 'flank',    type: 'QLIPHOTH', sprite: 'testa' },
-      SILIQVA: { vitae: 10, atk: 6, def: 0, aggro: 12, ai: 'skirmish', type: 'QLIPHOTH', sprite: 'siliqva' },
+      TESTA:   { vitae: 6, atk: 7, def: 2, aggro: 5, ai: 'flank',    type: 'QLIPHOTH', sprite: 'testa' },
+      SILIQVA: { vitae: 4, atk: 8, def: 0, aggro: 6, ai: 'skirmish', type: 'QLIPHOTH', sprite: 'siliqva' },
     },
 
     // OPERATIONS.

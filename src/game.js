@@ -212,9 +212,9 @@
   }
   const inSight = (c, r) => visible.has(key(c, r));
   // A foe is on screen only while the circle can actually see its tile. Waking
-  // does NOT reveal it: aggro is 10-12 against a sight of 4, so an "awake foes
-  // pierce fog" rule meant every foe lit up two to three times further out than
-  // the circle can see, and enemies were effectively never fogged at all.
+  // does NOT reveal it: aggro (5-6) sits just past sight (4), and when aggro
+  // was 10-12 an "awake foes pierce fog" rule meant every foe lit up far
+  // beyond what the circle can see, so enemies were effectively never fogged.
   const foeSeen = f => inSight(f.c, f.r);
   recomputeFOV();
   const wardBonus = () => state.wards.reduce((s, w) => s + w.def, 0);
