@@ -1861,6 +1861,9 @@
 
   // ------------------------------------------------------------- foe AI
 
+  // The side-effecting half: wake check and its log line. This is the ONLY
+  // part the render path must never touch, which is why it is split from the
+  // decision proper -- see decide().
   function foeIntent(foe, claimed) {
     if (foe.hp <= 0) return null;
     if (!foe.awake && living().some(m => cheb(foe, m) <= foe.aggro)) {
@@ -1868,6 +1871,19 @@
       log(`${foe.kind} WAKES.`, 'bad');
     }
     if (!foe.awake) return { kind: 'idle' };
+    return decide(foe, claimed);
+  }
+
+  // The brain proper: pure. No waking, no logging, no writes of any kind, so
+  // draw() can call it. previewIntent() runs THIS, which is the whole point:
+  // the indicator and the resolution now come out of one body of code.
+  //
+  // They used to be two. previewIntent held its own three-line heuristic
+  // ("attack if adjacent, else walk straight at the nearest member") and it
+  // drifted badly from what actually resolves: skirmishers were drawn
+  // advancing while they idled or withdrew, and flankers were drawn stepping
+  // at the circle rather than at the side tile they had claimed.
+  function decide(foe, claimed) {
     if (foe.ai === 'skirmish') return skirmishIntent(foe, claimed);
     // flank (default): claim a free tile beside the hunted member and path to
     // it. `chase: true` marks pursuit -- resolveRound grants chasers a second
@@ -1926,15 +1942,31 @@
     return opts.length ? { dc: opts[0].dc, dr: opts[0].dr } : null;
   }
 
-  // Display only. foeIntent() wakes foes and writes to the log, so it must never
-  // be called from the render path. This reads the same rules with no side
-  // effects, and only for foes that are already awake — waking one is still a
-  // surprise. Gated by BALANCE.ui.showFoeIntent.
-  function previewIntent(foe) {
+  // Display only, and only for foes that are already awake — waking one is
+  // still a surprise. Gated by BALANCE.ui.showFoeIntent.
+  //
+  // `claimed` must be ONE Set shared across a whole render pass, walked in
+  // state.foes order, exactly as resolveRound does it: claimTile() hands out
+  // flank tiles first-come, so a fresh Set per foe would show every pursuer
+  // converging on the same tile instead of enveloping.
+  function previewIntent(foe, claimed) {
     if (foe.hp <= 0 || !foe.awake) return null;
+    const it = decide(foe, claimed || new Set());
+    if (!it || it.kind !== 'attack') return it;
+    // strikeMember() rolls at random among everyone standing beside the foe,
+    // so a ring on one member would name a victim the game has not picked.
+    // Ring all of them: the honest read is "anyone here can be hit".
+    return { ...it, targets: living().filter(m => adjacent(foe, m)) };
+  }
+
+  // A step intent that OPENS distance from the member it hunts. Skirmishers
+  // back off below half VITAE or inside 3 tiles, and "CLOSING IN" on a foe
+  // that is running away is the exact read the player must not be given.
+  function withdrawing(foe, it) {
+    if (!it || it.kind !== 'step' || (!it.dc && !it.dr)) return false;
     const t = foeTarget(foe);
-    if (adjacent(foe, t)) return { kind: 'attack', target: t };
-    return { kind: 'step', ...stepToward(foe, t) };
+    if (!t) return false;
+    return cheb({ c: foe.c + it.dc, r: foe.r + it.dr }, t) > cheb(foe, t);
   }
 
   function stepToward(foe, t, enterOk) {
@@ -2709,20 +2741,26 @@
     if (!B.ui || !B.ui.showFoeIntent || finished()) return '';
     let g = '';
     const struckTiles = new Set();
-    for (const f of liveFoes()) {
+    // Decide for EVERY live foe, in state.foes order, off one shared claim Set
+    // — the identical allocation resolveRound will make. Skipping the fogged
+    // ones here instead would free their claims and hand the visible ones
+    // different tiles than they actually take.
+    const claimed = new Set();
+    const preview = liveFoes().map(f => ({ f, it: previewIntent(f, claimed) }));
+    for (const { f, it } of preview) {
       // An unseen foe telegraphs nothing: a chevron on a dark tile marks the
       // foe as surely as its token would. Anything close enough to strike the
       // circle is inside sight anyway, so the attack ring is unaffected.
-      if (!foeSeen(f)) continue;
-      const it = previewIntent(f);
-      if (!it) continue;
+      if (!foeSeen(f) || !it) continue;
       if (it.kind === 'attack') {
-        const k = key(it.target.c, it.target.r);
-        if (struckTiles.has(k)) continue;
-        struckTiles.add(k);
-        g += `<polygon points="${plate(it.target.c, it.target.r, 5)}" fill="none"
-                       stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
-                       opacity=".75"/>`;
+        for (const t of it.targets) {
+          const k = key(t.c, t.r);
+          if (struckTiles.has(k)) continue;
+          struckTiles.add(k);
+          g += `<polygon points="${plate(t.c, t.r, 5)}" fill="none"
+                         stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
+                         opacity=".75"/>`;
+        }
         continue;
       }
       if (!it.dc && !it.dr) continue;
@@ -3376,7 +3414,9 @@
               <span>ATK ${foe.atk} · DEF ${foe.def}</span>
               <span class="${foe.awake ? 'bad' : ''}">${
                 !foe.awake ? 'DORMANT'
-                : it && it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
+                : !it || it.kind === 'idle' ? 'HOLDING OFF'
+                : it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
+                : withdrawing(foe, it) ? 'WITHDRAWING'
                 : 'CLOSING IN'}</span>`;
     } else if (memberAt(c, r)) {
       const m = memberAt(c, r);
