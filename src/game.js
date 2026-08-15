@@ -480,11 +480,32 @@
   function previewIntent(foe, claimed) {
     if (foe.hp <= 0 || !foe.awake) return null;
     const it = decide(foe, claimed || new Set());
-    if (!it || it.kind !== 'attack') return it;
+    if (!it) return it;
     // strikeMember() rolls at random among everyone standing beside the foe,
     // so a ring on one member would name a victim the game has not picked.
     // Ring all of them: the honest read is "anyone here can be hit".
-    return { ...it, targets: living().filter(m => adjacent(foe, m)) };
+    if (it.kind === 'attack')
+      return { ...it, targets: living().filter(m => adjacent(foe, m)) };
+    if (it.kind !== 'step') return it;
+    // resolveRound re-decides after movement lands (PMD attack-on-arrival),
+    // so a step that ends in contact IS a strike and must be drawn as one.
+    // Simulate the landing: walk the foe through its step -- and the chaser's
+    // second step, same rule as resolveRound -- re-ask the same brain, and
+    // put the tiles back. The mutation never escapes this function; it is the
+    // price of keeping decide() as the single body of code the indicator and
+    // the resolution both read.
+    const [c0, r0] = [foe.c, foe.r];
+    foe.c += it.dc; foe.r += it.dr;
+    const t = foeTarget(foe);
+    if (it.chase && t && cheb(foe, t) > 2) {
+      const s2 = stepToward(foe, t);
+      foe.c += s2.dc; foe.r += s2.dr;
+    }
+    const then = decide(foe, new Set());
+    const strikes = then.kind === 'attack';
+    const targets = strikes ? living().filter(m => adjacent(foe, m)) : [];
+    foe.c = c0; foe.r = r0;
+    return strikes ? { ...it, strikes: true, targets } : it;
   }
 
   // A step intent that OPENS distance from the member it hunts. Skirmishers
@@ -675,8 +696,17 @@
       // must run even when nothing above did.
       () => {
         state.queued = [];
+        // PMD rule: the strike decision is re-made HERE, after every step has
+        // landed, not read off the intent frozen at the top of the round. A
+        // foe that closed to contact this round swings this round -- there is
+        // no polite free turn spent standing adjacent. decide() is pure, so
+        // re-running it is the same brain reading the finished board; the
+        // frozen intent only gates WHO gets asked (dead foes and foes that
+        // never had an intent stay silent). Kills still cancel: the party's
+        // attack phase ran first, and hp <= 0 drops a foe right here.
         for (const { foe, intent } of foeIntents) {
-          if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
+          if (!intent || intent.kind === 'idle' || foe.hp <= 0) continue;
+          if (decide(foe, new Set()).kind !== 'attack') continue;
           if (!living().some(m => adjacent(foe, m))) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
           strikeMember(foe);
         }
@@ -1280,7 +1310,7 @@
       // foe as surely as its token would. Anything close enough to strike the
       // circle is inside sight anyway, so the attack ring is unaffected.
       if (!foeSeen(f) || !it) continue;
-      if (it.kind === 'attack') {
+      if (it.kind === 'attack' || it.strikes) {
         for (const t of it.targets) {
           const k = key(t.c, t.r);
           if (struckTiles.has(k)) continue;
@@ -1289,8 +1319,8 @@
                          stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
                          opacity=".75"/>`;
         }
-        continue;
-      }
+        if (it.kind === 'attack') continue;         // striking steps fall
+      }                                             // through: destination too
       if (!it.dc && !it.dr) continue;
       g += `<polygon points="${plate(f.c + it.dc, f.r + it.dr, 20)}"
                      fill="var(--blood)" opacity=".3"/>`;
@@ -1944,6 +1974,7 @@
                 !foe.awake ? 'DORMANT'
                 : !it || it.kind === 'idle' ? 'HOLDING OFF'
                 : it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
+                : it.strikes ? 'CLOSING TO STRIKE'
                 : withdrawing(foe, it) ? 'WITHDRAWING'
                 : 'CLOSING IN'}</span>`;
     } else if (memberAt(c, r)) {
@@ -2550,7 +2581,7 @@
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
-                  canAct, actionsLeft };
+                  previewIntent, canAct, actionsLeft };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.
