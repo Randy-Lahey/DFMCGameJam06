@@ -1042,83 +1042,122 @@
 
 <div id="inv" aria-hidden="false"></div>
 <script>
-// FLOOR 01 — hand-authored. 93 tiles. Re-carved at 2x resolution (was 10x6 / 21).
+// FLOOR 01 — hand-authored. 135 tiles. Re-carved as rooms + corridors.
 // Coordinates are [col, row], origin top-left.
 //
+// SHAPE RULE (locked this pass): rooms are never joined by a shared edge.
+// Every connection is a 1-tile-wide corridor running along the X axis,
+// between 2 and 5 tiles long. There are no Y-axis corridors — north/south
+// travel happens inside the SPINE room, which every corridor hangs off.
+// tools/test-shape.js enforces the rule; it fails the build if a corridor
+// is the wrong width, wrong length, or runs vertically.
+//
 //        0 1 2 3 4 5 6 7 8 9 10  12  14  16  18
-//   0    . ^ # . . . . . . . . . . . . . . . . .
-//   1    . # # . . . . . . . . . . . . . . . . .
-//   2    . . # . . . . . . . . . . . # # # # # C
-//   3    x # # # # # . . . . . . . . # T # # T #
-//   4    # # # # S # # # # # # # # # # # # # # #
-//   5    # # # # # # # # # # # T # # # # # # # #
-//   6    S # # # # # . . # # . . . . # S # # # #
-//   7    . . . . . . . . # # . . . . # # # # # #
-//   8    . . . . . . . . # # . . . . . . . . . .
-//   9    . . . . . . . . # # . . . . . . . . . .
-//  10    . . . . . . . . # # . . . . . . . . . .
-//  11    . . . . . . . . @ # . . . . . . . . . .
+//   0    . . # # # # # . . . . . . . . # # # ^ .
+//   1    . . # # S # # . . . . . . . . # T # # .
+//   2    . . # # # # # = = # # # = = = # # # # .
+//   3    . . . . . . . . . # # # . . . # # # # .
+//   4    . # # # # # . . . # T # . . . . . . . .
+//   5    . # S # # # = = = # # # . . . # # # # S
+//   6    . # # # # # . . . # # # . . . # # # #
+//   7    . . . . . . . . . # # # = x = # # # T #
+//   8    # # # # . . . . . # # # . . . # # # # C
+//   9    # # # # . . . . . # T # . . . . . . . .
+//  10    # # # # . . . . . # # # . . . . . . . .
+//  11    # # # # = = = = = # # # . . . . . . . .
+//  12    @ @ @ # . . . . . # # # . . . . . . . .
 //
 //   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes
+//   = corridor tile (drawn identically in game; marked here for review)
 //
-//   Shape notes: rows 4-5 are the 2-wide highway. The stairs approach
-//   narrows to 1 tile at (2,2) — the only narrow corridor, on purpose.
+//   Rooms: ENTRY (0-3, 8-12) - WEST (1-5, 4-6) - NORTHWEST (2-6, 0-2)
+//          SPINE (9-11, 2-12) - EAST/cache (15-19, 5-8) - NORTHEAST/stairs (15-18, 0-3)
+//   Corridor lengths, west to east: 5, 3, 2, 3, 3.
 //
 // To reshape the floor, edit `tiles` only. Nothing else reads geometry.
 
 (function () {
   window.FLOOR01 = {
     cols: 20,
-    rows: 12,
+    rows: 13,
 
     tiles: [
-      [1, 0], [2, 0],                                           // stairs alcove
-      [1, 1], [2, 1],
-      [2, 2],                                                   // the neck: 1-wide
-      [14, 2], [15, 2], [16, 2], [17, 2], [18, 2], [19, 2],     // right chamber, top
-      [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3],           // left chamber, top
-      [14, 3], [15, 3], [16, 3], [17, 3], [18, 3], [19, 3],
-      [0, 4], [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],           // highway, north lane
-      [6, 4], [7, 4], [8, 4], [9, 4], [10, 4], [11, 4], [12, 4], [13, 4],
-      [14, 4], [15, 4], [16, 4], [17, 4], [18, 4], [19, 4],
-      [0, 5], [1, 5], [2, 5], [3, 5], [4, 5], [5, 5],           // highway, south lane
-      [6, 5], [7, 5], [8, 5], [9, 5], [10, 5], [11, 5], [12, 5], [13, 5],
-      [14, 5], [15, 5], [16, 5], [17, 5], [18, 5], [19, 5],
-      [0, 6], [1, 6], [2, 6], [3, 6], [4, 6], [5, 6],           // left chamber, floor
-      [8, 6], [9, 6],
-      [14, 6], [15, 6], [16, 6], [17, 6], [18, 6], [19, 6],     // right chamber, floor
-      [8, 7], [9, 7],
-      [14, 7], [15, 7], [16, 7], [17, 7], [18, 7], [19, 7],
-      [8, 8], [9, 8],                                           // entry corridor, 2-wide
-      [8, 9], [9, 9],
-      [8, 10], [9, 10],
-      [8, 11], [9, 11],
+      // NORTHWEST room (2-6, 0-2)
+      [2, 0], [3, 0], [4, 0], [5, 0], [6, 0],
+      [2, 1], [3, 1], [4, 1], [5, 1], [6, 1],
+      [2, 2], [3, 2], [4, 2], [5, 2], [6, 2],
+      // corridor NORTHWEST -> SPINE, row 2, length 2
+      [7, 2], [8, 2],
+      // NORTHEAST room (15-18, 0-3) — holds the stairs
+      [15, 0], [16, 0], [17, 0], [18, 0],
+      [15, 1], [16, 1], [17, 1], [18, 1],
+      [15, 2], [16, 2], [17, 2], [18, 2],
+      [15, 3], [16, 3], [17, 3], [18, 3],
+      // corridor SPINE -> NORTHEAST, row 2, length 3
+      [12, 2], [13, 2], [14, 2],
+      // WEST room (1-5, 4-6)
+      [1, 4], [2, 4], [3, 4], [4, 4], [5, 4],
+      [1, 5], [2, 5], [3, 5], [4, 5], [5, 5],
+      [1, 6], [2, 6], [3, 6], [4, 6], [5, 6],
+      // corridor WEST -> SPINE, row 5, length 3
+      [6, 5], [7, 5], [8, 5],
+      // SPINE room (9-11, 2-12) — the trunk; all north/south travel
+      [9, 2], [10, 2], [11, 2],
+      [9, 3], [10, 3], [11, 3],
+      [9, 4], [10, 4], [11, 4],
+      [9, 5], [10, 5], [11, 5],
+      [9, 6], [10, 6], [11, 6],
+      [9, 7], [10, 7], [11, 7],
+      [9, 8], [10, 8], [11, 8],
+      [9, 9], [10, 9], [11, 9],
+      [9, 10], [10, 10], [11, 10],
+      [9, 11], [10, 11], [11, 11],
+      [9, 12], [10, 12], [11, 12],
+      // EAST room (15-19, 5-8) — holds the cache
+      [15, 5], [16, 5], [17, 5], [18, 5], [19, 5],
+      [15, 6], [16, 6], [17, 6], [18, 6], [19, 6],
+      [15, 7], [16, 7], [17, 7], [18, 7], [19, 7],
+      [15, 8], [16, 8], [17, 8], [18, 8], [19, 8],
+      // corridor SPINE -> EAST, row 7, length 3 — the trapped approach
+      [12, 7], [13, 7], [14, 7],
+      // ENTRY room (0-3, 8-12)
+      [0, 8], [1, 8], [2, 8], [3, 8],
+      [0, 9], [1, 9], [2, 9], [3, 9],
+      [0, 10], [1, 10], [2, 10], [3, 10],
+      [0, 11], [1, 11], [2, 11], [3, 11],
+      [0, 12], [1, 12], [2, 12], [3, 12],
+      // corridor ENTRY -> SPINE, row 11, length 5 — the long walk in
+      [4, 11], [5, 11], [6, 11], [7, 11], [8, 11],
     ],
 
     props: [
-      { kind: 'stairs', c: 1, r: 0, hidden: false, label: 'DESCENT' },
-      { kind: 'chest',  c: 19, r: 2, hidden: false, label: 'CACHE' },
-      { kind: 'spikes', c: 0, r: 3, hidden: true,  label: 'SPIKE ARRAY' },
+      { kind: 'stairs', c: 18, r: 0, hidden: false, label: 'DESCENT' },
+      { kind: 'chest',  c: 19, r: 8, hidden: false, label: 'CACHE' },
+      // On the cache corridor, not the mandatory path: the loot approach
+      // is the thing that costs you, and the corridor gives no room to dodge.
+      { kind: 'spikes', c: 13, r: 7, hidden: true,  label: 'SPIKE ARRAY' },
     ],
 
-    // Party spawns, in command order. The OPERATOR takes the point tile —
-    // travel is north toward the stairs — with both daemons behind, so the
-    // formation reads leader-first from the very first frame.
+    // Party spawns, in command order, along the bottom-left corner of the
+    // ENTRY room. The tail sits in the literal corner (0,12) and the OPERATOR
+    // takes the point tile east of it, facing the way out, so the formation
+    // reads leader-first from the very first frame and the floor unrolls
+    // ahead of you rather than behind.
     spawns: [
-      { c: 8, r: 10 },
-      { c: 8, r: 11 },
-      { c: 9, r: 11 },
+      { c: 2, r: 12 },
+      { c: 1, r: 12 },
+      { c: 0, r: 12 },
     ],
 
     // Foe placements. `kind` keys into BALANCE.foes.
     foes: [
-      { kind: 'TESTA',   c: 18, r: 3 },  // right chamber, guarding the cache
-      { kind: 'TESTA',   c: 14, r: 4 },  // right chamber mouth
-      { kind: 'SILIQVA', c: 15, r: 6 },  // right chamber, deep
-      { kind: 'TESTA',   c: 11, r: 5 },  // highway patrol, east
-      { kind: 'TESTA',   c: 2, r: 3 },   // left chamber, blocks the neck
-      { kind: 'SILIQVA', c: 0, r: 6 },   // left chamber, far corner
-      { kind: 'SILIQVA', c: 4, r: 4 },   // left chamber, mid floor
+      { kind: 'TESTA',   c: 18, r: 7 },  // EAST room, guarding the cache
+      { kind: 'SILIQVA', c: 19, r: 5 },  // EAST room, far corner
+      { kind: 'TESTA',   c: 10, r: 9 },  // SPINE, south — meets you at the door
+      { kind: 'TESTA',   c: 10, r: 4 },  // SPINE, north — blocks the stairs run
+      { kind: 'SILIQVA', c: 2,  r: 5 },  // WEST room
+      { kind: 'SILIQVA', c: 4,  r: 1 },  // NORTHWEST room
+      { kind: 'TESTA',   c: 16, r: 1 },  // NORTHEAST room, on the stairs
     ],
   };
 })();
@@ -1952,11 +1991,32 @@
   function previewIntent(foe, claimed) {
     if (foe.hp <= 0 || !foe.awake) return null;
     const it = decide(foe, claimed || new Set());
-    if (!it || it.kind !== 'attack') return it;
+    if (!it) return it;
     // strikeMember() rolls at random among everyone standing beside the foe,
     // so a ring on one member would name a victim the game has not picked.
     // Ring all of them: the honest read is "anyone here can be hit".
-    return { ...it, targets: living().filter(m => adjacent(foe, m)) };
+    if (it.kind === 'attack')
+      return { ...it, targets: living().filter(m => adjacent(foe, m)) };
+    if (it.kind !== 'step') return it;
+    // resolveRound re-decides after movement lands (PMD attack-on-arrival),
+    // so a step that ends in contact IS a strike and must be drawn as one.
+    // Simulate the landing: walk the foe through its step -- and the chaser's
+    // second step, same rule as resolveRound -- re-ask the same brain, and
+    // put the tiles back. The mutation never escapes this function; it is the
+    // price of keeping decide() as the single body of code the indicator and
+    // the resolution both read.
+    const [c0, r0] = [foe.c, foe.r];
+    foe.c += it.dc; foe.r += it.dr;
+    const t = foeTarget(foe);
+    if (it.chase && t && cheb(foe, t) > 2) {
+      const s2 = stepToward(foe, t);
+      foe.c += s2.dc; foe.r += s2.dr;
+    }
+    const then = decide(foe, new Set());
+    const strikes = then.kind === 'attack';
+    const targets = strikes ? living().filter(m => adjacent(foe, m)) : [];
+    foe.c = c0; foe.r = r0;
+    return strikes ? { ...it, strikes: true, targets } : it;
   }
 
   // A step intent that OPENS distance from the member it hunts. Skirmishers
@@ -2147,8 +2207,17 @@
       // must run even when nothing above did.
       () => {
         state.queued = [];
+        // PMD rule: the strike decision is re-made HERE, after every step has
+        // landed, not read off the intent frozen at the top of the round. A
+        // foe that closed to contact this round swings this round -- there is
+        // no polite free turn spent standing adjacent. decide() is pure, so
+        // re-running it is the same brain reading the finished board; the
+        // frozen intent only gates WHO gets asked (dead foes and foes that
+        // never had an intent stay silent). Kills still cancel: the party's
+        // attack phase ran first, and hp <= 0 drops a foe right here.
         for (const { foe, intent } of foeIntents) {
-          if (!intent || intent.kind !== 'attack' || foe.hp <= 0) continue;
+          if (!intent || intent.kind === 'idle' || foe.hp <= 0) continue;
+          if (decide(foe, new Set()).kind !== 'attack') continue;
           if (!living().some(m => adjacent(foe, m))) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
           strikeMember(foe);
         }
@@ -2752,7 +2821,7 @@
       // foe as surely as its token would. Anything close enough to strike the
       // circle is inside sight anyway, so the attack ring is unaffected.
       if (!foeSeen(f) || !it) continue;
-      if (it.kind === 'attack') {
+      if (it.kind === 'attack' || it.strikes) {
         for (const t of it.targets) {
           const k = key(t.c, t.r);
           if (struckTiles.has(k)) continue;
@@ -2761,8 +2830,8 @@
                          stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
                          opacity=".75"/>`;
         }
-        continue;
-      }
+        if (it.kind === 'attack') continue;         // striking steps fall
+      }                                             // through: destination too
       if (!it.dc && !it.dr) continue;
       g += `<polygon points="${plate(f.c + it.dc, f.r + it.dr, 20)}"
                      fill="var(--blood)" opacity=".3"/>`;
@@ -3416,6 +3485,7 @@
                 !foe.awake ? 'DORMANT'
                 : !it || it.kind === 'idle' ? 'HOLDING OFF'
                 : it.kind === 'attack' ? 'WILL STRIKE THE CIRCLE'
+                : it.strikes ? 'CLOSING TO STRIKE'
                 : withdrawing(foe, it) ? 'WITHDRAWING'
                 : 'CLOSING IN'}</span>`;
     } else if (memberAt(c, r)) {
@@ -4022,7 +4092,7 @@
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
-                  canAct, actionsLeft };
+                  previewIntent, canAct, actionsLeft };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.
