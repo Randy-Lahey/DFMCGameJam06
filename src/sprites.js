@@ -123,6 +123,22 @@
       <path d="M17 26 L17 43 M47 26 L47 43" stroke="var(--cyan)" stroke-width="1.2" opacity=".5"/>
     </g>`;
 
-  window.SPRITES = { hero, calx, cinis, party, testa, siliqva,
+  // GVTTA — the drop. Placeholder vector until raster art lands: a bead of
+  // quicksilver mid-fall, drawn in the shell register with a bone highlight.
+  const gvtta = () => `
+    <g>
+      <ellipse cx="32" cy="52" rx="11" ry="3" fill="var(--shell)" opacity=".18"/>
+      <path d="M32 8 C32 8 18 28 18 38 A14 14 0 0 0 46 38 C46 28 32 8 32 8 Z"
+            fill="var(--void)" stroke="var(--shell)" stroke-width="1.8"/>
+      <path d="M32 14 C32 14 22 29 22 38 A10 10 0 0 0 42 38 C42 29 32 14 32 14 Z"
+            fill="var(--shell)" opacity=".28"/>
+      <path d="M26 36 A6.5 6.5 0 0 0 30 44" fill="none"
+            stroke="var(--bone)" stroke-width="1.4" opacity=".85"/>
+      <circle cx="36.5" cy="33" r="1.6" fill="var(--bone)" opacity=".9"/>
+      <path d="M32 2 L32 6 M27 5 L29.5 8 M37 5 L34.5 8"
+            stroke="var(--shell)" stroke-width="1.2" opacity=".6"/>
+    </g>`;
+
+  window.SPRITES = { hero, calx, cinis, gvtta, party, testa, siliqva,
                      stairs, stairsSealed, chest, chestOpen, spikes, argent, flux, databank };
 })();

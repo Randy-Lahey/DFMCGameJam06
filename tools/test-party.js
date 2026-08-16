@@ -60,16 +60,16 @@ Object.defineProperty(global, 'navigator', { value: { maxTouchPoints: 0 }, confi
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/balance.js', 'data/fxsheets.js',
-                 'src/sprites.js', 'src/game.js']) {
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js',
+                 'data/fxsheets.js', 'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
-const { state, moveInput, lead, memberAt, foeTarget, validTargets } = window.__DW;
-const F = window.FLOOR01, B = window.BALANCE;
+const { state, moveInput, lead, memberAt, foeTarget, validTargets, stepsMax, applyOp,
+        allOps, answerExit, loadFloor, recruit, chooseStarter } = window.__DW;
+const F = window.FLOOR01, F2 = window.FLOOR02, B = window.BALANCE;
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.error('FAIL: ' + msg); } };
-const M = state.circle.members;
 const pos = m => m.c + ',' + m.r;
 
 // Keep foes quiet for movement assertions and clear the intro modal, which
@@ -77,11 +77,51 @@ const pos = m => m.c + ',' + m.r;
 state.modal = null;
 state.foes.forEach(f => { f.awake = false; });
 
+// ------------------------------------------------------------- solo start
+ok(state.circle.members.length === 1 && state.roster.length === 1,
+   'the run starts solo: OPERATOR only');
+ok(lead().name === 'OPERATOR' &&
+   lead().c === F.spawns[0].c && lead().r === F.spawns[0].r,
+   'solo OPERATOR stands on spawn 0');
+ok(allOps().length === 1 && allOps()[0].op.name === 'PERCVSSIO',
+   'solo op set is PERCVSSIO alone -- no bank ops before a daemon joins');
+
+// ------------------------------------------------------------- hermit flow
+// Clear the floor, take the stairs: the solo descent must open the Hermit's
+// bargain instead of dropping through, and the choice must land the party
+// on FLOOR 02 spawns with fresh foes and reset fog.
+state.foes.forEach(f => { f.hp = 0; });
+state.modal = 'exit';
+answerExit(true);
+ok(state.modal === 'hermit', 'descending floor 01 solo opens the Hermit, not the drop');
+chooseStarter('CALX');
+ok(state.modal === null && state.floor === 1, 'the bargain descends: floor 02 loads');
+ok(state.roster.join(',') === 'OPERATOR,CALX', 'CALX joins the roster behind the OPERATOR');
+ok(state.circle.members.length === 2 &&
+   state.circle.members.every((m, i) => m.c === F2.spawns[i].c && m.r === F2.spawns[i].r),
+   'both members seat on FLOOR 02 spawns in command order');
+ok(state.foes.length === F2.foes.length && state.foes.every(f => f.hp > 0 && !f.awake),
+   'floor 02 foes stand fresh and asleep');
+ok(state.seen.size > 0 && state.seen.size < F2.tiles.length &&
+   state.drops.length === 0 && state.wards.length === 0,
+   'fog resets to fresh spawn sight on descent (not empty, not the old floor)');
+
+// ------------------------------------------------------------- full roster
+// Recruit the rest and reload floor 01: every legacy assertion below runs
+// against the same 4-member board it was written for.
+recruit('CINIS');
+recruit('GVTTA');
+loadFloor(0);
+state.modal = null;
+state.foes.forEach(f => { f.awake = false; });
+const M = state.circle.members;
+
 // ------------------------------------------------------------- spawn
-ok(M.length === 3, 'three members');
+const N = Object.keys(B.party).length;
+ok(M.length === N && N === 4, 'four members after recruits (OPERATOR + three daemons)');
 ok(M.every((m, i) => m.c === F.spawns[i].c && m.r === F.spawns[i].r),
    'members spawn on their own tiles in command order');
-ok(new Set(M.map(pos)).size === 3, 'no two members share a tile at spawn');
+ok(new Set(M.map(pos)).size === N, 'no two members share a tile at spawn');
 ok(lead() === M[0], 'OPERATOR leads');
 ok(state.circle.c === undefined && state.circle.r === undefined,
    'circle.c/r is gone -- stale reads cannot silently succeed');
@@ -103,11 +143,13 @@ moveInput(0, -1);
 ok(pos(M[0]) === `${S[0].c},${S[0].r - 1}`, 'leader stepped onto free floor');
 ok(pos(M[1]) === was[0], 'follower 1 took the vacated tile');
 ok(pos(M[2]) === was[1], 'follower 2 took follower 1\'s vacated tile');
-ok(new Set(M.map(pos)).size === 3, 'trail never stacks members');
+ok(pos(M[3]) === was[2], 'follower 3 took follower 2\'s vacated tile');
+ok(new Set(M.map(pos)).size === N, 'trail never stacks members');
 // One more step: the chain snakes cleanly along.
 was = M.map(pos);
 moveInput(0, -1);
-ok(pos(M[0]) === `${S[0].c},${S[0].r - 2}` && pos(M[1]) === was[0] && pos(M[2]) === was[1],
+ok(pos(M[0]) === `${S[0].c},${S[0].r - 2}` && pos(M[1]) === was[0]
+   && pos(M[2]) === was[1] && pos(M[3]) === was[2],
    'chain snakes tile-by-tile behind the leader');
 
 // ------------------------------------------------------------- swap
@@ -116,9 +158,37 @@ was = M.map(pos);
 moveInput(0, 1);
 ok(pos(M[0]) === was[1] && pos(M[1]) === was[0], 'stepping into a follower swaps');
 ok(pos(M[2]) === was[2], 'the other follower does not move on a swap');
-ok(new Set(M.map(pos)).size === 3, 'swap never stacks members');
+ok(new Set(M.map(pos)).size === N, 'swap never stacks members');
 moveInput(0, -1);   // swap back: leader on point again for the sections below
 ok(pos(M[0]) === was[0] && pos(M[1]) === was[1], 'swapping back restores the chain');
+
+// ------------------------------------------------------------- gvtta
+// The quicksilver aura: +1 step while GVTTA stands, gone when it falls.
+const gv = M.find(m => m.name === 'GVTTA');
+ok(gv && gv.type === 'MERCVRIVS', 'GVTTA is seated in the party as MERCVRIVS');
+ok(stepsMax() === B.combat.stepsPerRound + 1, 'aura grants +1 step while GVTTA stands');
+const gvHp = gv.hp; gv.hp = 0;
+ok(stepsMax() === B.combat.stepsPerRound, 'aura dies with GVTTA');
+gv.hp = gvHp;
+
+// PERMVTO: cast from the trail it trades tile AND chain slot with the point,
+// so the chain keeps the same tiles and only the two identities exchange.
+const permvto = { name: 'PERMVTO', ...B.operations.PERMVTO, fluxes: [] };
+let tiles = M.map(pos);
+const oldLead = lead();
+applyOp({ member: gv, op: permvto });
+ok(lead() === gv, 'PERMVTO from the trail puts GVTTA on point');
+ok(M.map(pos).join('|') === tiles.join('|'),
+   'swap preserves the chain tiles exactly (identities exchange, tiles do not)');
+ok(new Set(M.map(pos)).size === N, 'PERMVTO never stacks members');
+// Cast again from point: quicksilver runs to where it isn't -- the rear.
+gv.pn = B.party.GVTTA.pneuma;                 // refund the test cast
+applyOp({ member: gv, op: permvto });
+ok(lead() === oldLead, 'PERMVTO from point trades with the rear, restoring the old leader');
+ok(M[M.length - 1] === gv, 'GVTTA now holds the rear slot');
+ok(M.map(pos).join('|') === tiles.join('|'), 'chain tiles still unchanged after the return swap');
+gv.pn = B.party.GVTTA.pneuma;
+state.cd = {};                                 // clear PERMVTO cooldown for later sections
 
 // ------------------------------------------------------------- targeting
 // Plant a foe next to CINIS's tile: it must hunt CINIS, not the leader.
@@ -178,6 +248,40 @@ ok(actionsLeft() === 1 && canAct(M[2]),
    'refunding an action reopens the gate');
 ok(!canAct(M[0]), 'a spent member stays spent while the pool is open');
 state.acted = [];
+
+// ------------------------------------------------- aim forgiveness
+// A tap one tile off a valid target still fires (thumbs, gliding sprites);
+// a tap between TWO valid targets stays ambiguous and refuses.
+const { chooseOp, clickTile, allOps: ops2, recomputeFOV } = window.__DW;
+state.foes.forEach(f => { f.hp = 0; });
+M.forEach(m => { m.hp = m.vitae; m.pn = m.pneuma; });
+state.acted = []; state.queued = []; state.mode = 'move'; state.cd = {};
+const cinis = M.find(m => m.name === 'CINIS');
+// Foes must stand on REAL floor to be in sight; derive adjacent walkable
+// tiles from F.tiles instead of assuming cinis+1 is not a wall.
+const ring = F.tiles.map(([c, r]) => ({ c, r }))
+  .filter(t => Math.max(Math.abs(t.c - cinis.c), Math.abs(t.r - cinis.r)) === 1
+            && !memberAt(t.c, t.r));
+ok(ring.length >= 2, 'geometry: two free floor tiles ring CINIS');
+const fA = state.foes[0];
+fA.hp = fA.vitae; fA.awake = true; fA.c = ring[0].c; fA.r = ring[0].r;
+recomputeFOV();   // headless never draws; sight must be recomputed by hand
+chooseOp(ops2().findIndex(e => e.op.name === 'IMMOLATIO'));
+ok(!!state.pending, 'IMMOLATIO aims with a valid adjacent target');
+// Tap one tile past the foe: off-target, no other foe near.
+clickTile(fA.c * 2 - cinis.c, fA.r * 2 - cinis.r);
+ok(state.queued.length === 1 && state.queued[0].targetId === fA.id,
+   'near-miss one tile off a lone valid target snaps to it');
+state.queued = []; state.acted = [];
+const fB = state.foes[1];
+fB.hp = fB.vitae; fB.awake = true; fB.c = ring[1].c; fB.r = ring[1].r;
+recomputeFOV();
+chooseOp(ops2().findIndex(e => e.op.name === 'IMMOLATIO'));
+clickTile(cinis.c, cinis.r);   // CINIS's own tile: cheb 1 from BOTH foes
+ok(state.queued.length === 0 && !!state.pending,
+   'a miss ringed by TWO valid targets stays ambiguous: no guess, keep aiming');
+state.pending = null; state.aiming = null; state.queued = []; state.acted = [];
+state.foes.forEach(f => { f.hp = 0; });
 
 console.log(`test-party: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

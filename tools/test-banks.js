@@ -67,12 +67,19 @@ Object.defineProperty(global, 'navigator', { value: { maxTouchPoints: 0 }, confi
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
 const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit } = window.__DW;
+
+// The run now starts SOLO (tutorial); these assertions were written for the
+// full 4-member board. Recruit everyone and reload floor 01 first.
+window.__DW.recruit('CALX');
+window.__DW.recruit('CINIS');
+window.__DW.recruit('GVTTA');
+window.__DW.loadFloor(0);
 const B = window.BALANCE;
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.error('FAIL: ' + msg); } };
@@ -86,14 +93,25 @@ ok(state.loadout.CALX.length === 2 && state.loadout.CINIS.length === 2,
    'daemons start with two seated banks');
 ok(state.loadout.CALX[0].fluxes.length === 2 && state.loadout.CALX[1].fluxes.length === 1,
    'bay counts follow banks table (ABRASIO 2, CONCRETIO 1)');
-ok(allOps().length === 5, 'five hotkeys: PERCVSSIO + four seated banks');
+ok(allOps().length === 6, 'six hotkeys: PERCVSSIO + five seated banks');
 ok(allOps()[0].op.name === 'PERCVSSIO', 'OPERATOR intrinsic holds hotkey 1');
+
+// PERCVSSIO now rides a fixed loadout slot so it can seat ONE flux. The
+// slot must exist, expose a single bay, and fold a seated VITRIOL into
+// real strike damage -- while staying un-swappable (type matches nothing).
+const pSlot = state.loadout.OPERATOR && state.loadout.OPERATOR[0];
+ok(pSlot && pSlot.bank === 'PERCVSSIO' && pSlot.fluxes.length === 1,
+   'OPERATOR slot: PERCVSSIO with exactly one flux bay');
+ok(fold({ bank: 'PERCVSSIO', fluxes: ['VITRIOL'] }).dmgBonus === 2,
+   'VITRIOL seated in PERCVSSIO folds to +2 damage');
+ok(window.BALANCE.banks.PERCVSSIO.type === '\u2014',
+   'PERCVSSIO bank type matches no daemon: the slot cannot be swapped');
 
 // ---------------------------------------------------------------- fold
 const base = fold({ bank: 'FVLGVR', fluxes: [null, null] });
-ok(base.pn === 3 && base.range === 4, 'fold with no fluxes = base stats');
+ok(base.pn === 3 && base.range === 2, 'fold with no fluxes = base stats');
 const modded = fold({ bank: 'FVLGVR', fluxes: ['VITRIOL', 'VIVVM'] });
-ok(modded.dmgBonus === 2 && modded.range === 5 && modded.pn === 3,
+ok(modded.dmgBonus === 2 && modded.range === 3 && modded.pn === 3,
    'VITRIOL +2 dmg and VIVVM +1 range apply; pn untouched');
 const greedy = fold({ bank: 'IMMOLATIO', fluxes: ['FVLMINANS'] });
 ok(greedy.dmgBonus === 5 && greedy.vitaeCost === 6,
@@ -102,7 +120,7 @@ const cheap = fold({ bank: 'ABRASIO', fluxes: ['NITRVM', 'NITRVM'] });
 ok(cheap.pn === 1, 'double NITRVM floors ABRASIO at pn 1, not 0');
 const perc = fold({ bank: 'CONCRETIO', fluxes: ['ADAMANS'] });
 ok(perc.minDmg === 3, 'ADAMANS sets a per-op minimum');
-ok(B.operations.FVLGVR.pn === 3 && B.operations.FVLGVR.range === 4,
+ok(B.operations.FVLGVR.pn === 3 && B.operations.FVLGVR.range === 2,
    'fold never mutates the base operation table');
 
 // ---------------------------------------------------------------- drops
@@ -142,15 +160,21 @@ ok(state.modal === null, 'inventory closes clean');
 }
 
 // ------------------------------------------------------- refit rule
+// Proximity-gated: an awake foe within combat.refitLockRange of any member
+// shuts the rig; asleep or genuinely-outrun foes leave it open. Never an
+// action tax, so state.acted must stay untouched either way.
 state.foes.forEach(f => { f.awake = false; });
 ok(payRefit('CINIS') === true && state.acted.length === 0,
    'quiet floor: refit is free, no action spent');
-state.foes[0].awake = true; state.foes[0].hp = 5;
-ok(payRefit('CINIS') === true && state.acted.includes('CINIS'),
-   'awake foe: first refit spends the daemon action');
-ok(payRefit('CINIS') === false,
-   'awake foe: second refit same round is refused');
-state.acted.length = 0; state.foes[0].awake = false;
+const near = state.foes[0], lead0 = state.circle.members[0];
+near.awake = true; near.hp = 5; near.c = lead0.c + 1; near.r = lead0.r;
+ok(payRefit('CINIS') === false && payRefit('CINIS') === false &&
+   state.acted.length === 0,
+   'awake foe in range: rig shut, repeatably, no action ever spent');
+near.c = lead0.c + window.BALANCE.combat.refitLockRange + 2; near.r = lead0.r;
+ok(payRefit('CINIS') === true,
+   'awake foe OUTRUN past refitLockRange: refit is free again');
+near.awake = false; near.hp = 0;
 
 console.log(fail ? `\n${pass} passed, ${fail} FAILED` : `all ${pass} checks passed`);
 process.exit(fail ? 1 : 0);

@@ -76,12 +76,19 @@ global.clearTimeout = () => {};
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
 const { state, resolveRound, lead } = window.__DW;
+
+// The run now starts SOLO (tutorial); these assertions were written for the
+// full 4-member board. Recruit everyone and reload floor 01 first.
+window.__DW.recruit('CALX');
+window.__DW.recruit('CINIS');
+window.__DW.recruit('GVTTA');
+window.__DW.loadFloor(0);
 const B = window.BALANCE;
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.error('FAIL: ' + msg); } };
@@ -152,6 +159,20 @@ if (!previewIntent) {
   ok(it && it.kind === 'step' && !it.strikes,
      'a step that cannot reach contact previews as plain movement');
 }
+
+// ---------------------------------------------- dead-party foe brain
+// The strike loop can kill the LAST member while other foes still hold
+// intents; decide() against an empty world must idle, never throw. This was
+// the "stuck after the chest" wedge: the throw killed the cleanup phase
+// before checkEnd could declare SEVERED.
+const { previewIntent: pv } = window.__DW;
+state.circle.members.forEach(m => { m.hp = 0; });
+state.foes[0].hp = state.foes[0].vitae; state.foes[0].awake = true;
+let threw = false, intent = null;
+try { intent = pv(state.foes[0]); } catch (e) { threw = true; }
+ok(!threw && intent && intent.kind === 'idle',
+   'a foe with no living target idles instead of throwing');
+state.circle.members.forEach(m => { m.hp = m.vitae; });
 
 console.log(`test-combat: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

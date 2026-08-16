@@ -16,6 +16,10 @@
 //     TESTA    -> CINIS    6 +/-1   => 3 hits   (CINIS is glass)
 //     SILIQVA  -> OPERATOR 6 +/-1   => 4 hits
 //     SILIQVA  -> CINIS    7 +/-1   => 3 hits
+//     GVTTA    -> TESTA    3 +/-1   => 2 hits
+//     GVTTA    -> SILIQVA  5 +/-1   => 1 hit
+//     TESTA    -> GVTTA    7 +/-1   => 3 hits   (GVTTA is the ghost: def 0)
+//     SILIQVA  -> GVTTA    8 +/-1   => 2 hits
 
 (function () {
   window.BALANCE = {
@@ -28,6 +32,11 @@
       // refits spend from this same pool. Movement is NOT in the pool. Set to
       // 3 to restore one-act-per-member.
       actionsPerRound: 2,
+      // A refit (seat / vnseat / swap) is FREE unless an awake foe stands
+      // within this Chebyshev range of any living member. Inside it, the rig
+      // stays shut: no action-cost workaround, the fight comes first. Awake
+      // foes beyond it count as disengaged -- kiting away to refit is play.
+      refitLockRange: 6,
       minDamage: 1,     // a hit always does something
       pneumaRegen: 1,   // per living member, per round, move or act
     },
@@ -58,6 +67,13 @@
       OPERATOR: { vitae: 24, pneuma: 10, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
       CALX:     { vitae: 26, pneuma: 14, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
       CINIS:    { vitae: 18, pneuma: 10, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
+      // The third of the tria prima: quicksilver, the volatile. Paper-thin,
+      // but while GVTTA stands the whole circle walks one extra tile a round
+      // (aura.steps is summed over LIVING members by stepsMax() in game.js).
+      // Interim: spawns as a 4th follower until the starter-choice system
+      // prunes the party to OPERATOR + one daemon.
+      GVTTA:    { vitae: 16, pneuma: 12, atk: 5, def: 0, type: 'MERCVRIVS', role: 'FVGA', tint: 'shell-txt',
+                  aura: { steps: 1 } },
     },
 
     // Drops. Exactly one per severed enemy, rolled off this weighted table.
@@ -146,6 +162,11 @@
         pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
         note: 'Heavy hit, adjacent. Burns the caster.',
       },
+      PERMVTO: {
+        kind: 'swap', targets: 'circle', range: 0,
+        pn: 2, cd: 2, fx: 'hex',
+        note: 'Trade places with the point.',
+      },
       // Findable banks. Not in any default loadout; they enter play only as
       // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
       LORICA: {
@@ -163,20 +184,27 @@
     // ------------------------------------------------------------- banks
     // A DATA BANK *is* an operation: the archive that carries it. Daemons run
     // whatever banks are seated in their two slots; the OPERATOR's PERCVSSIO
-    // is intrinsic (bare hands, not an archive) and has no bank entry.
+    // is intrinsic (bare hands, not an archive): it never drops, never
+    // unseats, and lives in no satchel. Its entry below exists ONLY so the
+    // rig knows it seats one FLUX -- type '\u2014' matches no daemon, so no
+    // bank can ever swap into the OPERATOR's fixed slot.
     // `type` locks a bank to daemons of that alchemical type. `bays` is how
     // many FLUX cartridges it seats: workhorse ops get 2, spike ops get 1.
     banks: {
+      PERCVSSIO: { type: '\u2014',  bays: 1, intrinsic: true },
       ABRASIO:   { type: 'SAL',     bays: 2 },
       CONCRETIO: { type: 'SAL',     bays: 1 },
       FVLGVR:    { type: 'SVLPHVR', bays: 2 },
       IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
       LORICA:    { type: 'SAL',     bays: 1 },
+      PERMVTO:   { type: 'MERCVRIVS', bays: 1 },
       VAPOR:     { type: 'SVLPHVR', bays: 2 },
     },
     defaultLoadout: {
+      OPERATOR: ['PERCVSSIO'],
       CALX:  ['ABRASIO', 'CONCRETIO'],
       CINIS: ['FVLGVR', 'IMMOLATIO'],
+      GVTTA: ['PERMVTO'],
     },
 
     // ------------------------------------------------------------- fluxes
