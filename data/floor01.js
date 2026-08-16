@@ -16,12 +16,12 @@
 //   4    . # # # # # . . . # T # . . . . . . . .
 //   5    . # S # # # = = = # # # . . . # # # # S
 //   6    . # # # # # . . . # # # . . . # # # #
-//   7    . . . . . . . . . # # # = x = # # # T #
-//   8    # # # # . . . . . # # # . . . # # # # C
+//   7    . . . . . . . . . # # # = = = # # # T #
+//   8    # # # # . . . . . # # # . . . # # x # C
 //   9    # # # # . . . . . # T # . . . . . . . .
 //  10    # # # # . . . . . # # # . . . . . . . .
 //  11    # # # # = = = = = # # # . . . . . . . .
-//  12    @ @ @ # . . . . . # # # . . . . . . . .
+//  12    @ @ @ @ . . . . . # # # . . . . . . . .
 //
 //   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes
 //   = corridor tile (drawn identically in game; marked here for review)
@@ -34,6 +34,11 @@
 
 (function () {
   window.FLOOR01 = {
+    name: 'FLOOR 01',
+    // The Hermit waits at this floor's descent: taking the stairs with a
+    // solo OPERATOR opens the starter choice instead of dropping straight
+    // through. game.js reads this flag in answerExit().
+    hermit: true,
     cols: 20,
     rows: 13,
 
@@ -89,30 +94,35 @@
     props: [
       { kind: 'stairs', c: 18, r: 0, hidden: false, label: 'DESCENT' },
       { kind: 'chest',  c: 19, r: 8, hidden: false, label: 'CACHE' },
-      // On the cache corridor, not the mandatory path: the loot approach
-      // is the thing that costs you, and the corridor gives no room to dodge.
-      { kind: 'spikes', c: 13, r: 7, hidden: true,  label: 'SPIKE ARRAY' },
+      // INSIDE the cache room, on the straight line from the corridor mouth
+      // to the chest -- never on the 1-wide corridor itself. A corridor
+      // spike is a toll you pay TWICE (in and out) with no counterplay; a
+      // room spike bites once on the reveal, then routing around it is the
+      // player's job. The loot approach still costs, dodging is still earned.
+      { kind: 'spikes', c: 17, r: 8, hidden: true,  label: 'SPIKE ARRAY' },
     ],
 
     // Party spawns, in command order, along the bottom-left corner of the
     // ENTRY room. The tail sits in the literal corner (0,12) and the OPERATOR
     // takes the point tile east of it, facing the way out, so the formation
     // reads leader-first from the very first frame and the floor unrolls
-    // ahead of you rather than behind.
+    // ahead of you rather than behind. Four tiles: OPERATOR, CALX, CINIS,
+    // GVTTA (interim full-roster spawn until starter choice lands).
     spawns: [
+      { c: 3, r: 12 },
       { c: 2, r: 12 },
       { c: 1, r: 12 },
       { c: 0, r: 12 },
     ],
 
     // Foe placements. `kind` keys into BALANCE.foes.
+    // Trimmed for the SOLO tutorial: one foe per teaching beat, never two
+    // at once. The pre-Hermit OPERATOR has PERCVSSIO and two steps -- a
+    // gauntlet, not a wall. (The old 7-foe set returns on later floors.)
     foes: [
-      { kind: 'TESTA',   c: 18, r: 7 },  // EAST room, guarding the cache
-      { kind: 'SILIQVA', c: 19, r: 5 },  // EAST room, far corner
+      { kind: 'SILIQVA', c: 2,  r: 5 },  // WEST room -- first blood, skirmisher
       { kind: 'TESTA',   c: 10, r: 9 },  // SPINE, south — meets you at the door
-      { kind: 'TESTA',   c: 10, r: 4 },  // SPINE, north — blocks the stairs run
-      { kind: 'SILIQVA', c: 2,  r: 5 },  // WEST room
-      { kind: 'SILIQVA', c: 4,  r: 1 },  // NORTHWEST room
+      { kind: 'TESTA',   c: 18, r: 7 },  // EAST room, guarding the cache
       { kind: 'TESTA',   c: 16, r: 1 },  // NORTHEAST room, on the stairs
     ],
   };
