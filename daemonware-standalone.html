@@ -201,6 +201,30 @@
   .dlg-title{font-size:14px;letter-spacing:.16em;color:var(--bone);line-height:1.6}
   .dlg-note{font-size:9.5px;letter-spacing:.16em;opacity:.7;margin-top:10px}
   .dlg-actions{display:flex;gap:16px;justify-content:center;margin-top:22px}
+
+  /* ---- Hermit starter choice ----
+     Three cards, keyboard 1-3 or tap. Each card borrows its daemon's tint
+     through --tint (set inline by game.js). No dismiss control on purpose:
+     the bargain is mandatory, the cards are the only exits. */
+  .hermitbox{max-width:560px}
+  .starters{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px;
+  }
+  @media (max-width:520px){ .starters{grid-template-columns:1fr} }
+  .starter{
+    font:inherit;color:var(--bone);background:transparent;cursor:pointer;
+    display:flex;flex-direction:column;gap:6px;align-items:flex-start;
+    text-align:left;padding:14px;min-height:44px;
+    border:1px solid var(--tint,var(--edge-i));
+    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+    transition:background .15s ease;
+  }
+  .starter:hover,.starter:focus-visible{background:rgba(70,240,220,.06);outline:none}
+  .starter .st-key{font-size:9px;letter-spacing:.24em;opacity:.5}
+  .starter .st-name{font-size:13px;letter-spacing:.26em;color:var(--tint,var(--bone))}
+  .starter .st-role{font-size:9px;letter-spacing:.2em;opacity:.75}
+  .starter .st-pitch{font-size:9.5px;letter-spacing:.16em;opacity:.9;margin-top:2px}
+  .starter .st-stats{font-size:9px;letter-spacing:.18em;opacity:.55}
   .dlg-keys{font-size:9px;letter-spacing:.24em;opacity:.6;margin-top:14px}
 
   .box{
@@ -225,6 +249,13 @@
              opacity:.7;margin-bottom:26px}
   .win-stats div{display:flex;justify-content:space-between;gap:34px}
   .win-stats b{font-weight:400;color:var(--gold)}
+  /* The lose screen. SEVERED used to freeze every input and show NOTHING --
+     a silent brick with no way out but a manual reload. Death gets the same
+     dignity as the win: a verdict, the run's numbers, and a restart. */
+  .severbox{border-color:var(--blood)}
+  .sever-title{color:var(--blood)}
+  .sever-rule{background:var(--blood)}
+  .sever-stats b{color:var(--blood)}
 
   /* ---- controls screen + its reopen handle ----
      The legend used to live permanently in the HUD, four lines of 9px text at
@@ -600,6 +631,10 @@
      affordance. */
   .ctl.touch{display:none}
   @media (pointer:coarse){
+    /* No hover on touch: the unseat cross must be visible on its own, or a
+       seated bay reads as inert chrome with no way to pull the flux. */
+    #inv .ibay.seated .ipull{opacity:.6}
+    #inv .ibay.seated{box-shadow:inset 0 0 0 1px rgba(214,64,42,.35)}
     .ctl.kb{display:none}
     .ctl.touch{display:grid}
     /* visibility, not display: display:none removes .hk from the grid flow,
@@ -806,6 +841,11 @@
   #inv .ibay.seated{cursor:pointer;}
   #inv .ibay .ipull{margin-left:auto;font-size:12px;line-height:1;opacity:0;
     transition:opacity .12s;}
+  /* Refit refusals used to go ONLY to the log, which the inventory covers on
+     phones -- a refused unseat looked like a dead tap. This line is the
+     inventory's own voice. */
+  #inv .inote{grid-column:1/-1;font-size:9px;letter-spacing:.2em;color:var(--blood);
+    padding:4px 2px 0;min-height:14px;}
   #inv .ibay.seated:hover{box-shadow:inset 0 0 0 1.5px var(--blood);
     background:rgba(214,64,42,.1);color:var(--blood);}
   #inv .ibay.seated:hover .ipull{opacity:.85;}
@@ -1031,6 +1071,25 @@
 </div>
 
 <!-- win screen -->
+<div id="hermit" class="overlay">
+  <div class="dialog hermitbox">
+    <div class="dlg-eyebrow">INTERRVPT</div>
+    <div class="dlg-title">A hooded process resolves out of the static.</div>
+    <div class="dlg-note">"ALONE, THE FLOORS BELOW WILL END YOV. I KEEP THREE BOVND DAEMONS.
+      TAKE ONE — THE OTHERS STAY MINE. CHOOSE, AND THE CHOICE HOLDS."</div>
+    <div id="starters" class="starters"></div>
+  </div>
+</div>
+
+<div id="sever" class="overlay">
+  <div class="winbox severbox">
+    <div class="win-title sever-title">SEVERED</div>
+    <div class="win-rule sever-rule"></div>
+    <div id="sever-stats" class="win-stats sever-stats"></div>
+    <button class="box no" id="sever-again">RECOMPILE</button>
+  </div>
+</div>
+
 <div id="win" class="overlay">
   <div class="winbox">
     <div class="win-title">YOU'RE WINNER!!!</div>
@@ -1060,12 +1119,12 @@
 //   4    . # # # # # . . . # T # . . . . . . . .
 //   5    . # S # # # = = = # # # . . . # # # # S
 //   6    . # # # # # . . . # # # . . . # # # #
-//   7    . . . . . . . . . # # # = x = # # # T #
-//   8    # # # # . . . . . # # # . . . # # # # C
+//   7    . . . . . . . . . # # # = = = # # # T #
+//   8    # # # # . . . . . # # # . . . # # x # C
 //   9    # # # # . . . . . # T # . . . . . . . .
 //  10    # # # # . . . . . # # # . . . . . . . .
 //  11    # # # # = = = = = # # # . . . . . . . .
-//  12    @ @ @ # . . . . . # # # . . . . . . . .
+//  12    @ @ @ @ . . . . . # # # . . . . . . . .
 //
 //   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes
 //   = corridor tile (drawn identically in game; marked here for review)
@@ -1078,6 +1137,11 @@
 
 (function () {
   window.FLOOR01 = {
+    name: 'FLOOR 01',
+    // The Hermit waits at this floor's descent: taking the stairs with a
+    // solo OPERATOR opens the starter choice instead of dropping straight
+    // through. game.js reads this flag in answerExit().
+    hermit: true,
     cols: 20,
     rows: 13,
 
@@ -1133,31 +1197,120 @@
     props: [
       { kind: 'stairs', c: 18, r: 0, hidden: false, label: 'DESCENT' },
       { kind: 'chest',  c: 19, r: 8, hidden: false, label: 'CACHE' },
-      // On the cache corridor, not the mandatory path: the loot approach
-      // is the thing that costs you, and the corridor gives no room to dodge.
-      { kind: 'spikes', c: 13, r: 7, hidden: true,  label: 'SPIKE ARRAY' },
+      // INSIDE the cache room, on the straight line from the corridor mouth
+      // to the chest -- never on the 1-wide corridor itself. A corridor
+      // spike is a toll you pay TWICE (in and out) with no counterplay; a
+      // room spike bites once on the reveal, then routing around it is the
+      // player's job. The loot approach still costs, dodging is still earned.
+      { kind: 'spikes', c: 17, r: 8, hidden: true,  label: 'SPIKE ARRAY' },
     ],
 
     // Party spawns, in command order, along the bottom-left corner of the
     // ENTRY room. The tail sits in the literal corner (0,12) and the OPERATOR
     // takes the point tile east of it, facing the way out, so the formation
     // reads leader-first from the very first frame and the floor unrolls
-    // ahead of you rather than behind.
+    // ahead of you rather than behind. Four tiles: OPERATOR, CALX, CINIS,
+    // GVTTA (interim full-roster spawn until starter choice lands).
     spawns: [
+      { c: 3, r: 12 },
       { c: 2, r: 12 },
       { c: 1, r: 12 },
       { c: 0, r: 12 },
     ],
 
     // Foe placements. `kind` keys into BALANCE.foes.
+    // Trimmed for the SOLO tutorial: one foe per teaching beat, never two
+    // at once. The pre-Hermit OPERATOR has PERCVSSIO and two steps -- a
+    // gauntlet, not a wall. (The old 7-foe set returns on later floors.)
     foes: [
-      { kind: 'TESTA',   c: 18, r: 7 },  // EAST room, guarding the cache
-      { kind: 'SILIQVA', c: 19, r: 5 },  // EAST room, far corner
+      { kind: 'SILIQVA', c: 2,  r: 5 },  // WEST room -- first blood, skirmisher
       { kind: 'TESTA',   c: 10, r: 9 },  // SPINE, south — meets you at the door
-      { kind: 'TESTA',   c: 10, r: 4 },  // SPINE, north — blocks the stairs run
-      { kind: 'SILIQVA', c: 2,  r: 5 },  // WEST room
-      { kind: 'SILIQVA', c: 4,  r: 1 },  // NORTHWEST room
+      { kind: 'TESTA',   c: 18, r: 7 },  // EAST room, guarding the cache
       { kind: 'TESTA',   c: 16, r: 1 },  // NORTHEAST room, on the stairs
+    ],
+  };
+})();
+
+</script>
+<script>
+// FLOOR 02 -- hand-authored. 87 tiles. The party tutorial: the circle is
+// two strong now, and the floor asks for it -- foes sit where a lone
+// OPERATOR would be pinned, but a daemon on point (or a well-timed swap)
+// opens every fight.
+//
+// SHAPE RULE (same as floor 01): rooms never share an edge; every
+// connection is a 1-tile-wide corridor running along the X axis, 2-5 tiles
+// long. North/south travel happens inside the SPINE. tools/test-shape.js
+// enforces this: node tools/test-shape.js data/floor02.js
+//
+//        0 1 2 3 4 5 6 7 8 9 10  12  14  16
+//   0    . . . . . . . . . . . . . S # # #
+//   1    . . . . . . . # # # . . . # # ^ #
+//   2    . . . . . . . # S # = = = # # # #
+//   3    . . . . . . . # # # . . . # # # #
+//   4    . . . . . . . # # # . . . . . . .
+//   5    . . . . . . . # # # . . . . . . .
+//   6    . . . . . . . # T # . . . . . . .
+//   7    # # # # . . . # # # . . . . . . .
+//   8    @ @ @ @ = = = # # # . . . # # # #
+//   9    # # # # . . . # # # = = = # T # #
+//  10    # # # # . . . # # # . . . # x C #
+//  11    . . . . . . . . . . . . . # # # #
+//
+//   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes
+//   = corridor tile (drawn identically in game; marked here for review)
+//
+//   Rooms: ENTRY (0-3, 7-10) - SPINE (7-9, 1-10)
+//          NORTHEAST/stairs (13-16, 0-3) - SOUTHEAST/cache (13-16, 8-11)
+//   Corridor lengths, west to east: 3, 3, 3.
+//
+// To reshape the floor, edit `tiles` only. Nothing else reads geometry.
+
+(function () {
+  window.FLOOR02 = {
+    name: 'FLOOR 02',
+    cols: 17,
+    rows: 12,
+
+    tiles: [
+      [13,0], [14,0], [15,0], [16,0],
+      [7,1], [8,1], [9,1], [13,1], [14,1], [15,1], [16,1],
+      [7,2], [8,2], [9,2], [10,2], [11,2], [12,2], [13,2], [14,2], [15,2], [16,2],
+      [7,3], [8,3], [9,3], [13,3], [14,3], [15,3], [16,3],
+      [7,4], [8,4], [9,4],
+      [7,5], [8,5], [9,5],
+      [7,6], [8,6], [9,6],
+      [0,7], [1,7], [2,7], [3,7], [7,7], [8,7], [9,7],
+      [0,8], [1,8], [2,8], [3,8], [4,8], [5,8], [6,8], [7,8], [8,8], [9,8], [13,8], [14,8], [15,8], [16,8],
+      [0,9], [1,9], [2,9], [3,9], [7,9], [8,9], [9,9], [10,9], [11,9], [12,9], [13,9], [14,9], [15,9], [16,9],
+      [0,10], [1,10], [2,10], [3,10], [7,10], [8,10], [9,10], [13,10], [14,10], [15,10], [16,10],
+      [13,11], [14,11], [15,11], [16,11],
+    ],
+
+    props: [
+      { kind: 'stairs', c: 15, r: 1,  hidden: false, label: 'DESCENT' },
+      { kind: 'chest',  c: 15, r: 10, hidden: false, label: 'CACHE' },
+      // Inside the cache room (see floor 01's note): bites once on the way
+      // in, routable-around once revealed. Never on a 1-wide corridor.
+      { kind: 'spikes', c: 14, r: 10, hidden: true,  label: 'SPIKE ARRAY' },
+    ],
+
+    // Party spawns, in command order, west wall of the ENTRY room. Four
+    // tiles so any roster size seats cleanly; the jam flow arrives here
+    // with two (OPERATOR + the Hermit's starter).
+    spawns: [
+      { c: 3, r: 8 },
+      { c: 2, r: 8 },
+      { c: 1, r: 8 },
+      { c: 0, r: 8 },
+    ],
+
+    // Foe placements. `kind` keys into BALANCE.foes.
+    foes: [
+      { kind: 'SILIQVA', c: 8,  r: 2 },  // SPINE north, on the stairs run
+      { kind: 'TESTA',   c: 8,  r: 6 },  // SPINE mid -- meets you at the door
+      { kind: 'SILIQVA', c: 13, r: 0 },  // NORTHEAST room, stairs guard
+      { kind: 'TESTA',   c: 14, r: 9 },  // SOUTHEAST room, guarding the cache
     ],
   };
 })();
@@ -1182,6 +1335,10 @@
 //     TESTA    -> CINIS    6 +/-1   => 3 hits   (CINIS is glass)
 //     SILIQVA  -> OPERATOR 6 +/-1   => 4 hits
 //     SILIQVA  -> CINIS    7 +/-1   => 3 hits
+//     GVTTA    -> TESTA    3 +/-1   => 2 hits
+//     GVTTA    -> SILIQVA  5 +/-1   => 1 hit
+//     TESTA    -> GVTTA    7 +/-1   => 3 hits   (GVTTA is the ghost: def 0)
+//     SILIQVA  -> GVTTA    8 +/-1   => 2 hits
 
 (function () {
   window.BALANCE = {
@@ -1194,6 +1351,11 @@
       // refits spend from this same pool. Movement is NOT in the pool. Set to
       // 3 to restore one-act-per-member.
       actionsPerRound: 2,
+      // A refit (seat / vnseat / swap) is FREE unless an awake foe stands
+      // within this Chebyshev range of any living member. Inside it, the rig
+      // stays shut: no action-cost workaround, the fight comes first. Awake
+      // foes beyond it count as disengaged -- kiting away to refit is play.
+      refitLockRange: 6,
       minDamage: 1,     // a hit always does something
       pneumaRegen: 1,   // per living member, per round, move or act
     },
@@ -1224,6 +1386,13 @@
       OPERATOR: { vitae: 24, pneuma: 10, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
       CALX:     { vitae: 26, pneuma: 14, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
       CINIS:    { vitae: 18, pneuma: 10, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
+      // The third of the tria prima: quicksilver, the volatile. Paper-thin,
+      // but while GVTTA stands the whole circle walks one extra tile a round
+      // (aura.steps is summed over LIVING members by stepsMax() in game.js).
+      // Interim: spawns as a 4th follower until the starter-choice system
+      // prunes the party to OPERATOR + one daemon.
+      GVTTA:    { vitae: 16, pneuma: 12, atk: 5, def: 0, type: 'MERCVRIVS', role: 'FVGA', tint: 'shell-txt',
+                  aura: { steps: 1 } },
     },
 
     // Drops. Exactly one per severed enemy, rolled off this weighted table.
@@ -1312,6 +1481,11 @@
         pn: 2, mult: 2.2, vitaeCost: 4, fx: 'burn',
         note: 'Heavy hit, adjacent. Burns the caster.',
       },
+      PERMVTO: {
+        kind: 'swap', targets: 'circle', range: 0,
+        pn: 2, cd: 2, fx: 'hex',
+        note: 'Trade places with the point.',
+      },
       // Findable banks. Not in any default loadout; they enter play only as
       // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
       LORICA: {
@@ -1329,20 +1503,27 @@
     // ------------------------------------------------------------- banks
     // A DATA BANK *is* an operation: the archive that carries it. Daemons run
     // whatever banks are seated in their two slots; the OPERATOR's PERCVSSIO
-    // is intrinsic (bare hands, not an archive) and has no bank entry.
+    // is intrinsic (bare hands, not an archive): it never drops, never
+    // unseats, and lives in no satchel. Its entry below exists ONLY so the
+    // rig knows it seats one FLUX -- type '\u2014' matches no daemon, so no
+    // bank can ever swap into the OPERATOR's fixed slot.
     // `type` locks a bank to daemons of that alchemical type. `bays` is how
     // many FLUX cartridges it seats: workhorse ops get 2, spike ops get 1.
     banks: {
+      PERCVSSIO: { type: '\u2014',  bays: 1, intrinsic: true },
       ABRASIO:   { type: 'SAL',     bays: 2 },
       CONCRETIO: { type: 'SAL',     bays: 1 },
       FVLGVR:    { type: 'SVLPHVR', bays: 2 },
       IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
       LORICA:    { type: 'SAL',     bays: 1 },
+      PERMVTO:   { type: 'MERCVRIVS', bays: 1 },
       VAPOR:     { type: 'SVLPHVR', bays: 2 },
     },
     defaultLoadout: {
+      OPERATOR: ['PERCVSSIO'],
       CALX:  ['ABRASIO', 'CONCRETIO'],
       CINIS: ['FVLGVR', 'IMMOLATIO'],
+      GVTTA: ['PERMVTO'],
     },
 
     // ------------------------------------------------------------- fluxes
@@ -1503,7 +1684,23 @@
       <path d="M17 26 L17 43 M47 26 L47 43" stroke="var(--cyan)" stroke-width="1.2" opacity=".5"/>
     </g>`;
 
-  window.SPRITES = { hero, calx, cinis, party, testa, siliqva,
+  // GVTTA — the drop. Placeholder vector until raster art lands: a bead of
+  // quicksilver mid-fall, drawn in the shell register with a bone highlight.
+  const gvtta = () => `
+    <g>
+      <ellipse cx="32" cy="52" rx="11" ry="3" fill="var(--shell)" opacity=".18"/>
+      <path d="M32 8 C32 8 18 28 18 38 A14 14 0 0 0 46 38 C46 28 32 8 32 8 Z"
+            fill="var(--void)" stroke="var(--shell)" stroke-width="1.8"/>
+      <path d="M32 14 C32 14 22 29 22 38 A10 10 0 0 0 42 38 C42 29 32 14 32 14 Z"
+            fill="var(--shell)" opacity=".28"/>
+      <path d="M26 36 A6.5 6.5 0 0 0 30 44" fill="none"
+            stroke="var(--bone)" stroke-width="1.4" opacity=".85"/>
+      <circle cx="36.5" cy="33" r="1.6" fill="var(--bone)" opacity=".9"/>
+      <path d="M32 2 L32 6 M27 5 L29.5 8 M37 5 L34.5 8"
+            stroke="var(--shell)" stroke-width="1.2" opacity=".6"/>
+    </g>`;
+
+  window.SPRITES = { hero, calx, cinis, gvtta, party, testa, siliqva,
                      stairs, stairsSealed, chest, chestOpen, spikes, argent, flux, databank };
 })();
 
@@ -1520,7 +1717,7 @@
 //   MOVE: WASD steps the LEADER one tile; the daemons trail into the tiles
 //         the member ahead of them vacates (Mystery Dungeon snake). Stepping
 //         into a follower SWAPS with it. WASD NEVER attacks.
-//   ACT:  E opens the fan; 1-5 pick any op from any member who has not
+//   ACT:  E opens the fan; 1-6 pick any op from any member who has not
 //         yet acted, in any order — but the CIRCLE shares
 //         combat.actionsPerRound (2) actions per round, so with three
 //         standing, someone sits out. Who acts is the decision.
@@ -1537,6 +1734,7 @@
 (function () {
   const missing = [];
   if (!window.FLOOR01) missing.push('data/floor01.js');
+  if (!window.FLOOR02) missing.push('data/floor02.js');
   if (!window.BALANCE) missing.push('data/balance.js');
   if (!window.SPRITES) missing.push('src/sprites.js');
   if (missing.length) {
@@ -1546,13 +1744,17 @@
     return;
   }
 
-  const F = window.FLOOR01;
+  // The dungeon is an ordered stack of floors; F is ALWAYS the current one.
+  // Everything geometric (walkable, camera bounds, backdrop) derives from F
+  // and is rebuilt by loadFloor(), so F and walkable are lets, not consts.
+  const FLOORS = [window.FLOOR01, window.FLOOR02];
+  let F = FLOORS[0];
   const B = window.BALANCE;
   const S = window.SPRITES;
   const T = 64, CH = 0;
 
   const key = (c, r) => c + ',' + r;
-  const walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
+  let walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
   const propAt = (c, r) => F.props.find(p => p.c === c && p.r === r);
   const cheb = (a, b) => Math.max(Math.abs(a.c - b.c), Math.abs(a.r - b.r));
   const adjacent = (a, b) => Math.abs(a.c - b.c) + Math.abs(a.r - b.r) === 1;
@@ -1560,9 +1762,14 @@
   // Intrinsic operations only (ops with a `by` field, i.e. the OPERATOR's
   // bare-hands PERCVSSIO). Everything else is a seated DATA BANK: the bank IS
   // the operation, and a daemon runs whatever archives its two slots hold.
+  // An intrinsic op that ALSO appears in the default loadout is served by
+  // its loadout slot instead (that is how PERCVSSIO carries a flux bay);
+  // listing it here too would double it on the fan.
+  const DEFAULTED = new Set(Object.values(B.defaultLoadout).flat());
   const INTRINSIC = {};
   for (const [name, op] of Object.entries(B.operations)) {
-    if (op.by) (INTRINSIC[op.by] = INTRINSIC[op.by] || []).push({ name, ...op });
+    if (op.by && !DEFAULTED.has(name))
+      (INTRINSIC[op.by] = INTRINSIC[op.by] || []).push({ name, ...op });
   }
 
   // fold(): resolve one seated bank -> a usable operation. Base stats come
@@ -1592,17 +1799,32 @@
   // the loadout can change mid-run; this list is tiny.
   function allOps() {
     const out = [];
-    Object.keys(B.party).forEach(who =>
+    state.roster.forEach(who =>
       memberOps(who).forEach(op => out.push({ owner: who, op })));
     return out;
   }
 
   // -------------------------------------------------------------- state
 
+  // Fresh member at the floor's i-th spawn tile, full VITAE/PNEUMA.
+  const mkMember = (name, i) => ({
+    name, ...B.party[name],
+    c: F.spawns[i].c, r: F.spawns[i].r,
+    hp: B.party[name].vitae,
+    pn: B.party[name].pneuma,
+  });
+  const mkFoes = () => F.foes.map((f, i) => ({
+    id: i, kind: f.kind, c: f.c, r: f.r,
+    ...B.foes[f.kind],
+    hp: B.foes[f.kind].vitae,
+    awake: false,
+  }));
+
   const state = {
     turn: 1,
     // Two bank slots per daemon, seeded from the default loadout. Each slot:
-    // { bank, fluxes: [fluxId|null per bay] }. The OPERATOR has no slots.
+    // { bank, fluxes: [fluxId|null per bay] }. The OPERATOR's single slot
+    // holds intrinsic PERCVSSIO permanently; only its flux bay is live.
     loadout: Object.fromEntries(Object.entries(B.defaultLoadout).map(
       ([who, banks]) => [who, banks.map(b =>
         ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
@@ -1620,23 +1842,19 @@
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
     cd: {},                        // { opName: rounds remaining }
+    // Which of B.party is actually IN the run, in command order. The run
+    // starts solo: the OPERATOR earns a daemon from the Hermit at the first
+    // descent, and everything downstream (ops, roster panel, inventory rig)
+    // reads this list, never B.party directly.
+    roster: ['OPERATOR'],
+    floor: 0,
     // Members carry their OWN tiles now. There is deliberately no circle.c/r
     // any more — a stale read of it must fail loudly, not silently target one
     // ghost tile. Spawns are in command order: OPERATOR leads.
     circle: {
-      members: Object.keys(B.party).map((name, i) => ({
-        name, ...B.party[name],
-        c: F.spawns[i].c, r: F.spawns[i].r,
-        hp: B.party[name].vitae,
-        pn: B.party[name].pneuma,
-      })),
+      members: [mkMember('OPERATOR', 0)],
     },
-    foes: F.foes.map((f, i) => ({
-      id: i, kind: f.kind, c: f.c, r: f.r,
-      ...B.foes[f.kind],
-      hp: B.foes[f.kind].vitae,
-      awake: false,
-    })),
+    foes: mkFoes(),
     floats: [],                    // queued floating text, flushed on draw
     bursts: [],                    // queued particle bursts, flushed on draw
     drops: [],                     // [{ id, kind, label, sprite, c, r, amount }]
@@ -1648,10 +1866,22 @@
   let dropSeq = 0;
 
   const living = () => state.circle.members.filter(m => m.hp > 0);
+  // Step allowance for the round: the base walk plus any aura tiles carried
+  // by LIVING members (GVTTA grants +1 while it stands). Foes stay at their
+  // own speed, so with the aura up the circle can genuinely outrun pursuit —
+  // that is the aura's whole point, not an oversight.
+  const stepsMax = () => B.combat.stepsPerRound +
+    state.circle.members.reduce((n, m) =>
+      n + (m.hp > 0 && m.aura ? (m.aura.steps || 0) : 0), 0);
   const liveFoes = () => state.foes.filter(f => f.hp > 0);
   const foeAt = (c, r) => state.foes.find(f => f.hp > 0 && f.c === c && f.r === r);
   const foeById = id => state.foes.find(f => f.id === id);
   const operator = () => state.circle.members[0];
+  // Where the camera and minimap look. With everyone alive this IS the
+  // leader; with the whole circle severed it falls back to the OPERATOR's
+  // body, so the death frame can still draw (the sever screen paints OVER a
+  // real board, not over a crash).
+  const camAnchor = () => living()[0] || state.circle.members[0];
   // CLEARED is NOT terminal: the floor is empty but you still have to walk to
   // the stairs. Only these two states actually stop play.
   const finished = () => state.over === 'SEVERED' || state.over === 'WIN';
@@ -1786,6 +2016,32 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('open'), 2000);
   }
+
+  // A script fault must never be silent. Before this, one exception inside a
+  // phase or a draw wedged the game PERMANENTLY with no output: the phase
+  // queue stalled, every later input re-threw inside settle(), and the board
+  // froze mid-round looking perfectly normal. The fault line goes into the
+  // record via state.log AND straight into the DOM (in case draw itself is
+  // the casualty; the next healthy draw rebuilds the record and absorbs it).
+  function reportFault(where, err) {
+    const msg = 'SCRIPT FAVLT [' + where + '] \u2014 ' +
+      (err && err.message ? err.message : String(err));
+    log(msg, 'bad');
+    try {
+      const el = document.getElementById('log');
+      if (el) el.insertAdjacentHTML('afterbegin',
+        `<div class="line bad">${msg}</div>`);
+      const tk = document.getElementById('ticker');
+      if (tk) tk.insertAdjacentHTML('afterbegin',
+        `<div class="line bad">${msg}</div>`);
+    } catch (_) { /* reporting must never throw */ }
+    if (window.console && console.error) console.error(msg, err);
+  }
+  window.addEventListener('error', e =>
+    reportFault('WINDOW', (e.error && e.error.message ? e.error : e.message) ||
+      'unknown'));
+  window.addEventListener('unhandledrejection', e =>
+    reportFault('PROMISE', e.reason || 'unknown'));
 
   // -------------------------------------------------------------- combat
 
@@ -1923,6 +2179,16 @@
   // advancing while they idled or withdrew, and flankers were drawn stepping
   // at the circle rather than at the side tile they had claimed.
   function decide(foe, claimed) {
+    // No living member -> nothing to hunt. This is not a corner case: the
+    // strike loop kills mid-iteration (the LAST member can fall while other
+    // foes still hold intents), and FVLMINANS lets a member burn THEMSELVES
+    // down in the party phase. foeTarget() then returns undefined, and
+    // adjacent(foe, undefined) used to THROW -- killing the cleanup phase
+    // before checkEnd() could declare SEVERED. The player was left on a
+    // stale frame of a dead party the game never noticed: the true face of
+    // the "stuck after the chest" bug (chests are where FVLMINANS and the
+    // guard fights live).
+    if (!living().length) return { kind: 'idle' };
     if (foe.ai === 'skirmish') return skirmishIntent(foe, claimed);
     // flank (default): claim a free tile beside the hunted member and path to
     // it. `chase: true` marks pursuit -- resolveRound grants chasers a second
@@ -2058,7 +2324,7 @@
     pendingMembers().every(m => opsFor(m).every(op => !usable(m, op)));
   // Every direction blocked by wall or enemy -> the only way out is SPACE too.
   // A follower's tile counts as open: stepping into it swaps.
-  const canStep = () => [[0,-1],[-1,0],[0,1],[1,0]].some(([dc, dr]) => {
+  const canStep = () => !!lead() && [[0,-1],[-1,0],[0,1],[1,0]].some(([dc, dr]) => {
     const c = lead().c + dc, r = lead().r + dr;
     return walkable.has(key(c, r)) && !foeAt(c, r);
   });
@@ -2100,6 +2366,26 @@
       burst(member.c, member.r, op.fx);
       log(`${op.name} SCOURS ${hit.length} ${hit.length > 1 ? 'ENEMIES' : 'ENEMY'}.`);
       hit.forEach(f => strikeFoe(member, op, f));
+      return;
+    }
+
+    // Swap: the caster trades BOTH tile and chain slot with the leader, so
+    // the trail keeps occupying the same contiguous tiles and only the two
+    // identities exchange. Cast from point, it trades with the rear instead —
+    // quicksilver runs to where it isn't.
+    if (op.kind === 'swap') {
+      const ms = living();
+      if (ms.length < 2) { log(`${op.name} FINDS NO ONE TO TRADE WITH.`); return; }
+      const other = member === ms[0] ? ms[ms.length - 1] : ms[0];
+      const tc = other.c, tr = other.r;
+      other.c = member.c; other.r = member.r;
+      member.c = tc; member.r = tr;
+      const arr = state.circle.members;
+      const i = arr.indexOf(member), j = arr.indexOf(other);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      burst(member.c, member.r, op.fx || 'hex');
+      burst(other.c, other.r, op.fx || 'hex');
+      log(`${op.name} \u2014 ${member.name} TRADES PLACES WITH ${other.name}.`, 'good');
       return;
     }
 
@@ -2150,15 +2436,22 @@
   function nextPhase() {
     phaseTimer = null;
     if (!phaseQueue.length) return;
-    phaseQueue.shift()();
-    draw();
+    // A phase that throws is REPORTED and DROPPED, never left at the head of
+    // the queue: settle() drains this same queue on every later input, so a
+    // sticky throwing phase used to abort every input forever -- a total,
+    // silent wedge. Losing one phase's effects is strictly better than
+    // losing the game; the round's cleanup phase still runs.
+    try { phaseQueue.shift()(); } catch (err) { reportFault('PHASE', err); }
+    try { draw(); } catch (err) { reportFault('DRAW', err); }
     if (phaseQueue.length) phaseTimer = setTimeout(nextPhase, STEP_MS);
   }
 
   // Run everything still owed, right now. Callers draw afterwards.
   function settle() {
     if (phaseTimer !== null) { clearTimeout(phaseTimer); phaseTimer = null; }
-    while (phaseQueue.length) phaseQueue.shift()();
+    while (phaseQueue.length) {
+      try { phaseQueue.shift()(); } catch (err) { reportFault('PHASE', err); }
+    }
   }
 
   function resolveRound(move) {
@@ -2242,8 +2535,16 @@
     if (state.modal !== 'exit') return;
     state.modal = null;
     if (!yes) { log('THE CIRCLE STEPS BACK FROM THE DESCENT.'); return; }
+    // A solo OPERATOR does not get to fall through the first floor: the
+    // Hermit is standing IN the stairwell, and the bargain is mandatory.
+    if (F.hermit && state.roster.length === 1) { state.modal = 'hermit'; return; }
+    if (state.floor + 1 < FLOORS.length) {
+      log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
+      loadFloor(state.floor + 1);
+      return;
+    }
     state.over = 'WIN';
-    log('THE CIRCLE TAKES THE DESCENT. FLOOR 01 IS BEHIND YOU.', 'good');
+    log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
   }
 
   function checkEnd() {
@@ -2254,8 +2555,90 @@
     }
     if (!liveFoes().length && !state.over) {
       state.over = 'CLEARED';
-      log('FLOOR 01 IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.', 'good');
+      log(`${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.`, 'good');
     }
+  }
+
+  // ---------------------------------------------------------- floor loader
+  // Descending is the ONLY way floors change, and this is the only function
+  // that swaps F. Carries across floors: roster, VITAE/PNEUMA (a severed
+  // daemon limps back at half VITAE -- the descent knits, it does not heal),
+  // bag, argent, loadout, the turn counter. Resets: foes, drops, fog, wards,
+  // cooldowns, camera, props (caches close again on THEIR floor -- each
+  // floor object keeps its own).
+  function loadFloor(i) {
+    state.floor = i;
+    F = FLOORS[i];
+    walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
+    F.props.forEach(p => { p.opened = false; });
+
+    const old = state.circle.members;
+    state.circle.members = state.roster.map((name, idx) => {
+      const prev = old.find(m => m.name === name);
+      const m = mkMember(name, idx);
+      if (prev) {
+        m.hp = prev.hp > 0 ? prev.hp : Math.ceil(m.vitae / 2);
+        m.pn = prev.pn;
+      }
+      return m;
+    });
+
+    state.foes = mkFoes();
+    state.over = null;
+    state.drops = []; state.wards = []; state.cd = {}; state.queued = [];
+    state.acted = []; state.mode = 'move'; state.sel = null;
+    state.pending = null; state.aiming = null; state.staged = null;
+    state.hover = null; state.stepsUsed = 0;
+    state.floats = []; state.bursts = [];
+    state.revealed = new Set(); state.seen = new Set();
+    recomputeFOV();   // members stand on a NEW floor; stale sight is floor-crossed
+
+    // Persistent actor nodes are keyed 'foe'+id / 'party-'+name; the new
+    // floor reuses both key spaces, and a stale node would visibly TWEEN
+    // from its old-floor tile. Hard reset.
+    for (const k in actorNodes) { actorNodes[k].remove(); delete actorNodes[k]; }
+
+    bgG.innerHTML = backdrop();
+    mmEl.setAttribute('viewBox', `0 0 ${F.cols} ${F.rows}`);
+    mmEl.style.aspectRatio = `${F.cols} / ${F.rows}`;
+    cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
+    view.free = false;
+
+    buildRoster();
+    renderFanChips();
+    log(`${F.name} COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
+  }
+
+  // Add a daemon to the run mid-floor: roster slot plus a body on the first
+  // free tile ringing the tail (8-way, orthogonals first). The Hermit flow
+  // never needs the placement (it recruits BETWEEN floors, and loadFloor
+  // seats everyone at spawns), but tests and future floor events do.
+  function recruit(name) {
+    if (state.roster.includes(name) || !B.party[name]) return null;
+    state.roster.push(name);
+    const chain = living();
+    const tail = chain[chain.length - 1] || operator();
+    const spot = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+      .map(([dc, dr]) => ({ c: tail.c + dc, r: tail.r + dr }))
+      .find(t => walkable.has(key(t.c, t.r)) && !foeAt(t.c, t.r) && !memberAt(t.c, t.r))
+      || { c: tail.c, r: tail.r };
+    const m = { ...mkMember(name, 0), c: spot.c, r: spot.r };
+    state.circle.members.push(m);
+    buildRoster();
+    renderFanChips();
+    return m;
+  }
+
+  // The Hermit's bargain: one daemon joins, the choice is final, and the
+  // descent happens in the same breath. Roster order IS command order, so
+  // the starter falls in directly behind the OPERATOR.
+  function chooseStarter(name) {
+    if (state.modal !== 'hermit') return;
+    state.modal = null;
+    state.roster.push(name);
+    log(`THE HERMIT UNBINDS ${name}. IT FALLS IN BEHIND YOU.`, 'good');
+    log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
+    loadFloor(state.floor + 1);
   }
 
   // Hazards bite on EVERY entry. Revealing one is not the same as disarming
@@ -2279,7 +2662,7 @@
 
   // The prop under the circle that E would act on, or null.
   function interactable() {
-    if (blocked() || state.mode !== 'move') return null;
+    if (blocked() || state.mode !== 'move' || !lead()) return null;
     const p = propAt(lead().c, lead().r);
     if (!p) return null;
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
@@ -2399,7 +2782,16 @@
   // Hotkey picks the operation, one click on an enemy fires it. No confirm.
   function clickTile(c, r) {
     if (state.pending) {
-      const foe = foeAt(c, r);
+      let foe = foeAt(c, r);
+      // Near-miss forgiveness: a thumb one tile off a VALID target still
+      // means that target. Only unambiguous rescues fire -- exactly one
+      // valid foe ringing the tapped tile -- so a miss between two enemies
+      // stays a miss rather than guessing.
+      if (!foe) {
+        const near = validTargets(state.pending.op, state.pending.member)
+          .filter(f => cheb(f, { c, r }) === 1);
+        if (near.length === 1) foe = near[0];
+      }
       if (!foe) { warn('TAP AN ENEMY INSIDE THE WASH, OR CANCEL.'); return; }
       if (cheb(foe, state.pending.member) > state.pending.op.range) {
         warn(foe.kind + ' IS OUT OF RANGE.');
@@ -2408,7 +2800,7 @@
       commitMember(state.pending.member, state.pending.op, foe.id);
       return;
     }
-    if (state.mode === 'act') return;
+    if (state.mode === 'act' || !lead()) return;
 
     const dc = c - lead().c, dr = r - lead().r;
 
@@ -2499,7 +2891,7 @@
   // just vacated. The chain is contiguous at spawn and both moves preserve
   // that, so followers only ever step one tile.
   function moveInput(dc, dr) {
-    if (blocked() || state.mode === 'act') return;
+    if (blocked() || state.mode === 'act' || !lead()) return;
     const L = lead();
     const nc = L.c + dc, nr = L.r + dr;
     if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
@@ -2525,7 +2917,7 @@
     onEnter();
     collectDrops();
     if (living().length === 0) { resolveRound(null); return; }
-    if (state.stepsUsed >= B.combat.stepsPerRound) resolveRound({ kind: 'moved' });
+    if (state.stepsUsed >= stepsMax()) resolveRound({ kind: 'moved' });
   }
 
   // ------------------------------------------------------------- render
@@ -2629,8 +3021,8 @@
     const fitR = Math.max(3, Math.floor(box.height / px));
     const w = Math.min(F.cols, fitC) * T;
     const h = Math.min(F.rows, fitR) * T;
-    const cx = view.free ? view.ox : (lead().c + .5) * T;
-    const cy = view.free ? view.oy : (lead().r + .5) * T;
+    const cx = view.free ? view.ox : (camAnchor().c + .5) * T;
+    const cy = view.free ? view.oy : (camAnchor().r + .5) * T;
     const x = Math.max(0, Math.min(cx - w / 2, F.cols * T - w));
     const y = Math.max(0, Math.min(cy - h / 2, F.rows * T - h));
 
@@ -2654,7 +3046,7 @@
     camTween = requestAnimationFrame(step);
   }
   updateCamera(true);
-  bgG.innerHTML = backdrop();     // depends only on floor dimensions: never changes
+  bgG.innerHTML = backdrop();     // floor-sized; loadFloor() repaints it
 
   function plate(c, r, inset) {
     const x = c * T + inset, y = r * T + inset, s = T - inset * 2;
@@ -2746,6 +3138,10 @@
       if (!foeSeen(f)) continue;      // out of sight: node drops out below
       const key = 'foe' + f.id;
       seen.add(key);
+      // The node carries its foe id so the stage click handler can hit-test
+      // the SPRITE the player sees, not the tile the camera math lands on.
+      // Actors glide on a CSS transition while state teleports, so mid-step
+      // the two disagree -- taps must side with the pixels.
       const pct = f.hp / f.vitae;
       const alert = f.awake
         ? `<polygon points="${plate(0, 0, 2)}" fill="none" stroke="var(--blood)"
@@ -2755,6 +3151,7 @@
                    <rect x="14" y="6" width="${36 * pct}" height="3.5"
                          fill="var(--blood)"/>`;
       const el = actorNode(key);
+      el.dataset.foe = f.id;
       setActorContent(el, alert + S[f.sprite]() + bar);
       placeActor(el, f.c, f.r);
     }
@@ -2779,7 +3176,7 @@
   }
 
   // Presentation-only mapping; the numbers bible stays numbers.
-  const MEMBER_SPRITE = { OPERATOR: 'hero', CALX: 'calx', CINIS: 'cinis' };
+  const MEMBER_SPRITE = { OPERATOR: 'hero', CALX: 'calx', CINIS: 'cinis', GVTTA: 'gvtta' };
 
   // Per-token VITAE bar in the member's own tint, same geometry as foe bars.
   function memberBar(m) {
@@ -2792,7 +3189,7 @@
   // The four legal steps, outlined. Nothing on the board used to say which
   // tiles were the move buttons, so a diagonal tap did nothing with no feedback.
   function moveLayer() {
-    if (state.mode !== 'move' || state.pending || finished() || !isCoarse()) return '';
+    if (state.mode !== 'move' || state.pending || finished() || !isCoarse() || !lead()) return '';
     return [[0, -1], [-1, 0], [0, 1], [1, 0]].map(([dc, dr]) => {
       const c = lead().c + dc, r = lead().r + dr;
       if (!walkable.has(key(c, r)) || foeAt(c, r)) return '';
@@ -2891,7 +3288,7 @@
         g += `<circle cx="${f.c + .5}" cy="${f.r + .5}" r=".33" fill="var(--blood)"/>`;
     for (const m of living())
       g += `<circle cx="${m.c + .5}" cy="${m.r + .5}" r=".4" fill="var(--gold)"/>`;
-    g += `<circle cx="${lead().c + .5}" cy="${lead().r + .5}" r=".72"
+    g += `<circle cx="${camAnchor().c + .5}" cy="${camAnchor().r + .5}" r=".72"
                   fill="none" stroke="var(--gold)" stroke-width=".14" opacity=".55"/>`;
     if (cam.w < F.cols * T - 1 || cam.h < F.rows * T - 1)
       g += `<rect x="${cam.x / T}" y="${cam.y / T}" width="${cam.w / T}" height="${cam.h / T}"
@@ -2901,7 +3298,7 @@
 
   // Where a staged step would land, before it is paid for.
   function stagedLayer() {
-    if (!state.staged) return '';
+    if (!state.staged || !lead()) return '';
     const c = lead().c + state.staged.dc, r = lead().r + state.staged.dr;
     return `<polygon points="${plate(c, r, 3)}" fill="var(--gold)" opacity=".14"/>
             <polygon points="${plate(c, r, 1)}" fill="none" stroke="var(--gold)"
@@ -2944,18 +3341,24 @@
       };
     });
 
-    rosterEl.addEventListener('click', e => {
-      if (blocked() || !tapOk()) return;
-      const card = e.target.closest('.unit');
-      if (!card) return;
-      const m = byName(card.dataset.member);
-      if (!m || !canAct(m)) return;
-      if (state.mode === 'move') state.mode = 'act';
-      state.pending = null; state.aiming = null;
-      state.sel = state.sel === m.name ? null : m.name;   // tap again closes
-      draw();
-    });
-    rosterEl.addEventListener('keydown', activateOnKey);
+    // Listeners are DELEGATED (rosterEl survives innerHTML rebuilds), and
+    // buildRoster now reruns on every recruit / floor load, so they must
+    // attach exactly once or every tap dispatches N times.
+    if (!buildRoster.wired) {
+      buildRoster.wired = true;
+      rosterEl.addEventListener('click', e => {
+        if (blocked() || !tapOk()) return;
+        const card = e.target.closest('.unit');
+        if (!card) return;
+        const m = byName(card.dataset.member);
+        if (!m || !canAct(m)) return;
+        if (state.mode === 'move') state.mode = 'act';
+        state.pending = null; state.aiming = null;
+        state.sel = state.sel === m.name ? null : m.name;   // tap again closes
+        draw();
+      });
+      rosterEl.addEventListener('keydown', activateOnKey);
+    }
   }
 
   // role="button" on a div is a promise that the keyboard can activate it.
@@ -3162,8 +3565,13 @@
       g.el.classList.toggle('acting', state.aiming === m.name);
       g.tag.textContent = dead ? 'SEVERED' : done ? 'DONE' : 'P ' + m.pn;
 
+      // Folded ops, not the raw table: a chip must show what the op COSTS AS
+      // SEATED. A FVLMINANS'd PERCVSSIO burns vitae per swing -- reading raw
+      // B.operations hid that surcharge (and any flux range) from the fan.
+      const folded = memberOps(m.name);
       g.chips.forEach(chip => {
-        const op = { name: chip.dataset.op, ...B.operations[chip.dataset.op] };
+        const op = folded.find(o => o.name === chip.dataset.op) ||
+          { name: chip.dataset.op, ...B.operations[chip.dataset.op] };
         const cd = cdLeft(op), blind = noTarget(m, op);
         chip.querySelector('.cc').textContent =
           cd > 0 ? 'CD ' + cd
@@ -3210,7 +3618,35 @@
 
   const modalEl = document.getElementById('modal');
   const winEl = document.getElementById('win');
+  const severEl = document.getElementById('sever');
   const ctlEl = document.getElementById('controls');
+  const hermitEl = document.getElementById('hermit');
+  const startersEl = document.getElementById('starters');
+
+  // Starter cards, built once from the numbers bible. Presentation-layer
+  // pitches live HERE, not in balance -- the bible stays numbers.
+  const STARTER_PITCH = {
+    CALX:  'TAKES THE HITS.',
+    CINIS: 'ENDS FIGHTS FAST.',
+    GVTTA: 'CANNOT BE CAVGHT.',
+  };
+  const STARTERS = Object.keys(STARTER_PITCH);
+  startersEl.innerHTML = STARTERS.map((name, i) => {
+    const p = B.party[name];
+    return `<button class="starter" data-starter="${name}" style="--tint:var(--${p.tint})">
+        <span class="st-key">${i + 1}</span>
+        <span class="st-name">${name}</span>
+        <span class="st-role">${p.type} \u00b7 ${p.role}</span>
+        <span class="st-pitch">${STARTER_PITCH[name]}</span>
+        <span class="st-stats">V ${p.vitae} \u00b7 P ${p.pneuma} \u00b7 ATK ${p.atk} \u00b7 DEF ${p.def}</span>
+      </button>`;
+  }).join('');
+  startersEl.addEventListener('click', e => {
+    const card = e.target.closest('.starter');
+    if (!card) return;
+    chooseStarter(card.dataset.starter);
+    draw();
+  });
   const helpEl = document.getElementById('help');
   const satchelEl = document.getElementById('satchel');
 
@@ -3252,10 +3688,13 @@
     draw();
   });
   document.getElementById('again').addEventListener('click', () => window.location.reload());
+  document.getElementById('sever-again').addEventListener('click', () => window.location.reload());
 
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
+    hermitEl.classList.toggle('open', state.modal === 'hermit');
     winEl.classList.toggle('open', state.over === 'WIN');
+    severEl.classList.toggle('open', state.over === 'SEVERED');
 
     const ctlOpen = state.modal === 'controls';
     ctlEl.classList.toggle('open', ctlOpen);
@@ -3277,6 +3716,16 @@
         : 'THE FLOOR IS QUIET. NOTHING LEFT BEHIND.';
     }
 
+    if (state.over === 'SEVERED') {
+      const dead = state.foes.filter(f => f.hp <= 0).length;
+      document.getElementById('sever-stats').innerHTML = [
+        ['SVRVIVED TO TVRN', state.turn],
+        ['FLOOR REACHED', F.name],
+        ['ENEMIES SEVERED', dead + ' / ' + state.foes.length],
+        ['ARGENT CARRIED', state.bag.argent],
+      ].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('');
+    }
+
     if (state.over === 'WIN') {
       const flux = state.bag.items.filter(i => i.kind === 'FLUX').length;
       const data = state.bag.items.filter(i => i.kind === 'DATA').length;
@@ -3293,6 +3742,9 @@
   }
 
   function draw() {
+    try { drawBody(); } catch (err) { reportFault('DRAW', err); }
+  }
+  function drawBody() {
     recomputeFOV();
     updateCamera();
     boardG.innerHTML = floorLayer() + propLayer() + aimLayer()
@@ -3348,7 +3800,7 @@
       prompt.textContent = 'ACTIONS ' + state.acted.length + '/' +
         B.combat.actionsPerRound + ' \u2014 ' + (isCoarse()
         ? 'TAP A NAMEPLATE \u2014 COMMIT ENDS THE ROUND'
-        : 'TAP A NAMEPLATE OR 1-5 \u2014 COMMIT ENDS THE ROUND');
+        : 'TAP A NAMEPLATE OR 1-6 \u2014 COMMIT ENDS THE ROUND');
     else if (state.staged)
       prompt.textContent = 'CONFIRM THE STEP, OR TAP ANOTHER TILE';
     else if (!canStep())
@@ -3409,6 +3861,13 @@
       draw();
       return;
     }
+    // The Hermit's bargain has no escape key: the choice is the only door.
+    if (state.modal === 'hermit') {
+      e.preventDefault();
+      const idx = ['1', '2', '3'].indexOf(k);
+      if (idx >= 0) { chooseStarter(STARTERS[idx]); draw(); }
+      return;
+    }
     if (state.modal === 'inv') {
       e.preventDefault();
       if (k === 'escape' || k === 'i') closeInv();
@@ -3428,7 +3887,7 @@
     if (k === 'escape') { e.preventDefault(); cancel(); draw(); return; }
     if (k === 'enter')  { e.preventDefault(); confirmTarget(); draw(); return; }
     if (k === 'e')      { e.preventDefault(); openAct(); draw(); return; }
-    if (k >= '1' && k <= '5') { e.preventDefault(); chooseOp(+k - 1); draw(); }
+    if (k >= '1' && k <= '6') { e.preventDefault(); chooseOp(+k - 1); draw(); }
   });
 
   function tileFromEvent(e) {
@@ -3455,6 +3914,14 @@
     if (longPressed) { longPressed = false; return; }
     if (!tapOk()) return;
     hideInspect();
+    // Tap-what-you-see: a click that lands on a foe's sprite resolves to that
+    // foe's CURRENT state tile, even while the sprite is mid-glide between
+    // tiles (state moves instantly, the CSS transition lags ~a step). Without
+    // this, aiming at a foe that just stepped maps the tap to the tile it is
+    // VISIBLY on but no longer AT, and the operation refuses to fire.
+    const hit = e.target.closest && e.target.closest('[data-foe]');
+    const foe = hit ? foeById(+hit.dataset.foe) : null;
+    if (foe && foe.hp > 0) { clickTile(foe.c, foe.r); draw(); return; }
     const t = tileFromEvent(e);
     clickTile(t.c, t.r); draw();
   });
@@ -3648,24 +4115,21 @@
   // ---------------------------------------------------------- inventory
   const invEl = document.getElementById('inv');
 
-  const aggroLive = () => liveFoes().some(f => f.awake && f.hp > 0);
-
-  // Mid-combat refits are not free: with any foe awake, touching a daemon's
-  // loadout spends that daemon's action for the round and takes back any
-  // operation it had queued. With the floor quiet, the workbench is open.
+  // Refits are free OR forbidden, never an action tax. The old rule (spend
+  // the daemon's action while any foe was awake) trapped players mid-move-
+  // phase: the spent action lingered in state.acted until the round resolved,
+  // so refit -> step once -> refit again read as a stuck rig. The gate is now
+  // PROXIMITY: an awake foe within combat.refitLockRange of any living member
+  // means the fight is on and the rig stays shut; otherwise change freely --
+  // including with awake foes you have genuinely outrun.
+  const refitThreat = () => liveFoes().find(f => f.awake &&
+    living().some(m => cheb(f, m) <= B.combat.refitLockRange));
   function payRefit(who) {
-    if (!aggroLive()) return true;
-    if (state.acted.includes(who)) {
-      log(who + ' HAS ALREADY ACTED \u2014 REFIT NEXT ROVND.', 'bad');
+    const foe = refitThreat();
+    if (foe) {
+      log(foe.kind + ' TOO CLOSE \u2014 THE RIG STAYS SHVT VNDER THREAT.', 'bad');
       return false;
     }
-    if (actionsLeft() === 0) {
-      log('NO ACTION LEFT IN THE ROVND TO REFIT ' + who + '.', 'bad');
-      return false;
-    }
-    state.queued = state.queued.filter(q => q.member.name !== who);
-    state.acted.push(who);
-    log(who + ' SPENDS THE ROVND REFITTING.');
     return true;
   }
 
@@ -3676,7 +4140,7 @@
     invEl.classList.add('show');
   }
   function closeInv() {
-    state.modal = null; state.invSel = null; state.fluxPick = null;
+    state.modal = null; state.invSel = null; state.fluxPick = null; state.invNote = null;
     invEl.classList.remove('show');
   }
 
@@ -3769,6 +4233,7 @@
   : op.kind === 'hex'    ? 'HEX \u00b7 PERMANENT'
   : op.kind === 'ward'   ? 'WARD \u00b7 CIRCLE'
   : op.kind === 'splash' ? 'SPLASH BOLT'
+  : op.kind === 'swap'   ? 'SWAP \u00b7 CIRCLE'
   : op.range > 1         ? 'RANGED STRIKE' : 'MELEE STRIKE';
 
   const delta = (n) => n > 0 ? `  (+${n})` : n < 0 ? `  (${n})` : '';
@@ -3843,7 +4308,8 @@
     const sel = state.invSel != null ? state.bag.items[state.invSel] : null;
 
     // ------------------------------------------------------------- rig
-    const panels = ['CALX', 'CINIS'].map(who => {
+    const rigged = state.roster.filter(who => state.loadout[who]);
+    const panels = rigged.map(who => {
       const ptype = B.party[who].type;
       const m = state.circle.members.find(x => x.name === who) || {};
       const banks = state.loadout[who].map((sl, si) => {
@@ -3910,9 +4376,9 @@
       insp = `<b>${sel.flux}</b> \u00b7 ${B.fluxes[sel.flux].note}` +
              ` CLICK A GLOWING BAY TO SEAT \u00b7 ONE PER BANK.`;
     }
-    const cost = aggroLive()
-      ? 'FOES AWAKE \u2014 A REFIT SPENDS THAT DAEMON\u2019S ACTION THIS ROVND'
-      : 'FLOOR QVIET \u2014 REFITS ARE FREE';
+    const cost = refitThreat()
+      ? 'ENEMY IN RANGE \u2014 THE RIG IS SHVT VNTIL YOV BREAK AWAY'
+      : 'NO THREAT IN RANGE \u2014 REFITS ARE FREE';
 
     // --------------------------------------------------------- satchel
     // Identical items collapse into one card; data-i points at the first of
@@ -3968,6 +4434,7 @@
       <div class="ispec">
         <div class="iinsp">${insp}</div>
         <div class="icost">${cost}</div>
+        <div class="inote">${state.invNote || ''}</div>
         <div class="ispec-b">
           <div class="ispec-t">${title}<small>${sub}</small></div>
           <dl>${cols[0]}</dl><dl>${cols[1]}</dl><dl>${cols[2]}</dl>
@@ -3988,8 +4455,19 @@
   }
 
 
+  // payRefit that the INVENTORY can hear: on refusal, the reason (already
+  // logged) is copied onto state.invNote, which renderInv prints inside the
+  // overlay. On phones the log is covered by the inventory, so without this
+  // a refused refit is indistinguishable from a dead tap.
+  function payRefitInv(who) {
+    if (payRefit(who)) return true;
+    state.invNote = state.log[0] ? state.log[0].text : 'REFIT REFVSED.';
+    return false;
+  }
+
   invEl.addEventListener('click', e => {
     if (e.target.closest('#inv-close')) { closeInv(); draw(); return; }
+    state.invNote = null;   // any fresh interaction speaks for itself
 
     // Picker branches sit first so a chip tap never falls through to the
     // bay handlers underneath it.
@@ -3999,7 +4477,7 @@
       const flux = fpChip.dataset.fpFlux;
       const i = state.bag.items.findIndex(it => it.kind === 'FLUX' && it.flux === flux);
       state.fluxPick = null;
-      if (i >= 0 && payRefit(who)) {
+      if (i >= 0 && payRefitInv(who)) {
         state.loadout[who][slot].fluxes[bay] = flux;
         state.bag.items.splice(i, 1); state.invSel = null;
         log(flux + ' SEATED.', 'good');
@@ -4029,7 +4507,7 @@
     const pull = e.target.closest('.ibay.seated');
     if (pull) {
       const who = pull.dataset.who;
-      if (!payRefit(who)) { renderInv(); draw(); return; }
+      if (!payRefitInv(who)) { renderInv(); draw(); return; }
       const sl = state.loadout[who][+pull.dataset.slot];
       const fi = +pull.dataset.bay, flux = sl.fluxes[fi];
       sl.fluxes[fi] = null;
@@ -4059,7 +4537,7 @@
     const bay = e.target.closest('.ibay.empty.elig');
     if (bay && sel.kind === 'FLUX') {
       const who = bay.dataset.who;
-      if (!payRefit(who)) { renderInv(); draw(); return; }
+      if (!payRefitInv(who)) { renderInv(); draw(); return; }
       state.loadout[who][+bay.dataset.slot].fluxes[+bay.dataset.bay] = sel.flux;
       state.bag.items.splice(state.invSel, 1); state.invSel = null;
       log(sel.flux + ' SEATED.', 'good');
@@ -4068,7 +4546,7 @@
     const sock = e.target.closest('.isock.elig');
     if (sock && sel.kind === 'DATA') {
       const who = sock.dataset.who;
-      if (!payRefit(who)) { renderInv(); draw(); return; }
+      if (!payRefitInv(who)) { renderInv(); draw(); return; }
       const sl = state.loadout[who][+sock.dataset.slot];
       // Ride-along (sheet 24): fluxes travel with their bank, both ways.
       const old = { kind: 'DATA', bank: sl.bank, label: sl.bank, sprite: 'databank',
@@ -4092,7 +4570,8 @@
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
-                  previewIntent, canAct, actionsLeft };
+                  previewIntent, canAct, actionsLeft, stepsMax, applyOp,
+                  loadFloor, recruit, chooseStarter, recomputeFOV };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.
@@ -4112,7 +4591,7 @@
   window.addEventListener('resize', redraw);
   window.addEventListener('orientationchange', () => setTimeout(redraw, 250));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', redraw);
-  log(`FLOOR 01 COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
+  log(`${F.name} COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
   // Set before the first draw so the overlay is up on the first painted frame,
   // rather than flashing the board and then covering it.
   if (!seenControls()) state.modal = 'controls';
