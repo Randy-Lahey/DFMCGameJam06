@@ -281,7 +281,8 @@ function draw(){
   svg.innerHTML="";
   const VW=W*TW+TW, VH=(W+H)*TH/2+TH*4;
   svg.setAttribute("viewBox",`0 0 ${VW} ${VH}`);
-  el("image",{href:BG,x:0,y:0,width:VW,height:VH,preserveAspectRatio:"xMidYMid slice",opacity:.9});
+  // backdrop: floor center (768,500 in 1536-wide art) mapped to grid center (416,224), scale .70
+  el("image",{href:BG,x:-122,y:-126,width:1075,height:717,preserveAspectRatio:"none",opacity:.9});
 
   // highlight sets
   let hlMove=new Map(), hlRng=new Set(), hlPlace=new Set();
