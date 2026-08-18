@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>DAEMONWARE — combat proto</title>
+<style>
+  :root{
+    --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;
+    --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--white);
+    font:14px/1.35 "Courier New",monospace; -webkit-user-select:none;user-select:none;
+    touch-action:manipulation; overflow:hidden;}
+  #wrap{display:flex;flex-direction:column;height:100%;}
+  /* timeline strip */
+  #tl{display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;flex:0 0 auto;}
+  .chip{width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--tealdim);border-radius:4px;font-weight:bold;font-size:16px;
+    background:#0a1214;position:relative;opacity:.55;}
+  .chip.party{color:var(--gold);border-color:#6b5322;}
+  .chip.foe{color:#e26a7c;border-color:#5c1220;}
+  .chip.now{opacity:1;box-shadow:0 0 8px var(--teal);border-color:var(--teal);}
+  .chip .hp{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:#222;}
+  .chip .hp i{display:block;height:100%;background:var(--teal);}
+  #board{flex:1 1 auto;min-height:0;}
+  svg{width:100%;height:100%;display:block;}
+  /* HUD */
+  #hud{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--line);
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:56px;}
+  #stat{flex:1 1 100%;color:var(--dim);letter-spacing:.5px;}
+  #stat b{color:var(--white);}
+  button{background:#0a1214;color:var(--white);border:1px solid var(--tealdim);
+    border-radius:4px;padding:8px 12px;font:inherit;letter-spacing:1px;cursor:pointer;}
+  button:disabled{opacity:.35;cursor:default;}
+  button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}
+  button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}
+  .cost{color:var(--dim);font-size:11px;}
+  /* overlay */
+  #over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:#05080ae6;flex-direction:column;gap:16px;z-index:9;}
+  #over h1{font-size:28px;letter-spacing:6px;margin:0;color:var(--teal);}
+  /* tiles */
+  .tile{fill:#07100f;stroke:var(--line);stroke-width:1;}
+  .tile.hl-move{fill:#0c2d24;stroke:#1e6b53;}
+  .tile.hl-rng{fill:#301620;stroke:#7a2338;}
+  .tile.hl-place{fill:#2b2410;stroke:#6b5322;}
+  .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}
+  .unit{transition:transform .18s ease;}
+  .fx-dmg{font-weight:bold;font-size:15px;paint-order:stroke;stroke:#000;stroke-width:3px;
+    animation:rise .8s ease-out forwards;pointer-events:none;}
+  @keyframes rise{from{opacity:1;}to{opacity:0;transform:translateY(-26px);}}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="tl"></div>
+  <div id="board"><svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div id="hud">
+    <div id="stat">—</div>
+    <div id="banks" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;"></div>
+    <button id="endbtn" class="end">END TVRN</button>
+  </div>
+</div>
+<div id="over"><h1 id="overmsg"></h1><button onclick="location.reload()">RESTART</button></div>
+
+<script>
+"use strict";
+/* ============================== data ============================== */
+const W=12, H=12, TW=64, TH=32;
+const OBST = [[3,3],[3,4],[8,2],[5,6],[6,6],[9,8],[4,9],[7,4],[2,7],[9,5]];
+const isObst = (x,y)=>OBST.some(o=>o[0]===x&&o[1]===y);
+const inB = (x,y)=>x>=0&&x<W&&y>=0&&y<H;
+
+const BANKS = {
+  PERCVSSIO:{name:"PERCVSSIO",cost:3,dmg:7,vr:1,min:1,max:1,line:false,los:true,aoe:false,swap:false,
+    desc:"melee strike"},
+  FVLGVR:{name:"FVLGVR",cost:4,dmg:9,vr:2,min:2,max:6,line:true,los:true,aoe:false,swap:false,
+    desc:"line bolt"},
+  IMMOLATIO:{name:"IMMOLATIO",cost:5,dmg:6,vr:1,min:3,max:5,line:false,los:false,aoe:true,swap:false,
+    desc:"arcing burst, no LOS, cross AoE"},
+  TRANSPOSITIO:{name:"TRANSPOSITIO",cost:2,dmg:0,vr:0,min:1,max:4,line:false,los:true,aoe:false,swap:true,
+    desc:"swap places with any unit"},
+  MORSVS:{name:"MORSVS",cost:3,dmg:6,vr:1,min:1,max:1,line:false,los:true,aoe:false,swap:false,desc:"foe melee"},
+  IACVLVM:{name:"IACVLVM",cost:3,dmg:5,vr:1,min:2,max:4,line:false,los:true,aoe:false,swap:false,desc:"foe shot"},
+};
+
+function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,x:-1,y:-1},o); }
+const UNITS = [
+  mkUnit({id:"op", name:"OPERATOR", side:"party", glyph:"O", maxVitae:24, def:1, speed:12, maxCycles:3, maxPneuma:7, banks:["PERCVSSIO","FVLGVR"]}),
+  mkUnit({id:"calx", name:"CALX", side:"party", glyph:"C", maxVitae:30, def:2, speed:8, maxCycles:3, maxPneuma:6, banks:["PERCVSSIO","IMMOLATIO"]}),
+  mkUnit({id:"cinis",name:"CINIS", side:"party", glyph:"I", maxVitae:18, def:0, speed:14, maxCycles:4, maxPneuma:6, banks:["PERCVSSIO","TRANSPOSITIO"]}),
+  mkUnit({id:"t1", name:"TESTA", side:"foe", glyph:"T", maxVitae:20, def:2, speed:9,  maxCycles:3, maxPneuma:6, banks:["MORSVS"], x:9,y:3}),
+  mkUnit({id:"t2", name:"TESTA", side:"foe", glyph:"T", maxVitae:20, def:2, speed:7,  maxCycles:3, maxPneuma:6, banks:["MORSVS"], x:10,y:7}),
+  mkUnit({id:"s1", name:"SILIQVA",side:"foe", glyph:"S", maxVitae:14, def:0, speed:11, maxCycles:4, maxPneuma:6, banks:["IACVLVM"], x:11,y:5}),
+];
+
+const state = {
+  phase:"place",           // place | battle | over
+  units:UNITS,
+  order:[],                // unit refs sorted by speed
+  turn:0,                  // index into order
+  sel:null,                // selected bank id or null
+  toPlace:UNITS.filter(u=>u.side==="party").map(u=>u.id),
+  round:1,
+};
+window.__PROTO = state;    // test hook
+
+/* ============================ helpers ============================= */
+const unitAt = (x,y)=>state.units.find(u=>u.alive&&u.x===x&&u.y===y);
+const cur = ()=>state.order[state.turn];
+const dist = (a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
+
+function reachable(u){ // BFS within cycles; 4-dir; blocked by obstacles + units
+  const seen=new Map(), q=[[u.x,u.y,0]]; seen.set(u.x+","+u.y,0);
+  while(q.length){
+    const [x,y,c]=q.shift();
+    if(c>=u.cycles) continue;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx, ny=y+dy, k=nx+","+ny;
+      if(!inB(nx,ny)||isObst(nx,ny)||unitAt(nx,ny)||seen.has(k)) continue;
+      seen.set(k,c+1); q.push([nx,ny,c+1]);
+    }
+  }
+  seen.delete(u.x+","+u.y);
+  return seen; // map "x,y" -> cost
+}
+
+function los(a,b){ // grid Bresenham; blocked by obstacles and other units
+  let x0=a.x,y0=a.y; const x1=b.x,y1=b.y;
+  const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+  let err=dx-dy;
+  while(!(x0===x1&&y0===y1)){
+    const e2=2*err;
+    if(e2>-dy){err-=dy;x0+=sx;}
+    if(e2<dx){err+=dx;y0+=sy;}
+    if(x0===x1&&y0===y1) break;
+    if(isObst(x0,y0)) return false;
+    const u=unitAt(x0,y0); if(u&&u!==a&&u!==b) return false;
+  }
+  return true;
+}
+
+function inRange(u,bank,x,y){
+  const d=Math.abs(u.x-x)+Math.abs(u.y-y);
+  if(d<bank.min||d>bank.max) return false;
+  if(bank.line && u.x!==x && u.y!==y) return false;
+  if(bank.los && !los(u,{x,y})) return false;
+  return true;
+}
+function rangeCells(u,bank){
+  const out=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    if(isObst(x,y)) continue;
+    if(inRange(u,bank,x,y)) out.push([x,y]);
+  }
+  return out;
+}
+const cross = (x,y)=>[[x,y],[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(p=>inB(p[0],p[1]));
+
+/* ============================ combat ============================== */
+function newRound(){
+  state.order = state.units.filter(u=>u.alive).sort((a,b)=>b.speed-a.speed);
+  state.turn = 0;
+  startTurn();
+}
+function startTurn(){
+  const u=cur(); if(!u) return;
+  u.cycles=u.maxCycles; u.pneuma=u.maxPneuma; state.sel=null;
+  draw();
+  if(u.side==="foe") setTimeout(()=>foeTurn(u), 350);
+}
+function endTurn(){
+  state.turn++;
+  if(state.turn>=state.order.length){ state.round++; newRound(); }
+  else {
+    // prune dead that died mid-round
+    if(!cur().alive){ endTurn(); return; }
+    startTurn();
+  }
+}
+function moveTo(u,x,y,cost){
+  u.x=x; u.y=y; u.cycles-=cost;
+}
+function castAt(u,bank,x,y){
+  u.pneuma-=bank.cost;
+  if(bank.swap){
+    const t=unitAt(x,y);
+    if(t){ const tx=t.x,ty=t.y; t.x=u.x;t.y=u.y; u.x=tx;u.y=ty; fxText(u.x,u.y,"SWAP","#39c8c1"); }
+  } else {
+    const cells = bank.aoe ? cross(x,y) : [[x,y]];
+    for(const [cx,cy] of cells){
+      const t=unitAt(cx,cy); if(!t) continue;
+      const raw=bank.dmg+(Math.floor(Math.random()*(2*bank.vr+1))-bank.vr);
+      const dmg=Math.max(1,raw-t.def);
+      t.vitae-=dmg; fxText(cx,cy,"-"+dmg, t.side==="party"?"#e26a7c":"#d9a441");
+      if(t.vitae<=0){ t.alive=false; t.vitae=0; }
+    }
+  }
+  checkOver();
+}
+function checkOver(){
+  const p=state.units.some(u=>u.alive&&u.side==="party");
+  const f=state.units.some(u=>u.alive&&u.side==="foe");
+  if(p&&f) return false;
+  state.phase="over";
+  document.getElementById("overmsg").textContent = p ? "FOES PVRGED" : "PARTY TERMINATED";
+  document.getElementById("over").style.display="flex";
+  draw();
+  return true;
+}
+
+/* ============================ foe AI ============================== */
+function foeTurn(u){
+  if(state.phase!=="battle"||!u.alive){ endTurn(); return; }
+  const bank=BANKS[u.banks[0]];
+  const foes=()=>state.units.filter(v=>v.alive&&v.side==="party");
+  const step=()=>{
+    if(state.phase!=="battle") return;
+    const targets=foes(); if(!targets.length) return;
+    // attack if possible
+    if(u.pneuma>=bank.cost){
+      const hit=targets.find(t=>inRange(u,bank,t.x,t.y));
+      if(hit){ castAt(u,bank,hit.x,hit.y); draw(); setTimeout(step,300); return; }
+    }
+    // else move one step toward nearest
+    if(u.cycles>0){
+      const near=targets.sort((a,b)=>dist(u,a)-dist(u,b))[0];
+      const r=reachable({...u,cycles:1});
+      let best=null,bd=dist(u,near);
+      for(const k of r.keys()){
+        const [x,y]=k.split(",").map(Number);
+        const d=Math.abs(x-near.x)+Math.abs(y-near.y);
+        if(d<bd){bd=d;best=[x,y];}
+      }
+      if(best){ moveTo(u,best[0],best[1],1); draw(); setTimeout(step,180); return; }
+    }
+    setTimeout(()=>endTurn(),250);
+  };
+  step();
+}
+
+/* =========================== rendering ============================ */
+const svg=document.getElementById("svg");
+const NS="http://www.w3.org/2000/svg";
+const isoX=(x,y)=>(x-y)*TW/2, isoY=(x,y)=>(x+y)*TH/2;
+const PADX = W*TW/2 + TW/2, PADY = TH;
+function el(n,attrs,parent){
+  const e=document.createElementNS(NS,n);
+  for(const k in attrs) e.setAttribute(k,attrs[k]);
+  (parent||svg).appendChild(e); return e;
+}
+function diamond(x,y){
+  const cx=isoX(x,y)+PADX, cy=isoY(x,y)+PADY;
+  return `${cx},${cy} ${cx+TW/2},${cy+TH/2} ${cx},${cy+TH} ${cx-TW/2},${cy+TH/2}`;
+}
+let fxLayer=null;
+function fxText(x,y,txt,fill){
+  if(!fxLayer) return;
+  const t=el("text",{x:isoX(x,y)+PADX, y:isoY(x,y)+PADY+TH/2, fill,
+    "text-anchor":"middle", class:"fx-dmg"},fxLayer);
+  t.textContent=txt;
+  setTimeout(()=>t.remove(),800);
+}
+
+function placeCells(){ // party placement zone: left columns 0-1
+  const out=[];
+  for(let y=0;y<H;y++)for(let x=0;x<2;x++) if(!isObst(x,y)&&!unitAt(x,y)) out.push([x,y]);
+  return out;
+}
+
+function draw(){
+  const keepFx = fxLayer ? [...fxLayer.childNodes] : [];
+  svg.innerHTML="";
+  svg.setAttribute("viewBox",`0 0 ${W*TW+TW} ${(W+H)*TH/2+TH*4}`);
+
+  // highlight sets
+  let hlMove=new Map(), hlRng=new Set(), hlPlace=new Set();
+  const u=cur();
+  if(state.phase==="place") for(const [x,y] of placeCells()) hlPlace.add(x+","+y);
+  if(state.phase==="battle"&&u&&u.side==="party"){
+    if(state.sel){ for(const [x,y] of rangeCells(u,BANKS[state.sel])) hlRng.add(x+","+y); }
+    else hlMove=reachable(u);
+  }
+
+  // tiles
+  const tiles=el("g",{});
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    if(isObst(x,y)) continue;
+    const k=x+","+y;
+    let cls="tile";
+    if(hlPlace.has(k)) cls+=" hl-place";
+    else if(hlRng.has(k)) cls+=" hl-rng";
+    else if(hlMove.has(k)) cls+=" hl-move";
+    const p=el("polygon",{points:diamond(x,y),class:cls},tiles);
+    p.addEventListener("click",()=>tileClick(x,y));
+  }
+
+  // objects + units, painter order
+  const objs=el("g",{});
+  const drawables=[];
+  for(const [x,y] of OBST) drawables.push({x,y,k:"obst"});
+  for(const v of state.units) if(v.alive&&v.x>=0) drawables.push({x:v.x,y:v.y,k:"unit",u:v});
+  drawables.sort((a,b)=>(a.x+a.y)-(b.x+b.y));
+  for(const d of drawables){
+    const cx=isoX(d.x,d.y)+PADX, cy=isoY(d.x,d.y)+PADY;
+    if(d.k==="obst"){ // simple prism blocker
+      const hpx=26;
+      el("polygon",{points:`${cx-TW/2},${cy+TH/2} ${cx},${cy} ${cx},${cy-hpx} ${cx-TW/2},${cy+TH/2-hpx}`,fill:"#0b1d1c",stroke:"#153c3a"},objs);
+      el("polygon",{points:`${cx+TW/2},${cy+TH/2} ${cx},${cy} ${cx},${cy-hpx} ${cx+TW/2},${cy+TH/2-hpx}`,fill:"#081413",stroke:"#153c3a"},objs);
+      el("polygon",{points:`${cx},${cy-hpx} ${cx+TW/2},${cy+TH/2-hpx} ${cx},${cy+TH-hpx} ${cx-TW/2},${cy+TH/2-hpx}`,fill:"#102826",stroke:"#1e5a54"},objs);
+    } else {
+      const v=d.u, col=v.side==="party"?"var(--gold)":"var(--ox)";
+      const g=el("g",{class:"unit",transform:`translate(${cx},${cy})`},objs);
+      g.addEventListener("click",e=>{e.stopPropagation();tileClick(d.x,d.y);});
+      el("ellipse",{cx:0,cy:TH/2,rx:16,ry:8,fill:"#000",opacity:.45},g);
+      el("circle",{cx:0,cy:-4,r:13,fill:"#0a1214",stroke:col,"stroke-width":2},g);
+      const t=el("text",{x:0,y:1,fill:col,"text-anchor":"middle","font-size":"14","font-weight":"bold"},g);
+      t.textContent=v.glyph;
+      // hp bar
+      el("rect",{x:-14,y:-24,width:28,height:4,fill:"#111"},g);
+      el("rect",{x:-14,y:-24,width:28*v.vitae/v.maxVitae,height:4,fill:v===u&&state.phase==="battle"?"var(--teal)":col},g);
+      if(v===u&&state.phase==="battle")
+        el("polygon",{points:"0,-36 5,-29 -5,-29",fill:"var(--teal)"},g);
+    }
+  }
+  fxLayer=el("g",{});
+  for(const n of keepFx) fxLayer.appendChild(n);
+
+  drawTimeline(); drawHud();
+}
+
+function drawTimeline(){
+  const tl=document.getElementById("tl"); tl.innerHTML="";
+  if(state.phase==="place"){ tl.innerHTML=`<span style="color:var(--dim)">PLACEMENT — tap gold cells to seat: <b style="color:var(--gold)">${state.toPlace.map(id=>state.units.find(u=>u.id===id).name).join(", ")||"—"}</b></span>`; return; }
+  state.order.forEach((v,i)=>{
+    if(!v.alive) return;
+    const c=document.createElement("div");
+    c.className="chip "+v.side+(i===state.turn?" now":"");
+    c.innerHTML=`${v.glyph}<span class="hp"><i style="width:${100*v.vitae/v.maxVitae}%"></i></span>`;
+    tl.appendChild(c);
+  });
+  const r=document.createElement("span");
+  r.style.cssText="color:var(--dim);margin-left:auto;padding-left:8px;";
+  r.textContent="RND "+state.round;
+  tl.appendChild(r);
+}
+
+function drawHud(){
+  const stat=document.getElementById("stat"), banks=document.getElementById("banks"),
+        endb=document.getElementById("endbtn");
+  banks.innerHTML="";
+  if(state.phase==="place"){
+    stat.innerHTML="Seat your party in the gold zone. Tap a seated unit to pick it up.";
+    const b=document.createElement("button");
+    b.textContent="ENGAGE"; b.disabled=state.toPlace.length>0;
+    b.onclick=()=>{state.phase="battle"; newRound();};
+    banks.appendChild(b); endb.style.display="none"; return;
+  }
+  endb.style.display="";
+  const u=cur(); if(!u) return;
+  stat.innerHTML=`<b>${u.name}</b> · VITAE ${u.vitae}/${u.maxVitae} · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
+  if(u.side==="party"){
+    for(const id of u.banks){
+      const bk=BANKS[id], b=document.createElement("button");
+      b.className=state.sel===id?"sel":"";
+      b.disabled=u.pneuma<bk.cost;
+      b.innerHTML=`${bk.name} <span class="cost">${bk.cost}◆ ${bk.min===bk.max?bk.min:bk.min+"-"+bk.max}rng</span>`;
+      b.title=bk.desc;
+      b.onclick=()=>{state.sel=state.sel===id?null:id; draw();};
+      banks.appendChild(b);
+    }
+    endb.disabled=false;
+  } else { endb.disabled=true; }
+}
+
+/* ============================= input ============================== */
+function tileClick(x,y){
+  if(state.phase==="place"){
+    const u0=unitAt(x,y);
+    if(u0&&u0.side==="party"){ u0.x=-1;u0.y=-1; state.toPlace.unshift(u0.id); draw(); return; }
+    if(x<2&&!isObst(x,y)&&!u0&&state.toPlace.length){
+      const id=state.toPlace.shift();
+      const u=state.units.find(v=>v.id===id);
+      u.x=x;u.y=y; draw();
+    }
+    return;
+  }
+  if(state.phase!=="battle") return;
+  const u=cur(); if(!u||u.side!=="party") return;
+  if(state.sel){
+    const bk=BANKS[state.sel];
+    if(u.pneuma>=bk.cost&&inRange(u,bk,x,y)){
+      if(bk.swap&&!unitAt(x,y)) return;      // swap needs a unit
+      castAt(u,bk,x,y); state.sel=null; draw();
+    }
+    return;
+  }
+  const r=reachable(u), k=x+","+y;
+  if(r.has(k)){ moveTo(u,x,y,r.get(k)); draw(); }
+}
+document.getElementById("endbtn").onclick=()=>{
+  if(state.phase==="battle"&&cur()&&cur().side==="party") endTurn();
+};
+
+draw();
+</script>
+</body>
+</html>
