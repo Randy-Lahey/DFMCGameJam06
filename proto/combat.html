@@ -120,6 +120,7 @@ const state = {
   sel:null,                // selected bank id or null
   busy:false,              // input locked during move animation
   toPlace:UNITS.filter(u=>u.side==="party").map(u=>u.id),
+  items:{AMPVLLA:2},       // party satchel; tile-flavored loot in the full game
   round:1,
 };
 window.__PROTO = state;    // test hook
@@ -256,6 +257,17 @@ function castAt(u,bank,x,y){
     }
   }
   checkOver();
+}
+const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",cost:2,heal:8,desc:"Drink: heal self +8. Once per turn."}};
+function useItem(u,id){
+  const it=ITEMS[id];
+  if(state.items[id]<=0||u.pneuma<it.cost||u.cast["item:"+id]) return false;
+  state.items[id]--; u.pneuma-=it.cost; u.cast["item:"+id]=1;
+  const before=u.vitae;
+  u.vitae=Math.min(u.maxVitae,u.vitae+it.heal);
+  fxText(u.x,u.y,"+"+(u.vitae-before),"#3ecf95");
+  draw();
+  return true;
 }
 function checkOver(){
   const p=state.units.some(u=>u.alive&&u.side==="party");
@@ -496,6 +508,14 @@ function drawHud(){
       b.onclick=()=>{if(!canCast(u,id)&&state.sel!==id)return; state.sel=state.sel===id?null:id; draw();};
       banks.appendChild(b);
     }
+    for(const id in ITEMS){
+      const it=ITEMS[id], n=state.items[id], b=document.createElement("button");
+      b.disabled = n<=0||u.pneuma<it.cost||!!u.cast["item:"+id];
+      b.title=it.desc;
+      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${it.name} <span class="cost">${it.cost}◆ ×${n}${u.cast["item:"+id]?" · USED":""}</span>`;
+      b.onclick=()=>useItem(u,id);
+      banks.appendChild(b);
+    }
     endb.disabled=false;
   } else { endb.disabled=true; }
 }
@@ -537,8 +557,10 @@ document.addEventListener("keydown",e=>{
   if(state.phase!=="battle"||state.busy) return;
   const u=cur(); if(!u||u.side!=="party") return;
   if(e.key>="1"&&e.key<="4"){
-    const id=u.banks[+e.key-1];
+    const slot=+e.key-1;
+    const id=u.banks[slot];
     if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
+    else if(slot===u.banks.length) useItem(u,Object.keys(ITEMS)[0]);
   } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
   else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
 });
