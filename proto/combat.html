@@ -111,6 +111,7 @@ const state = {
   order:[],                // unit refs sorted by speed
   turn:0,                  // index into order
   sel:null,                // selected bank id or null
+  busy:false,              // input locked during move animation
   toPlace:UNITS.filter(u=>u.side==="party").map(u=>u.id),
   round:1,
 };
@@ -201,6 +202,16 @@ function endTurn(){
 }
 function moveTo(u,x,y,cost){
   u.x=x; u.y=y; u.cycles-=cost;
+}
+// Movement is orthogonal-only by rule; a future ability may grant diagonal steps.
+function animateMove(u,path){
+  state.busy=true;
+  const step=i=>{
+    if(i>=path.length||state.phase!=="battle"){ state.busy=false; draw(); return; }
+    u.x=path[i][0]; u.y=path[i][1]; u.cycles--; draw();
+    setTimeout(()=>step(i+1),110);
+  };
+  step(0);
 }
 function castAt(u,bank,x,y){
   u.pneuma-=bank.cost;
@@ -452,6 +463,7 @@ function drawHud(){
 
 /* ============================= input ============================== */
 function tileClick(x,y){
+  if(state.busy) return;
   if(state.phase==="place"){
     const u0=unitAt(x,y);
     if(u0&&u0.side==="party"){ u0.x=-1;u0.y=-1; state.toPlace.unshift(u0.id); draw(); return; }
@@ -473,13 +485,14 @@ function tileClick(x,y){
     return;
   }
   const r=reachable(u), k=x+","+y;
-  if(r.has(k)){ moveTo(u,x,y,r.get(k)); draw(); }
+  if(r.has(k)) animateMove(u, pathTo(r,x,y));
 }
 document.getElementById("endbtn").onclick=()=>{
+  if(state.busy) return;
   if(state.phase==="battle"&&cur()&&cur().side==="party") endTurn();
 };
 document.addEventListener("keydown",e=>{
-  if(state.phase!=="battle") return;
+  if(state.phase!=="battle"||state.busy) return;
   const u=cur(); if(!u||u.side!=="party") return;
   if(e.key>="1"&&e.key<="4"){
     const id=u.banks[+e.key-1];
