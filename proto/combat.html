@@ -441,7 +441,7 @@ function drawHud(){
       const bk=BANKS[id], b=document.createElement("button");
       b.className=state.sel===id?"sel":"";
       b.disabled=u.pneuma<bk.cost;
-      b.innerHTML=`${bk.name} <span class="cost">${bk.cost}◆ ${bk.min===bk.max?bk.min:bk.min+"-"+bk.max}rng</span>`;
+      b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${bk.min===bk.max?bk.min:bk.min+"-"+bk.max} range</span>`;
       b.title=bk.desc;
       b.onclick=()=>{state.sel=state.sel===id?null:id; draw();};
       banks.appendChild(b);
@@ -478,6 +478,15 @@ function tileClick(x,y){
 document.getElementById("endbtn").onclick=()=>{
   if(state.phase==="battle"&&cur()&&cur().side==="party") endTurn();
 };
+document.addEventListener("keydown",e=>{
+  if(state.phase!=="battle") return;
+  const u=cur(); if(!u||u.side!=="party") return;
+  if(e.key>="1"&&e.key<="4"){
+    const id=u.banks[+e.key-1];
+    if(id&&u.pneuma>=BANKS[id].cost){ state.sel=state.sel===id?null:id; draw(); }
+  } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
+  else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
+});
 
 draw();
 </script>
