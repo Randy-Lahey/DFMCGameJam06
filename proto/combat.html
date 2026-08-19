@@ -82,27 +82,34 @@ const SPR = {
 };
 const inB = (x,y)=>x>=0&&x<W&&y>=0&&y<H;
 
+// Party ops mirror data/balance.js operations + defaultLoadout (main).
+// dmg = round(mult * caster ATK) ±1 − target DEF. Each bank casts once per
+// turn (Dofus-style cap; main's depleting-PNEUMA model doesn't need one).
 const BANKS = {
-  PERCVSSIO:{name:"PERCVSSIO",cost:3,dmg:7,vr:1,min:1,max:1,line:false,los:true,aoe:false,swap:false,
-    desc:"melee strike"},
-  FVLGVR:{name:"FVLGVR",cost:4,dmg:9,vr:2,min:2,max:6,line:true,los:true,aoe:false,swap:false,
-    desc:"line bolt"},
-  IMMOLATIO:{name:"IMMOLATIO",cost:5,dmg:6,vr:1,min:3,max:5,line:false,los:false,aoe:true,swap:false,
-    desc:"arcing burst, no LOS, cross AoE"},
-  TRANSPOSITIO:{name:"TRANSPOSITIO",cost:2,dmg:0,vr:0,min:1,max:4,line:false,los:true,aoe:false,swap:true,
-    desc:"swap places with any unit"},
-  MORSVS:{name:"MORSVS",cost:3,dmg:6,vr:1,min:1,max:1,line:false,los:true,aoe:false,swap:false,desc:"foe melee"},
-  IACVLVM:{name:"IACVLVM",cost:3,dmg:5,vr:1,min:2,max:4,line:false,los:true,aoe:false,swap:false,desc:"foe shot"},
+  PERCVSSIO:{name:"PERCVSSIO",kind:"strike",cost:0,mult:1,min:1,max:1,los:true,
+    desc:"Melee. One enemy, adjacent."},
+  ABRASIO:{name:"ABRASIO",kind:"sweep",cost:3,mult:1.3,min:0,max:0,los:false,
+    desc:"Melee sweep. Every enemy touching you."},
+  CONCRETIO:{name:"CONCRETIO",kind:"hex",cost:4,mult:0,debuffAtk:2,cd:4,min:1,max:2,los:true,
+    desc:"Weakens one enemy ATK-2. Permanent."},
+  FVLGVR:{name:"FVLGVR",kind:"strike",cost:3,mult:1,min:1,max:2,los:true,
+    desc:"Ranged strike. Two tiles."},
+  IMMOLATIO:{name:"IMMOLATIO",kind:"strike",cost:2,mult:2.2,selfVitae:4,min:1,max:1,los:true,
+    desc:"Heavy hit, adjacent. Burns the caster."},
+  MORSVS:{name:"MORSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,desc:"foe melee"},
+  IACVLVM:{name:"IACVLVM",kind:"strike",cost:3,mult:1,min:2,max:4,los:true,desc:"foe shot"},
 };
 
-function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,x:-1,y:-1},o); }
+function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,x:-1,y:-1,cds:{},cast:{}},o); }
+// Party stats + loadouts from data/balance.js (members / defaultLoadout).
+// Foe VITAE stays proto-scale (arena fights, not floor attrition).
 const UNITS = [
-  mkUnit({id:"op", name:"OPERATOR", side:"party", glyph:"O", maxVitae:24, def:1, speed:12, maxCycles:3, maxPneuma:7, banks:["PERCVSSIO","FVLGVR"]}),
-  mkUnit({id:"calx", name:"CALX", side:"party", glyph:"C", maxVitae:30, def:2, speed:8, maxCycles:3, maxPneuma:6, banks:["PERCVSSIO","IMMOLATIO"]}),
-  mkUnit({id:"cinis",name:"CINIS", side:"party", glyph:"I", maxVitae:18, def:0, speed:14, maxCycles:4, maxPneuma:6, banks:["PERCVSSIO","TRANSPOSITIO"]}),
-  mkUnit({id:"t1", name:"TESTA", side:"foe", glyph:"T", maxVitae:20, def:2, speed:9,  maxCycles:3, maxPneuma:6, banks:["MORSVS"], x:9,y:3}),
-  mkUnit({id:"t2", name:"TESTA", side:"foe", glyph:"T", maxVitae:20, def:2, speed:7,  maxCycles:3, maxPneuma:6, banks:["MORSVS"], x:10,y:7}),
-  mkUnit({id:"s1", name:"SILIQVA",side:"foe", glyph:"S", maxVitae:14, def:0, speed:11, maxCycles:4, maxPneuma:6, banks:["IACVLVM"], x:11,y:5}),
+  mkUnit({id:"op", name:"OPERATOR", side:"party", glyph:"O", maxVitae:24, atk:7, def:2, speed:12, maxCycles:3, maxPneuma:10, banks:["PERCVSSIO"]}),
+  mkUnit({id:"calx", name:"CALX", side:"party", glyph:"C", maxVitae:26, atk:3, def:4, speed:8, maxCycles:3, maxPneuma:14, banks:["ABRASIO","CONCRETIO"]}),
+  mkUnit({id:"cinis",name:"CINIS", side:"party", glyph:"I", maxVitae:18, atk:6, def:1, speed:14, maxCycles:4, maxPneuma:10, banks:["FVLGVR","IMMOLATIO"]}),
+  mkUnit({id:"t1", name:"TESTA", side:"foe", glyph:"T", maxVitae:20, atk:7, def:2, speed:9,  maxCycles:3, maxPneuma:6, banks:["MORSVS"], x:9,y:3}),
+  mkUnit({id:"t2", name:"TESTA", side:"foe", glyph:"T", maxVitae:20, atk:7, def:2, speed:7,  maxCycles:3, maxPneuma:6, banks:["MORSVS"], x:10,y:7}),
+  mkUnit({id:"s1", name:"SILIQVA",side:"foe", glyph:"S", maxVitae:14, atk:8, def:0, speed:11, maxCycles:4, maxPneuma:6, banks:["IACVLVM"], x:11,y:5}),
 ];
 
 const state = {
@@ -163,11 +170,15 @@ function los(a,b){ // grid Bresenham; blocked by obstacles and other units
 }
 
 function inRange(u,bank,x,y){
+  if(bank.kind==="sweep") return x===u.x&&y===u.y; // cast on own tile
   const d=Math.abs(u.x-x)+Math.abs(u.y-y);
   if(d<bank.min||d>bank.max) return false;
-  if(bank.line && u.x!==x && u.y!==y) return false;
   if(bank.los && !los(u,{x,y})) return false;
   return true;
+}
+function canCast(u,id){
+  const bk=BANKS[id];
+  return u.pneuma>=bk.cost && !(u.cds[id]>0) && !u.cast[id];
 }
 function rangeCells(u,bank){
   const out=[];
@@ -187,6 +198,8 @@ function newRound(){
 }
 function startTurn(){
   const u=cur(); if(!u) return;
+  for(const k in u.cds) if(u.cds[k]>0) u.cds[k]--;
+  u.cast={};
   u.cycles=u.maxCycles; u.pneuma=u.maxPneuma; state.sel=null;
   draw();
   if(u.side==="foe") setTimeout(()=>foeTurn(u), 350);
@@ -213,19 +226,29 @@ function animateMove(u,path){
   };
   step(0);
 }
+function hitUnit(u,bank,t){
+  const raw=Math.round(u.atk*bank.mult)+(Math.floor(Math.random()*3)-1);
+  const dmg=Math.max(1,raw-t.def);
+  t.vitae-=dmg; fxText(t.x,t.y,"-"+dmg, t.side==="party"?"#e26a7c":"#d9a441");
+  if(t.vitae<=0){ t.alive=false; t.vitae=0; }
+}
 function castAt(u,bank,x,y){
   u.pneuma-=bank.cost;
-  if(bank.swap){
+  u.cast[bank.name]=1;
+  if(bank.cd) u.cds[bank.name]=bank.cd;
+  if(bank.kind==="sweep"){
+    for(const [ax,ay] of cross(u.x,u.y).slice(1)){ // 4 neighbors, not self
+      const t=unitAt(ax,ay);
+      if(t&&t.side!==u.side) hitUnit(u,bank,t);
+    }
+  } else if(bank.kind==="hex"){
     const t=unitAt(x,y);
-    if(t){ const tx=t.x,ty=t.y; t.x=u.x;t.y=u.y; u.x=tx;u.y=ty; fxText(u.x,u.y,"SWAP","#39c8c1"); }
-  } else {
-    const cells = bank.aoe ? cross(x,y) : [[x,y]];
-    for(const [cx,cy] of cells){
-      const t=unitAt(cx,cy); if(!t) continue;
-      const raw=bank.dmg+(Math.floor(Math.random()*(2*bank.vr+1))-bank.vr);
-      const dmg=Math.max(1,raw-t.def);
-      t.vitae-=dmg; fxText(cx,cy,"-"+dmg, t.side==="party"?"#e26a7c":"#d9a441");
-      if(t.vitae<=0){ t.alive=false; t.vitae=0; }
+    if(t){ t.atk=Math.max(1,t.atk-bank.debuffAtk); fxText(t.x,t.y,"ATK-"+bank.debuffAtk,"#b48ef0"); }
+  } else { // strike
+    const t=unitAt(x,y); if(t) hitUnit(u,bank,t);
+    if(bank.selfVitae){
+      u.vitae-=bank.selfVitae; fxText(u.x,u.y,"-"+bank.selfVitae,"#e26a7c");
+      if(u.vitae<=0){ u.alive=false; u.vitae=0; }
     }
   }
   checkOver();
@@ -250,7 +273,7 @@ function foeTurn(u){
     if(state.phase!=="battle") return;
     const targets=foes(); if(!targets.length) return;
     // attack if possible
-    if(u.pneuma>=bank.cost){
+    if(canCast(u,bank.name)){
       const hit=targets.find(t=>inRange(u,bank,t.x,t.y));
       if(hit){ castAt(u,bank,hit.x,hit.y); draw(); setTimeout(step,300); return; }
     }
@@ -300,8 +323,8 @@ function renderHover(x,y){
   const u=cur(); if(!u||u.side!=="party") return;
   if(state.sel){
     const bk=BANKS[state.sel];
-    if(u.pneuma>=bk.cost&&inRange(u,bk,x,y)&&!(bk.swap&&!unitAt(x,y))){
-      const cells=bk.aoe?cross(x,y):[[x,y]];
+    if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
+      const cells=bk.kind==="sweep"?cross(u.x,u.y).slice(1):[[x,y]];
       for(const [ax,ay] of cells)
         hoverDiamond(ax,ay,{fill:"#9e1b2e",opacity:.45});
     }
@@ -461,10 +484,12 @@ function drawHud(){
     for(const id of u.banks){
       const bk=BANKS[id], b=document.createElement("button");
       b.className=state.sel===id?"sel":"";
-      b.disabled=u.pneuma<bk.cost;
-      b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${bk.min===bk.max?bk.min:bk.min+"-"+bk.max} range</span>`;
+      b.disabled=!canCast(u,id);
+      const rng=bk.kind==="sweep"?"self":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max)+" range";
+      const st=u.cds[id]>0?` · CD ${u.cds[id]}`:(u.cast[id]?" · USED":"");
+      b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${rng}${st}</span>`;
       b.title=bk.desc;
-      b.onclick=()=>{state.sel=state.sel===id?null:id; draw();};
+      b.onclick=()=>{if(!canCast(u,id)&&state.sel!==id)return; state.sel=state.sel===id?null:id; draw();};
       banks.appendChild(b);
     }
     endb.disabled=false;
@@ -488,8 +513,11 @@ function tileClick(x,y){
   const u=cur(); if(!u||u.side!=="party") return;
   if(state.sel){
     const bk=BANKS[state.sel];
-    if(u.pneuma>=bk.cost&&inRange(u,bk,x,y)){
-      if(bk.swap&&!unitAt(x,y)) return;      // swap needs a unit
+    if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
+      if(bk.kind!=="sweep"){
+        const t=unitAt(x,y);
+        if(!t||t.side===u.side) return;      // foe-targeted ops need a foe
+      }
       castAt(u,bk,x,y); state.sel=null; draw();
     }
     return;
@@ -506,7 +534,7 @@ document.addEventListener("keydown",e=>{
   const u=cur(); if(!u||u.side!=="party") return;
   if(e.key>="1"&&e.key<="4"){
     const id=u.banks[+e.key-1];
-    if(id&&u.pneuma>=BANKS[id].cost){ state.sel=state.sel===id?null:id; draw(); }
+    if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
   } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
   else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
 });
