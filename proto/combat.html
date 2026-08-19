@@ -420,7 +420,7 @@ function renderHover(x,y){
   hoverLayer.innerHTML="";
   hoverDiamond(x,y,{fill:"none",stroke:"#cfe6e4","stroke-width":1.5,opacity:.8});
   if(state.phase!=="battle") return;
-  const u=cur(); if(!u||u.side!=="party") return;
+  const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
   if(state.sel){
     const bk=BANKS[state.sel];
     if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
@@ -627,7 +627,7 @@ function tileClick(x,y){
     return;
   }
   if(state.phase!=="battle") return;
-  const u=cur(); if(!u||u.side!=="party") return;
+  const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
   if(state.sel){
     const bk=BANKS[state.sel];
     if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
@@ -635,7 +635,9 @@ function tileClick(x,y){
         const t=unitAt(x,y);
         if(!t||t.side===u.side) return;      // foe-targeted ops need a foe
       }
-      castAt(u,bk,x,y); state.sel=null; draw();
+      castAt(u,bk,x,y); state.sel=null;
+      if(!u.alive&&state.phase==="battle"){ endTurn(); return; } // self-burn death ends the turn
+      draw();
     }
     return;
   }
@@ -648,7 +650,7 @@ document.getElementById("endbtn").onclick=()=>{
 };
 document.addEventListener("keydown",e=>{
   if(state.phase!=="battle"||state.busy) return;
-  const u=cur(); if(!u||u.side!=="party") return;
+  const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
   if(e.key>="1"&&e.key<="4"){
     const slot=+e.key-1;
     const id=u.banks[slot];
