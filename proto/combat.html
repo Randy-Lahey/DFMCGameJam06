@@ -316,7 +316,7 @@ function draw(){
   }
 
   // objects + units, painter order
-  const objs=el("g",{});
+  const objs=el("g",{"pointer-events":"none"});
   const overlays=[];
   const drawables=[];
   OBST.forEach(([x,y],i)=>drawables.push({x,y,k:"obst",kind:OB_KIND[i]||"cube1"}));
@@ -331,7 +331,6 @@ function draw(){
     } else {
       const v=d.u, col=v.side==="party"?"var(--gold)":"var(--ox)";
       const g=el("g",{class:"unit",transform:`translate(${cx},${cy})`},objs);
-      g.addEventListener("click",e=>{e.stopPropagation();tileClick(d.x,d.y);});
       el("ellipse",{cx:0,cy:TH/2,rx:16,ry:8,fill:"#000",opacity:.45},g);
       if(v===u&&state.phase==="battle")
         el("polygon",{points:`0,0 ${TW/2},${TH/2} 0,${TH} ${-TW/2},${TH/2}`,
@@ -351,7 +350,7 @@ function draw(){
       overlays.push({cx,cy,barY,v,col});
     }
   }
-  const ui=el("g",{});
+  const ui=el("g",{"pointer-events":"none"});
   for(const o of overlays){
     const og=el("g",{transform:`translate(${o.cx},${o.cy})`},ui);
     el("rect",{x:-14,y:o.barY,width:28,height:4,fill:"#111",stroke:"#000","stroke-width":1},og);
