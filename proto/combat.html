@@ -121,6 +121,9 @@ const state = {
   busy:false,              // input locked during move animation
   toPlace:UNITS.filter(u=>u.side==="party").map(u=>u.id),
   items:{AMPVLLA:2},       // party satchel; tile-flavored loot in the full game
+  // SATCHEL RULES (anti-hoarding, StS potion-belt model): SATCHEL_MAX doses
+  // total across all item types, ever. Full satchel at a chest = swap or
+  // leave, decided at the chest. No item menu exists anywhere in the game.
   round:1,
 };
 window.__PROTO = state;    // test hook
@@ -258,6 +261,8 @@ function castAt(u,bank,x,y){
   }
   checkOver();
 }
+const SATCHEL_MAX=3;
+const satchelCount=()=>Object.values(state.items).reduce((a,b)=>a+b,0);
 const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",cost:2,heal:8,desc:"Drink: heal self +8. Once per turn."}};
 function useItem(u,id){
   const it=ITEMS[id];
@@ -512,7 +517,7 @@ function drawHud(){
       const it=ITEMS[id], n=state.items[id], b=document.createElement("button");
       b.disabled = n<=0||u.pneuma<it.cost||!!u.cast["item:"+id];
       b.title=it.desc;
-      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${it.name} <span class="cost">${it.cost}◆ ×${n}${u.cast["item:"+id]?" · USED":""}</span>`;
+      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${it.name} <span class="cost">${it.cost}◆ ${n}/${SATCHEL_MAX}${u.cast["item:"+id]?" · USED":""}</span>`;
       b.onclick=()=>useItem(u,id);
       banks.appendChild(b);
     }
