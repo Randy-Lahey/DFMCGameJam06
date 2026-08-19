@@ -389,7 +389,7 @@ function draw(){
       }
       el("ellipse",{cx:cx,cy:cy+TH/2,rx:26,ry:11,fill:"#000",opacity:.45},objs);
       el("image",{href:s.href,x:ox0,y:oy0,width:s.w,height:s.h,preserveAspectRatio:"xMidYMax meet",
-        opacity:faded?0.5:1},objs);
+        opacity:faded?0.6:1},objs);
     } else {
       const v=d.u, col=v.side==="party"?"var(--gold)":"var(--ox)";
       const g=el("g",{class:"unit",transform:`translate(${cx},${cy})`},objs);
