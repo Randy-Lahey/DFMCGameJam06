@@ -136,6 +136,16 @@ function reachable(u){ // BFS within cycles; 4-dir; blocked by obstacles + units
   return seen; // map "x,y" -> cost
 }
 
+function pathTo(r,x,y){ // walk cost map back to origin
+  const path=[[x,y]]; let c=r.get(x+","+y), cx=x, cy=y, guard=64;
+  while(c>1&&guard--){
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      if(r.get((cx+dx)+","+(cy+dy))===c-1){cx+=dx;cy+=dy;c--;path.push([cx,cy]);break;}
+    }
+  }
+  return path.reverse();
+}
+
 function los(a,b){ // grid Bresenham; blocked by obstacles and other units
   let x0=a.x,y0=a.y; const x1=b.x,y1=b.y;
   const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1;
@@ -264,7 +274,35 @@ function diamond(x,y){
   const cx=isoX(x,y)+PADX, cy=isoY(x,y)+PADY;
   return `${cx},${cy} ${cx+TW/2},${cy+TH/2} ${cx},${cy+TH} ${cx-TW/2},${cy+TH/2}`;
 }
-let fxLayer=null;
+let fxLayer=null, hoverLayer=null;
+function hoverDiamond(x,y,attrs,scale){
+  const cx=isoX(x,y)+PADX, cy=isoY(x,y)+PADY, s=scale||1;
+  const hw=TW/2*s, hh=TH/2*s, my=cy+TH/2;
+  return el("polygon",Object.assign({points:
+    `${cx},${my-hh} ${cx+hw},${my} ${cx},${my+hh} ${cx-hw},${my}`},attrs),hoverLayer);
+}
+function renderHover(x,y){
+  if(!hoverLayer) return;
+  hoverLayer.innerHTML="";
+  hoverDiamond(x,y,{fill:"none",stroke:"#cfe6e4","stroke-width":1.5,opacity:.8});
+  if(state.phase!=="battle") return;
+  const u=cur(); if(!u||u.side!=="party") return;
+  if(state.sel){
+    const bk=BANKS[state.sel];
+    if(u.pneuma>=bk.cost&&inRange(u,bk,x,y)&&!(bk.swap&&!unitAt(x,y))){
+      const cells=bk.aoe?cross(x,y):[[x,y]];
+      for(const [ax,ay] of cells)
+        hoverDiamond(ax,ay,{fill:"#9e1b2e",opacity:.45});
+    }
+  } else {
+    const r=reachable(u), k=x+","+y;
+    if(r.has(k)){
+      for(const [px,py] of pathTo(r,x,y))
+        hoverDiamond(px,py,{fill:"var(--teal)",opacity:.55},0.35);
+      hoverDiamond(x,y,{fill:"none",stroke:"var(--teal)","stroke-width":2});
+    }
+  }
+}
 function fxText(x,y,txt,fill){
   if(!fxLayer) return;
   const t=el("text",{x:isoX(x,y)+PADX, y:isoY(x,y)+PADY+TH/2, fill,
@@ -313,7 +351,10 @@ function draw(){
     else if(hlMove.has(k)) cls+=" hl-move";
     const p=el("polygon",{points:diamond(x,y),class:cls},tiles);
     p.addEventListener("click",()=>tileClick(x,y));
+    p.addEventListener("mouseenter",()=>renderHover(x,y));
   }
+  hoverLayer=el("g",{"pointer-events":"none"});
+  svg.onmouseleave=()=>{if(hoverLayer)hoverLayer.innerHTML="";};
 
   // objects + units, painter order
   const objs=el("g",{"pointer-events":"none"});
