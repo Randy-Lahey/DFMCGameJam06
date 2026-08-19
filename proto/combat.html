@@ -124,6 +124,11 @@ const state = {
   // SATCHEL RULES (anti-hoarding, StS potion-belt model): SATCHEL_MAX doses
   // total across all item types, ever. Full satchel at a chest = swap or
   // leave, decided at the chest. No item menu exists anywhere in the game.
+  // Combat-belt only: consumables are unusable outside combat; out-of-combat
+  // healing comes from sites (shrines/fonts), not items.
+  // LATER (itemization layer, not consumption layer): satchels themselves
+  // drop as PoE-style gear with affixes — e.g. +1 slots, +% ampoule
+  // effectiveness. The 3-slot satchel is just the starting equip.
   round:1,
 };
 window.__PROTO = state;    // test hook
