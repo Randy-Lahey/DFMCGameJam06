@@ -289,9 +289,9 @@ function draw(){
   el("rect",{x:0,y:0,width:VW,height:VH,fill:"#000",opacity:.28});
   const defs=el("defs",{});
   defs.innerHTML=`<filter id="glowP" x="-50%" y="-50%" width="200%" height="200%">
-    <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#d9a441" flood-opacity="0.85"/></filter>
+    <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#d9a441" flood-opacity="0.6"/></filter>
   <filter id="glowF" x="-50%" y="-50%" width="200%" height="200%">
-    <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#e04a5e" flood-opacity="0.85"/></filter>`;
+    <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#e04a5e" flood-opacity="0.6"/></filter>`;
 
   // highlight sets
   let hlMove=new Map(), hlRng=new Set(), hlPlace=new Set();
@@ -317,6 +317,7 @@ function draw(){
 
   // objects + units, painter order
   const objs=el("g",{});
+  const overlays=[];
   const drawables=[];
   OBST.forEach(([x,y],i)=>drawables.push({x,y,k:"obst",kind:OB_KIND[i]||"cube1"}));
   for(const v of state.units) if(v.alive&&v.x>=0) drawables.push({x:v.x,y:v.y,k:"unit",u:v});
@@ -347,11 +348,17 @@ function draw(){
         const t=el("text",{x:0,y:1,fill:col,"text-anchor":"middle","font-size":"14","font-weight":"bold"},body);
         t.textContent=v.glyph;
       }
-      el("rect",{x:-14,y:barY,width:28,height:4,fill:"#111"},g);
-      el("rect",{x:-14,y:barY,width:28*v.vitae/v.maxVitae,height:4,fill:v===u&&state.phase==="battle"?"var(--teal)":col},g);
-      if(v===u&&state.phase==="battle")
-        el("polygon",{points:`0,${barY-12} 5,${barY-5} -5,${barY-5}`,fill:"var(--teal)"},g);
+      overlays.push({cx,cy,barY,v,col});
     }
+  }
+  const ui=el("g",{});
+  for(const o of overlays){
+    const og=el("g",{transform:`translate(${o.cx},${o.cy})`},ui);
+    el("rect",{x:-14,y:o.barY,width:28,height:4,fill:"#111",stroke:"#000","stroke-width":1},og);
+    el("rect",{x:-14,y:o.barY,width:28*o.v.vitae/o.v.maxVitae,height:4,
+      fill:o.v===u&&state.phase==="battle"?"var(--teal)":o.col},og);
+    if(o.v===u&&state.phase==="battle")
+      el("polygon",{points:`0,${o.barY-12} 5,${o.barY-5} -5,${o.barY-5}`,fill:"var(--teal)"},og);
   }
   fxLayer=el("g",{});
   for(const n of keepFx) fxLayer.appendChild(n);
