@@ -35,6 +35,9 @@
   button:disabled{opacity:.35;cursor:default;}
   button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}
   button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}
+  button.item{border-color:#7a2a20;}
+  button.item.sel{border-color:#D6402A;color:#e28a76;box-shadow:0 0 6px #d6402a66;}
+  button.item svg{vertical-align:-3px;margin-right:1px;}
   .cost{color:var(--dim);font-size:11px;}
   /* overlay */
   #over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
@@ -44,6 +47,7 @@
   .tile{fill:#0a1a18;fill-opacity:.42;stroke:#2f7a72;stroke-width:1;}
   .tile.hl-move{fill:#12503c;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}
   .tile.hl-rng{fill:#4a1626;fill-opacity:.75;stroke:#d94a63;stroke-width:1.5;}
+  .tile.hl-heal{fill:#0f3a2a;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}
   .tile.hl-place{fill:#3a3012;fill-opacity:.75;stroke:#d9a441;stroke-width:1.5;}
   .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}
   .unit{transition:transform .18s ease;}
@@ -343,15 +347,28 @@ function castAt(u,bank,x,y){
 }
 const SATCHEL_MAX=3;
 const satchelCount=()=>Object.values(state.items).reduce((a,b)=>a+b,0);
-const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",cost:2,heal:8,desc:"Drink: heal self +8. Once per turn."}};
-function useItem(u,id){
+const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",cost:2,heal:8,min:0,max:5,
+  desc:"Drink or hurl: heal a party unit +8. Range 0-5. Once per turn. OPERATOR only."}};
+const VIAL_SVG=`<svg viewBox="0 0 12 16" width="11" height="15" aria-hidden="true">
+  <path d="M4 1h4v1.6H4z" fill="#D6402A"/>
+  <path d="M4.6 3.4h2.8v2.6l2.6 5.6v2.6L8.8 15H3.2L2 14.2v-2.6l2.6-5.6z" fill="none" stroke="#D6402A" stroke-width="1.1"/>
+  <path d="M3 11.4h6v2.3l-.8.9H3.8l-.8-.9z" fill="#D6402A"/></svg>`;
+const isItemSel=s=>!!s&&s.indexOf("item:")===0;
+const selDef=()=>!state.sel?null:(isItemSel(state.sel)?ITEMS[state.sel.slice(5)]:BANKS[state.sel]);
+function canUseItem(u,id){
   const it=ITEMS[id];
-  if(state.items[id]<=0||u.pneuma<it.cost||u.cast["item:"+id]) return false;
+  return u.id==="op"&&state.items[id]>0&&u.pneuma>=it.cost&&!u.cast["item:"+id]; // OPERATOR only
+}
+const selUsable=u=>isItemSel(state.sel)?canUseItem(u,state.sel.slice(5)):canCast(u,state.sel);
+function useItemAt(u,id,x,y){
+  const it=ITEMS[id];
+  if(!canUseItem(u,id)||!inRange(u,it,x,y)) return false;
+  const t=unitAt(x,y);
+  if(!t||!t.alive||t.side!=="party") return false; // heals land on party units only
   state.items[id]--; u.pneuma-=it.cost; u.cast["item:"+id]=1;
-  const before=u.vitae;
-  u.vitae=Math.min(u.maxVitae,u.vitae+it.heal);
-  fxText(u.x,u.y,"+"+(u.vitae-before),"#3ecf95");
-  draw();
+  const before=t.vitae;
+  t.vitae=Math.min(t.maxVitae,t.vitae+it.heal);
+  fxText(t.x,t.y,"+"+(t.vitae-before),"#3ecf95");
   return true;
 }
 function checkOver(){
@@ -422,11 +439,12 @@ function renderHover(x,y){
   if(state.phase!=="battle") return;
   const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
   if(state.sel){
-    const bk=BANKS[state.sel];
-    if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
+    const bk=selDef();
+    if(selUsable(u)&&inRange(u,bk,x,y)){
       const cells=bk.kind==="sweep"?cross(u.x,u.y).slice(1):(bk.aoe?cross(x,y):[[x,y]]);
+      const fill=isItemSel(state.sel)?"#1f7a54":"#9e1b2e";
       for(const [ax,ay] of cells)
-        hoverDiamond(ax,ay,{fill:"#9e1b2e",opacity:.45});
+        hoverDiamond(ax,ay,{fill,opacity:.45});
     }
   } else {
     const r=reachable(u), k=x+","+y;
@@ -466,11 +484,14 @@ function draw(){
     <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#e04a5e" flood-opacity="0.6"/></filter>`;
 
   // highlight sets
-  let hlMove=new Map(), hlRng=new Set(), hlPlace=new Set();
+  let hlMove=new Map(), hlRng=new Set(), hlHeal=new Set(), hlPlace=new Set();
   const u=cur();
   if(state.phase==="place") for(const [x,y] of placeCells()) hlPlace.add(x+","+y);
   if(state.phase==="battle"&&u&&u.side==="party"){
-    if(state.sel){ for(const [x,y] of rangeCells(u,BANKS[state.sel])) hlRng.add(x+","+y); }
+    if(state.sel){
+      const set=isItemSel(state.sel)?hlHeal:hlRng;
+      for(const [x,y] of rangeCells(u,selDef())) set.add(x+","+y);
+    }
     else hlMove=reachable(u);
   }
 
@@ -481,6 +502,7 @@ function draw(){
     const k=x+","+y;
     let cls="tile";
     if(hlPlace.has(k)) cls+=" hl-place";
+    else if(hlHeal.has(k)) cls+=" hl-heal";
     else if(hlRng.has(k)) cls+=" hl-rng";
     else if(hlMove.has(k)) cls+=" hl-move";
     const p=el("polygon",{points:diamond(x,y),class:cls},tiles);
@@ -511,7 +533,7 @@ function draw(){
         if(ux0<ox1&&ux1>ox0&&uy0<oy1&&uy1>oy0){faded=true;break;}
       }
       if(!faded){ // ...and to highlighted cells behind them (move/range/place info)
-        for(const k of [...hlMove.keys(),...hlRng,...hlPlace]){
+        for(const k of [...hlMove.keys(),...hlRng,...hlHeal,...hlPlace]){
           const [hx,hy]=k.split(",").map(Number);
           if(hx+hy>=d.x+d.y) continue;
           const hcx=isoX(hx,hy)+PADX, hcy=isoY(hx,hy)+PADY;
@@ -601,12 +623,13 @@ function drawHud(){
       b.onclick=()=>{if(!canCast(u,id)&&state.sel!==id)return; state.sel=state.sel===id?null:id; draw();};
       banks.appendChild(b);
     }
-    for(const id in ITEMS){
-      const it=ITEMS[id], n=state.items[id], b=document.createElement("button");
-      b.disabled = n<=0||u.pneuma<it.cost||!!u.cast["item:"+id];
+    if(u.id==="op") for(const id in ITEMS){ // items are OPERATOR-only
+      const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
+      b.className="item"+(state.sel===sid?" sel":"");
+      b.disabled = !canUseItem(u,id)&&state.sel!==sid;
       b.title=it.desc;
-      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${it.name} <span class="cost">${it.cost}◆ ${n}/${SATCHEL_MAX}${u.cast["item:"+id]?" · USED":""}</span>`;
-      b.onclick=()=>useItem(u,id);
+      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${VIAL_SVG}${it.name} <span class="cost">${it.cost}◆ ${it.min}-${it.max} range · ${n}/${SATCHEL_MAX}${u.cast[sid]?" · USED":""}</span>`;
+      b.onclick=()=>{if(!canUseItem(u,id)&&state.sel!==sid)return; state.sel=state.sel===sid?null:sid; draw();};
       banks.appendChild(b);
     }
     endb.disabled=false;
@@ -629,6 +652,10 @@ function tileClick(x,y){
   if(state.phase!=="battle") return;
   const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
   if(state.sel){
+    if(isItemSel(state.sel)){
+      if(useItemAt(u,state.sel.slice(5),x,y)){ state.sel=null; draw(); }
+      return;
+    }
     const bk=BANKS[state.sel];
     if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
       if(bk.kind!=="sweep"&&!bk.aoe){
@@ -655,7 +682,10 @@ document.addEventListener("keydown",e=>{
     const slot=+e.key-1;
     const id=u.banks[slot];
     if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
-    else if(slot===u.banks.length) useItem(u,Object.keys(ITEMS)[0]);
+    else if(slot===u.banks.length&&u.id==="op"){
+      const iid=Object.keys(ITEMS)[0], sid="item:"+iid;
+      if(canUseItem(u,iid)||state.sel===sid){ state.sel=state.sel===sid?null:sid; draw(); }
+    }
   } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
   else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
 });
