@@ -110,6 +110,7 @@
     ...B.foes[f.kind],
     hp: B.foes[f.kind].vitae,
     awake: false,
+    grace: 0,   // rounds of no-aggro after a lost engagement, so RETVRN is not an instant re-fight
   }));
 
   const state = {
@@ -131,6 +132,7 @@
     hover: null,                   // { c, r } under the cursor
     staged: null,                  // { dc, dr } step awaiting CONFIRM (touch only)
     fluxPick: null,                // { who, slot, bay } inline picker on an empty bay (inv)
+    pendingEngage: null,           // foe that triggered combat; consumed after the round resolves
     stepsUsed: 0,                  // tiles walked this round, of combat.stepsPerRound
     queued: [],                    // [{ member, op, targetId }] this act round
     wards: [],                     // [{ name, def, left }] active timed wards
@@ -472,6 +474,7 @@
   // advancing while they idled or withdrew, and flankers were drawn stepping
   // at the circle rather than at the side tile they had claimed.
   function decide(foe, claimed) {
+    if (foe.grace > 0) return { kind: 'idle' };
     // No living member -> nothing to hunt. This is not a corner case: the
     // strike loop kills mid-iteration (the LAST member can fall while other
     // foes still hold intents), and FVLMINANS lets a member burn THEMSELVES
@@ -656,6 +659,13 @@
     if (op.kind === 'sweep') {
       const hit = liveFoes().filter(f => cheb(f, member) <= op.range);
       if (!hit.length) { log(`${op.name} SCOURS EMPTY AIR.`); return; }
+      if (op.range <= 1) {   // touching: melee sweep engages instead of chipping
+        if (!state.pendingEngage) {
+          state.pendingEngage = hit[0];
+          log(`${member.name} CLOSES WITH ${hit[0].kind} \u2014 ENGAGED.`, 'good');
+        }
+        return;
+      }
       burst(member.c, member.r, op.fx);
       log(`${op.name} SCOURS ${hit.length} ${hit.length > 1 ? 'ENEMIES' : 'ENEMY'}.`);
       hit.forEach(f => strikeFoe(member, op, f));
@@ -695,7 +705,16 @@
       return;
     }
 
-    if (op.kind === 'strike') strikeFoe(member, op, foe);
+    if (op.kind === 'strike') {
+      if (op.range <= 1) {   // touching: melee strike engages instead of chipping
+        if (!state.pendingEngage) {
+          state.pendingEngage = foe;
+          log(`${member.name} CLOSES WITH ${foe.kind} \u2014 ENGAGED.`, 'good');
+        }
+        return;
+      }
+      strikeFoe(member, op, foe);
+    }
     if (op.kind === 'splash') {
       const hit = [foe, ...liveFoes().filter(f => f !== foe && cheb(f, foe) <= 1)];
       log(`${op.name} BVRSTS OVER ${hit.length} ${hit.length > 1 ? 'ENEMIES' : 'ENEMY'}.`);
@@ -805,7 +824,11 @@
           if (!intent || intent.kind === 'idle' || foe.hp <= 0) continue;
           if (decide(foe, new Set()).kind !== 'attack') continue;
           if (!living().some(m => adjacent(foe, m))) { log(`${foe.kind} STRIKES EMPTY AIR.`); continue; }
-          strikeMember(foe);
+          // Contact is the combat trigger now: the swing becomes an engagement.
+          if (!state.pendingEngage) {
+            state.pendingEngage = foe;
+            log(`${foe.kind} CLOSES \u2014 ENGAGED.`, 'bad');
+          }
         }
 
         living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
@@ -813,11 +836,23 @@
         state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
         state.wards = state.wards.filter(w => w.left > 0);
         for (const k in state.cd) if (state.cd[k] > 0) state.cd[k]--;
+        liveFoes().forEach(f => { if (f.grace > 0) f.grace--; });
         state.turn++; state.stepsUsed = 0;
         state.mode = 'move'; state.acted = []; state.pending = null; state.aiming = null;
         state.sel = null; state.staged = null; state.hover = null;
         view.free = false;                       // snap the camera back to the party
         checkEnd();
+      },
+
+      // --- ENGAGEMENT ----------------------------------------------------
+      // Runs after all damage and cleanup so combat starts from a settled
+      // board. Whoever touched first is the trigger; the pack comes with it.
+      () => {
+        const trigger = state.pendingEngage;
+        state.pendingEngage = null;
+        if (!trigger || trigger.hp <= 0 || finished()) return;
+        const engaged = liveFoes().filter(f => cheb(f, trigger) <= 2);
+        enterCombat(engaged);
       },
     ]);
   }
@@ -2134,15 +2169,20 @@
   // Crawl and tactical combat use different VITAE scales, so state crosses
   // the seam as a FRACTION of max: hp/vitae out, vitae/maxVitae back in.
   const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis' };
-  function enterCombat() {
+  const COMBAT_TPL = { TESTA: 't', SILIQVA: 's' };
+  function enterCombat(engaged) {
     if (!window.DW_COMBAT) { log('COMBAT MODULE MISSING.', 'bad'); return; }
+    engaged = (engaged || []).filter(f => f.hp > 0 && COMBAT_TPL[f.kind]);
     state.scene = 'combat';
     const party = state.circle.members
       .filter(m => COMBAT_ID[m.name] && m.hp > 0)
       .map(m => ({ id: COMBAT_ID[m.name], frac: m.hp / m.vitae }));
+    const foes = engaged.map(f => ({
+      srcId: f.id, tpl: COMBAT_TPL[f.kind], frac: f.hp / f.vitae }));
     window.DW_COMBAT.start({
       fight: 1,
       party,
+      foes: foes.length ? foes : undefined,   // debug entry keeps the FIGHTS spec
       onEnd(res) {
         state.scene = 'crawl';
         for (const r of res.party) {
@@ -2151,23 +2191,44 @@
           if (!m) continue;
           m.hp = Math.max(0, Math.min(m.vitae, Math.round(r.frac * m.vitae)));
         }
-        log(res.won ? 'THE CHAMBER IS PVRGED. THE CRAWL RESVMES.'
-                    : 'DRIVEN BACK. THE CRAWL RESVMES.', res.won ? 'good' : 'bad');
+        if (res.won) {
+          // Victory severs the whole engaged pack on the crawl floor, through
+          // the normal path so drops and CLEARED detection still fire.
+          for (const f of engaged) {
+            if (f.hp <= 0) continue;
+            f.hp = 0;
+            log(`${f.kind} IS SEVERED IN THE CHAMBER.`, 'good');
+            float(f.c, f.r, 'SEVERED', 'f-sever');
+            rollDrop(f);
+          }
+          log('THE CHAMBER IS PVRGED. THE CRAWL RESVMES.', 'good');
+        } else {
+          // Loss with the OPERATOR standing: the pack keeps its wounds and
+          // grants one round of grace so RETVRN is not an instant re-fight.
+          for (const r of (res.foes || [])) {
+            const f = engaged.find(v => v.id === r.srcId);
+            if (!f) continue;
+            f.hp = Math.max(1, Math.min(f.vitae, Math.round(r.frac * f.vitae)));
+            f.grace = 1;
+          }
+          log('DRIVEN BACK. THE CRAWL RESVMES.', 'bad');
+        }
         checkEnd();
         draw();
       },
     });
   }
 
+  const DEBUG = typeof location !== 'undefined' && /[?&]debug/.test(location.search);
   const MOVES = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
 
   window.addEventListener('keydown', e => {
     if (state.scene === 'combat') return;   // combat module owns input
     const k = e.key.toLowerCase();
     if (animating()) settle();       // a keypress finishes the round in flight
-    // Debug seam: B drops the party into a tactical combat encounter.
-    if (k === 'b' && !state.modal && !finished()) {
-      e.preventDefault(); enterCombat(); return;
+    // Debug seam (?debug only): B forces the canned FIGHTS[1] encounter.
+    if (k === 'b' && DEBUG && !state.modal && !finished()) {
+      e.preventDefault(); enterCombat([]); return;
     }
 
     // A focused button owns ENTER and SPACE. Without this the window handler

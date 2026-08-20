@@ -98,51 +98,99 @@ const M = state.circle.members;
 const L = lead();
 const hpAll = () => M.reduce((s, m) => s + m.hp, 0);
 
-// One foe on the board, fangs out; the rest gone. def 0 so any atk lands.
+// One foe on the board, fangs out; the rest gone. Daemons are parked at hp
+// 999 so foeTarget's frailest-tiebreak cannot wander off the OPERATOR when
+// distances tie -- the old tests got this disambiguation for free from
+// contact damage, which no longer exists: contact now ENGAGES.
 const foe = state.foes[0];
 state.foes.forEach(f => { f.hp = 0; });
 const arm = (c, r) => Object.assign(foe, {
   hp: foe.vitae, c, r, awake: true, ai: 'flank', atk: Math.max(foe.atk, 3) });
-M.forEach(m => { m.hp = m.vitae; m.def = 99; });   // park the daemons out of reach
+M.forEach(m => { m.hp = m.vitae; m.def = 99; });
 L.def = 0;
-// Isolate the leader: daemons stay put, so plant the foe off their side.
+M.slice(1).forEach(m => { m.hp = 999; });   // tiebreak guard (test-only)
 
-// ------------------------------------------------- 1. adjacent foe strikes
+// The combat module is stubbed: we assert the HANDOFF, not the fight.
+const calls = [];
+window.DW_COMBAT = { start(cfg) { calls.push(cfg); }, isActive: () => false };
+
+// ------------------------------------------------- 1. contact = engagement
+// An adjacent foe's swing becomes the combat trigger: no crawl chip damage,
+// one handoff call carrying the touching foe across the seam.
 arm(L.c, L.r - 1);
 let before = hpAll();
 resolveRound({ kind: 'hold' });
-ok(hpAll() < before, 'adjacent foe strikes a holding party');
+ok(hpAll() === before, 'contact deals no crawl damage -- it engages');
+ok(calls.length === 1, 'adjacent foe triggers exactly one tactical handoff');
+ok(calls[0].foes && calls[0].foes.length === 1 && calls[0].foes[0].srcId === foe.id,
+   'the touching foe crosses the seam by srcId');
+ok(calls[0].foes[0].frac === 1, 'an unhurt foe crosses at full VITAE fraction');
+ok(state.scene === 'combat', 'scene flips to combat during the handoff');
 
-// ---------------------------------------- 2. attack-on-arrival (the fix)
-// Foe two tiles out: its frozen intent is a STEP. It must close AND strike
-// inside this one round -- the re-decision on the finished board.
-arm(L.c, L.r - 2);
+// Victory writes back: party fractions land, the engaged foe is severed on
+// the crawl floor through the normal drop path.
+calls[0].onEnd({ won: true, party: [{ id: 'op', frac: 0.5 }],
+                 foes: [{ srcId: foe.id, frac: 0 }] });
+ok(state.scene === 'crawl', 'RETVRN restores the crawl scene');
+ok(foe.hp === 0, 'victory severs the engaged foe on the floor');
+ok(L.hp === Math.round(0.5 * L.vitae), 'party VITAE fraction writes back');
+L.hp = L.vitae;
+
+// ------------------------------------------------- 2. the pack comes too
+// Foes within Chebyshev 2 of the trigger are pulled into the fight; foes
+// beyond it are not.
+const near = state.foes[1], far = state.foes[2];
+calls.length = 0;
+arm(L.c, L.r - 1);
+Object.assign(near, { hp: near.vitae, c: foe.c + 1, r: foe.r - 1, awake: true, ai: 'flank' });
+Object.assign(far,  { hp: far.vitae,  c: foe.c + 5, r: foe.r - 5, awake: false });
+resolveRound({ kind: 'hold' });
+ok(calls.length === 1, 'a pack engagement is still one handoff');
+const ids = calls.length ? calls[0].foes.map(f => f.srcId) : [];
+ok(ids.includes(foe.id) && ids.includes(near.id), 'foes within radius 2 are pulled in');
+ok(!ids.includes(far.id), 'foes beyond radius 2 stay out of the fight');
+
+// ------------------------------------------------- 3. loss, wounds, grace
+// Driven back: engaged foes keep their combat wounds and grant one round of
+// grace, so RETVRN is not an instant re-engagement.
+calls[0].onEnd({ won: false, party: [{ id: 'op', frac: 1 }],
+                 foes: [{ srcId: foe.id, frac: 0.25 }, { srcId: near.id, frac: 0.25 }] });
+ok(foe.hp === Math.max(1, Math.round(0.25 * foe.vitae)),
+   'a lost fight writes the foe\'s wounds back to the floor');
+ok(foe.grace === 1, 'the engaged pack grants one round of grace');
+calls.length = 0;
 before = hpAll();
 resolveRound({ kind: 'hold' });
-ok(Math.abs(foe.c - L.c) + Math.abs(foe.r - L.r) === 1,
-   'foe two tiles out closes to contact in one round');
-ok(hpAll() < before, 'foe that closed to contact strikes the SAME round');
+ok(calls.length === 0 && hpAll() === before, 'a graced foe neither strikes nor engages');
+ok(foe.grace === 0, 'grace decays in the upkeep phase');
+resolveRound({ kind: 'hold' });
+ok(calls.length === 1, 'grace over, contact engages again');
+calls[0].onEnd({ won: true, party: [{ id: 'op', frac: 1 }],
+                 foes: [{ srcId: foe.id, frac: 0 }, { srcId: near.id, frac: 0 }] });
+ok(foe.hp === 0 && near.hp === 0, 'victory severs the whole engaged pack');
 
-// ------------------------------------------------- 3. kills cancel strikes
-// Same setup, but the party's queued attack drops the foe in the attack
-// phase, which runs before the strike decision: no damage comes back.
+// ------------------------------------------------- 4. kills cancel contact
+// A RANGED queued op (range 2 stays crawl chip damage) that drops the foe in
+// the attack phase leaves nothing to engage: dead foes trigger no combat.
+calls.length = 0;
 arm(L.c, L.r - 1);
 foe.hp = 1;
-const opName = Object.keys(B.operations).find(n =>
-  B.operations[n].targets === 'foe' && !B.operations[n].vitaeCost);
-const op = { name: opName, ...B.operations[opName], dmg: 99, pn: 0 };
-state.queued = [{ member: L, op, targetId: foe.id }];
+const rangedName = Object.keys(B.operations).find(n =>
+  B.operations[n].kind === 'strike' && B.operations[n].range >= 2 && !B.operations[n].vitaeCost);
+const rop = { name: rangedName, ...B.operations[rangedName], dmg: 99, pn: 0 };
+state.queued = [{ member: L, op: rop, targetId: foe.id }];
 before = hpAll();
 resolveRound(null);
-ok(foe.hp <= 0, 'queued attack kills the foe in the attack phase');
+ok(foe.hp <= 0, 'a ranged queued op still chips and kills in the attack phase');
 ok(hpAll() === before, 'a foe killed before the strike phase deals NOTHING');
+ok(calls.length === 0, 'a dead foe triggers no engagement');
 
-// ------------------------------------------------- 4. dead stay dead
+// ------------------------------------------------- 5. dead stay dead
 before = hpAll();
 resolveRound({ kind: 'hold' });
-ok(hpAll() === before, 'a dead foe stays silent on later rounds');
+ok(hpAll() === before && calls.length === 0, 'a dead foe stays silent on later rounds');
 
-// ------------------------------------------------- 5. preview agrees
+// ------------------------------------------------- 6. preview agrees
 // The indicator's brain call, pre-round, must label a landing step as a
 // strike and a distant step as movement -- no drift from what resolves.
 const { previewIntent } = window.__DW;
@@ -158,6 +206,7 @@ if (!previewIntent) {
   it = previewIntent(foe, new Set());
   ok(it && it.kind === 'step' && !it.strikes,
      'a step that cannot reach contact previews as plain movement');
+  foe.hp = 0;
 }
 
 // ---------------------------------------------- dead-party foe brain

@@ -3,10 +3,11 @@
    Extracted from proto/dofus-combat proto/combat.html via a one-shot transform.
    window.DW_COMBAT.start(config):
      config.party : [{id, frac}] fractional VITAE applied before the fight
-     config.fight : FIGHTS spec index to run (default 1)
-     config.onEnd : function({won, party:[{id,frac}]}) after RETVRN */
+     config.foes  : [{srcId, tpl:'t'|'s', frac}] crawl encounter (else FIGHTS[fight])
+     config.fight : FIGHTS spec index when no foes given (default 1)
+     config.onEnd : function({won, party:[{id,frac}], foes:[{srcId,frac}]}) after RETVRN */
 (function(){
-const DWC_CSS = '#dwc-root{\n    --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;\n    --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;\n  }\n#dwc-root{position:fixed;inset:0;z-index:900;background:var(--bg);color:var(--white);\n    font:14px/1.35 "Courier New",monospace; -webkit-user-select:none;user-select:none;\n    touch-action:manipulation; overflow:hidden;}\n#dwc-root #dwc-wrap{display:flex;flex-direction:column;height:100%;}\n#dwc-root /* timeline strip */\n  #dwc-tl{display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;flex:0 0 auto;}\n#dwc-root .chip{width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;\n    border:1px solid var(--tealdim);border-radius:4px;font-weight:bold;font-size:16px;\n    background:#0a1214;position:relative;opacity:.55;}\n#dwc-root .chip.party{color:var(--gold);border-color:#6b5322;}\n#dwc-root .chip.foe{color:#e26a7c;border-color:#5c1220;}\n#dwc-root .chip.now{opacity:1;box-shadow:0 0 8px var(--teal);border-color:var(--teal);}\n#dwc-root .chip .hp{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:#222;}\n#dwc-root .chip .hp i{display:block;height:100%;background:var(--teal);}\n#dwc-root #dwc-board{flex:1 1 auto;min-height:0;}\n#dwc-root svg{width:100%;height:100%;display:block;}\n#dwc-root /* HUD */\n  #dwc-hud{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--line);\n    display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:56px;}\n#dwc-root #dwc-stat{flex:1 1 100%;color:var(--dim);letter-spacing:.5px;}\n#dwc-root #dwc-stat b{color:var(--white);}\n#dwc-root button{background:#0a1214;color:var(--white);border:1px solid var(--tealdim);\n    border-radius:4px;padding:8px 12px;font:inherit;letter-spacing:1px;cursor:pointer;}\n#dwc-root button:disabled{opacity:.35;cursor:default;}\n#dwc-root button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}\n#dwc-root button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}\n#dwc-root button.item{border-color:#7a2a20;}\n#dwc-root button.item.sel{border-color:#D6402A;color:#e28a76;box-shadow:0 0 6px #d6402a66;}\n#dwc-root button.item svg{vertical-align:-3px;margin-right:1px;}\n#dwc-root .cost{color:var(--dim);font-size:11px;}\n#dwc-root /* overlay */\n  #dwc-over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;\n    background:#05080ae6;flex-direction:column;gap:16px;z-index:9;}\n#dwc-root #dwc-over h1{font-size:28px;letter-spacing:6px;margin:0;color:var(--teal);}\n#dwc-root /* tiles */\n  .tile{fill:#0a1a18;fill-opacity:.42;stroke:#2f7a72;stroke-width:1;}\n#dwc-root .tile.hl-move{fill:#12503c;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-rng{fill:#4a1626;fill-opacity:.75;stroke:#d94a63;stroke-width:1.5;}\n#dwc-root .tile.hl-heal{fill:#0f3a2a;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-place{fill:#3a3012;fill-opacity:.75;stroke:#d9a441;stroke-width:1.5;}\n#dwc-root .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}\n#dwc-root .unit{transition:transform .18s ease;}\n#dwc-root .fx-dmg{font-weight:bold;font-size:19px;paint-order:stroke;stroke:#000;stroke-width:3px;\n    animation:dwc-rise .8s ease-out forwards;pointer-events:none;}\n@keyframes dwc-rise{from{opacity:1;}\n#dwc-root to{opacity:0;transform:translateY(-26px);}\n#dwc-root }{';
+const DWC_CSS = '#dwc-root{\n    --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;\n    --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;\n  }\n#dwc-root{position:fixed;inset:0;z-index:900;background:var(--bg);color:var(--white);\n    font:14px/1.35 "Courier New",monospace; -webkit-user-select:none;user-select:none;\n    touch-action:manipulation; overflow:hidden;}\n#dwc-root #dwc-wrap{display:flex;flex-direction:column;height:100%;}\n#dwc-root /* timeline strip */\n  #dwc-tl{display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;flex:0 0 auto;}\n#dwc-root .chip{width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;\n    border:1px solid var(--tealdim);border-radius:4px;font-weight:bold;font-size:16px;\n    background:#0a1214;position:relative;opacity:.55;}\n#dwc-root .chip.party{color:var(--gold);border-color:#6b5322;}\n#dwc-root .chip.foe{color:#e26a7c;border-color:#5c1220;}\n#dwc-root .chip.now{opacity:1;box-shadow:0 0 8px var(--teal);border-color:var(--teal);}\n#dwc-root .chip .hp{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:#222;}\n#dwc-root .chip .hp i{display:block;height:100%;background:var(--teal);}\n#dwc-root #dwc-board{flex:1 1 auto;min-height:0;}\n#dwc-root #dwc-board svg{width:100%;height:100%;display:block;}\n#dwc-root /* HUD */\n  #dwc-hud{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--line);\n    display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:56px;}\n#dwc-root #dwc-stat{flex:1 1 100%;color:var(--dim);letter-spacing:.5px;}\n#dwc-root #dwc-stat b{color:var(--white);}\n#dwc-root button{background:#0a1214;color:var(--white);border:1px solid var(--tealdim);\n    border-radius:4px;padding:8px 12px;font:inherit;letter-spacing:1px;cursor:pointer;}\n#dwc-root button:disabled{opacity:.35;cursor:default;}\n#dwc-root button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}\n#dwc-root button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}\n#dwc-root button.item{border-color:#7a2a20;}\n#dwc-root button.item.sel{border-color:#D6402A;color:#e28a76;box-shadow:0 0 6px #d6402a66;}\n#dwc-root button.item svg{width:11px;height:15px;vertical-align:-3px;margin-right:1px;}\n#dwc-root #dwc-engage{position:fixed;left:50%;bottom:30%;transform:translateX(-50%);z-index:20;padding:16px 44px;font-size:20px;font-weight:bold;letter-spacing:4px;color:#3dffd0;border:2px solid #3dffd0;background:#06201cee;border-radius:4px;box-shadow:0 0 14px #3dffd0aa, inset 0 0 10px #3dffd033;text-shadow:0 0 8px #3dffd0;}\n#dwc-root #dwc-engage:disabled{color:var(--dim);border-color:var(--tealdim);background:#0a1214;box-shadow:none;text-shadow:none;opacity:.5;}\n#dwc-root .cost{color:var(--dim);font-size:11px;}\n#dwc-root /* overlay */\n  #dwc-over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;\n    background:#05080ae6;flex-direction:column;gap:16px;z-index:9;}\n#dwc-root #dwc-over h1{font-size:28px;letter-spacing:6px;margin:0;color:var(--teal);}\n#dwc-root /* tiles */\n  .tile{fill:#0a1a18;fill-opacity:.42;stroke:#2f7a72;stroke-width:1;}\n#dwc-root .tile.hl-move{fill:#12503c;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-rng{fill:#4a1626;fill-opacity:.75;stroke:#d94a63;stroke-width:1.5;}\n#dwc-root .tile.hl-heal{fill:#0f3a2a;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-place{fill:#3a3012;fill-opacity:.75;stroke:#d9a441;stroke-width:1.5;}\n#dwc-root .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}\n#dwc-root .unit{transition:transform .18s ease;}\n#dwc-root .fx-dmg{font-weight:bold;font-size:19px;paint-order:stroke;stroke:#000;stroke-width:3px;\n    animation:dwc-rise .8s ease-out forwards;pointer-events:none;}\n@keyframes dwc-rise{from{opacity:1;}\n#dwc-root to{opacity:0;transform:translateY(-26px);}\n#dwc-root }{';
 const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo" style="color:var(--dim);text-align:center;line-height:1.7;"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
@@ -183,9 +184,21 @@ function rangeCells(u,bank){
 const cross = (x,y)=>[[x,y],[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(p=>inB(p[0],p[1]));
 
 /* ============================ combat ============================== */
+function buildEncounter(foes){
+  // Crawl handoff: foes arrive as [{srcId, tpl:'t'|'s', frac}]. Spawn on the
+  // right flank, skipping obstacles; speeds stagger so initiative interleaves.
+  const cells=[];
+  for(let x=11;x>=8&&cells.length<8;x--)for(let y=1;y<H-1;y++)
+    if(!isObst(x,y)&&cells.length<8) cells.push([x,y]);
+  return {name:"ENCOVNTER", foes:foes.map((f,i)=>({
+    tpl:f.tpl, id:"e"+(i+1), srcId:f.srcId,
+    name:f.tpl==="s"?"SILIQVA":"TESTA",
+    spd:(f.tpl==="s"?11:9)-i, x:cells[i][0], y:cells[i][1], frac:f.frac,
+  }))};
+}
 function setupFight(n){
   state.fight=n;
-  const spec=FIGHTS[n-1];
+  const spec=(cfg&&cfg.foes&&cfg.foes.length)?buildEncounter(cfg.foes):FIGHTS[n-1];
   for(const p of PARTY){
     if(!p.alive){ p.alive=true; p.vitae=Math.round(p.maxVitae*0.5); } // dead daemons reboot at 50%
     if(n===3){ p.vitae=p.maxVitae; p.alive=true; }                    // full restore before the Archon
@@ -197,9 +210,11 @@ function setupFight(n){
   for(const f of spec.foes){
     const tpl=FOE_TPL[f.tpl];
     SPR[f.id]=SPR[tpl.spr];
-    state.units.push(mkUnit({id:f.id,name:f.name,side:"foe",glyph:tpl.glyph,
+    const fu=mkUnit({id:f.id,name:f.name,side:"foe",glyph:tpl.glyph,srcId:f.srcId,
       maxVitae:tpl.maxVitae,atk:tpl.atk,def:tpl.def,speed:f.spd,
-      maxCycles:tpl.maxCycles,maxPneuma:tpl.maxPneuma,banks:tpl.banks.slice(),x:f.x,y:f.y}));
+      maxCycles:tpl.maxCycles,maxPneuma:tpl.maxPneuma,banks:tpl.banks.slice(),x:f.x,y:f.y});
+    if(typeof f.frac==="number") fu.vitae=Math.max(1,Math.min(fu.maxVitae,Math.round(f.frac*fu.maxVitae)));
+    state.units.push(fu);
   }
   state.toPlace=PARTY.map(u=>u.id);
   state.phase="place"; state.round=1; state.sel=null; state.busy=false;
@@ -540,6 +555,7 @@ function drawHud(){
   if(state.phase==="place"){
     stat.innerHTML="Seat your party in the gold zone. Tap a seated unit to pick it up.";
     const b=document.createElement("button");
+    b.id="dwc-engage";
     b.textContent="ENGAGE"; b.disabled=state.toPlace.length>0;
     b.onclick=()=>{state.phase="battle"; newRound();};
     banks.appendChild(b); endb.style.display="none"; return;
@@ -612,6 +628,12 @@ document.getElementById("dwc-endbtn").onclick=()=>{
   if(state.phase==="battle"&&cur()&&cur().side==="party") endTurn();
 };
 document.addEventListener("keydown",e=>{ if(!active) return;
+  // Placement: space/enter is the keyboard ENGAGE, once everyone is seated.
+  if(state.phase==="place"&&(e.key===" "||e.key==="Enter")){
+    e.preventDefault();
+    if(!state.toPlace.length){ state.phase="battle"; newRound(); }
+    return;
+  }
   if(state.phase!=="battle"||state.busy) return;
   const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
   if(e.key>="1"&&e.key<="4"){
@@ -640,7 +662,10 @@ function applyParty(){
 function finish(won){
   active=false; root.style.display="none";
   document.getElementById("dwc-over").style.display="none";
-  const res={won, party:PARTY.map(u=>({id:u.id, frac:Math.max(0,u.vitae)/u.maxVitae}))};
+  const res={won,
+    party:PARTY.map(u=>({id:u.id, frac:Math.max(0,u.vitae)/u.maxVitae})),
+    foes:state.units.filter(u=>u.side==="foe").map(u=>(
+      {srcId:u.srcId, frac:u.alive?Math.max(0,u.vitae)/u.maxVitae:0}))};
   if(cfg&&cfg.onEnd) cfg.onEnd(res);
 }
 apiStart=function(){
