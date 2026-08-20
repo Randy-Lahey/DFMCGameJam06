@@ -122,6 +122,7 @@
         ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
     modal: null,                   // null | 'exit' | 'controls' | 'inv'
+    scene: 'crawl',                // 'crawl' | 'combat' — which game owns input
     mode: 'move',                  // 'move' | 'act'
     sel: null,                     // member whose op menu is open (nameplate tap)
     acted: [],                     // member names done this act round (any order)
@@ -2129,11 +2130,45 @@
     return true;
   }
 
+  // ------------------------------------------------------- combat handoff
+  // Crawl and tactical combat use different VITAE scales, so state crosses
+  // the seam as a FRACTION of max: hp/vitae out, vitae/maxVitae back in.
+  const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis' };
+  function enterCombat() {
+    if (!window.DW_COMBAT) { log('COMBAT MODULE MISSING.', 'bad'); return; }
+    state.scene = 'combat';
+    const party = state.circle.members
+      .filter(m => COMBAT_ID[m.name] && m.hp > 0)
+      .map(m => ({ id: COMBAT_ID[m.name], frac: m.hp / m.vitae }));
+    window.DW_COMBAT.start({
+      fight: 1,
+      party,
+      onEnd(res) {
+        state.scene = 'crawl';
+        for (const r of res.party) {
+          const name = Object.keys(COMBAT_ID).find(n => COMBAT_ID[n] === r.id);
+          const m = name && state.circle.members.find(v => v.name === name);
+          if (!m) continue;
+          m.hp = Math.max(0, Math.min(m.vitae, Math.round(r.frac * m.vitae)));
+        }
+        log(res.won ? 'THE CHAMBER IS PVRGED. THE CRAWL RESVMES.'
+                    : 'DRIVEN BACK. THE CRAWL RESVMES.', res.won ? 'good' : 'bad');
+        checkEnd();
+        draw();
+      },
+    });
+  }
+
   const MOVES = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
 
   window.addEventListener('keydown', e => {
+    if (state.scene === 'combat') return;   // combat module owns input
     const k = e.key.toLowerCase();
     if (animating()) settle();       // a keypress finishes the round in flight
+    // Debug seam: B drops the party into a tactical combat encounter.
+    if (k === 'b' && !state.modal && !finished()) {
+      e.preventDefault(); enterCombat(); return;
+    }
 
     // A focused button owns ENTER and SPACE. Without this the window handler
     // preventDefaults them and the button's own activation never runs.
