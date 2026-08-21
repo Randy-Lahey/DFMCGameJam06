@@ -122,7 +122,12 @@
       ([who, banks]) => [who, banks.map(b =>
         ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
-    modal: null,                   // null | 'exit' | 'controls' | 'inv'
+    modal: null,                   // null | 'exit' | 'controls' | 'inv' | 'hermit' | 'cube' | 'fight'
+    pendingFight: null,            // engaged pack awaiting the player's Fight? answer
+    hasCube: false,                // THE CVBE granted (inventory flag; cube UI is post-jam-beat work)
+    hermitMet: false,              // bargain done; the NPC goes quiet afterwards
+    ampoules: 0,                   // AMPVLLA VITAE doses; carried across floors, spent in the chamber (cap 3, mirrors combat SATCHEL_MAX)
+    hermitGone: false,             // sacrifice beat fired; it fires exactly once per run
     scene: 'crawl',                // 'crawl' | 'combat' — which game owns input
     mode: 'move',                  // 'move' | 'act'
     sel: null,                     // member whose op menu is open (nameplate tap)
@@ -602,6 +607,7 @@
       if (!enterOk && nc === t.c && nr === t.r) continue;
       if (memberAt(nc, nr)) continue;
       if (foeAt(nc, nr)) continue;
+      if (npcAt(nc, nr)) continue;
       return { dc: mc, dr: mr };
     }
     return { dc: 0, dr: 0 };
@@ -622,7 +628,7 @@
   // A follower's tile counts as open: stepping into it swaps.
   const canStep = () => !!lead() && [[0,-1],[-1,0],[0,1],[1,0]].some(([dc, dr]) => {
     const c = lead().c + dc, r = lead().r + dr;
-    return walkable.has(key(c, r)) && !foeAt(c, r);
+    return walkable.has(key(c, r)) && !foeAt(c, r) && !npcAt(c, r);
   });
   const affordable = (m, op) =>
     m.pn >= op.pn && (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
@@ -852,9 +858,40 @@
         state.pendingEngage = null;
         if (!trigger || trigger.hp <= 0 || finished()) return;
         const engaged = liveFoes().filter(f => cheb(f, trigger) <= 2);
-        enterCombat(engaged);
+        if (!engaged.length) return;
+        // Contact ASKS before it commits: the Fight? dialog. The pack is
+        // frozen here and consumed by answerFight().
+        state.pendingFight = { engaged };
+        state.modal = 'fight';
+        const note = document.getElementById('fight-note');
+        if (note) {
+          const kinds = {};
+          for (const f of engaged) kinds[f.kind] = (kinds[f.kind] || 0) + 1;
+          note.textContent = Object.entries(kinds)
+            .map(([k, n]) => k + (n > 1 ? ' \u00d7' + n : '')).join(' \u00b7 ')
+            + ' IN CONTACT.';
+        }
       },
     ]);
+  }
+
+  // The player's answer to contact. YES hands the frozen pack to the
+  // tactical layer; NO buys one round of quarter (grace) so declining is a
+  // real step-away window, not an instant re-prompt on the same tiles.
+  function answerFight(yes) {
+    if (state.modal !== 'fight') return;
+    state.modal = null;
+    const pf = state.pendingFight;
+    state.pendingFight = null;
+    if (!pf) return;
+    const pack = pf.engaged.filter(f => f.hp > 0);
+    if (!pack.length) return;
+    if (!yes) {
+      for (const f of pack) f.grace = Math.max(f.grace, 1);
+      log('THE CIRCLE REFVSES CONTACT. ONE ROVND OF QVARTER.', 'dim');
+      return;
+    }
+    enterCombat(pack);
   }
 
   // Leaving is a choice, not a state you fall into: CLEARED means the floor is
@@ -863,9 +900,6 @@
     if (state.modal !== 'exit') return;
     state.modal = null;
     if (!yes) { log('THE CIRCLE STEPS BACK FROM THE DESCENT.'); return; }
-    // A solo OPERATOR does not get to fall through the first floor: the
-    // Hermit is standing IN the stairwell, and the bargain is mandatory.
-    if (F.hermit && state.roster.length === 1) { state.modal = 'hermit'; return; }
     if (state.floor + 1 < FLOORS.length) {
       log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
       loadFloor(state.floor + 1);
@@ -929,8 +963,20 @@
     bgG.innerHTML = backdrop();
     mmEl.setAttribute('viewBox', `0 0 ${F.cols} ${F.rows}`);
     mmEl.style.aspectRatio = `${F.cols} / ${F.rows}`;
-    cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
+    // The camera must be APPLIED, not just assigned: cam is only a mirror of
+    // the stage's viewBox, and updateCamera's change-detection compares
+    // against it -- so a bare assignment here made the new floor's frame
+    // look 'already current' and the SVG kept the OLD floor's viewBox
+    // forever (the floor-02 letterbox bug). Write the attribute, then let
+    // updateCamera(true) fit and centre on the party for the real screen.
     view.free = false;
+    cam = { x: 0, y: 0, w: F.cols * T, h: F.rows * T };
+    stage.setAttribute('viewBox', `0 0 ${F.cols * T} ${F.rows * T}`);
+    updateCamera(true);
+
+    // Header floor label is floor-scoped UI too.
+    const brandSub = document.querySelector('.brand small');
+    if (brandSub) brandSub.textContent = `${F.name} // VERTICAL SLICE`;
 
     buildRoster();
     renderFanChips();
@@ -957,16 +1003,34 @@
     return m;
   }
 
+  // The Hermit's sacrifice: scripted beat after the ambush is cleared. He
+  // burns out sealing the breach, and his last act hands over THE CVBE --
+  // for now an inventory flag; entering/solving it is later tutorial work.
+  function hermitSacrifice() {
+    if (state.hermitGone) return;            // fires exactly once per run
+    state.hermitGone = true;
+    log('THE HERMIT PLANTS HIMSELF IN THE BREACH BEHIND YOV.', 'bad');
+    log('HERMIT VITAE \u2192 0. THE SEAL TAKES EVERYTHING HE HAS.', 'bad');
+    log('THE STATIC GOES QVIET.', 'dim');
+    state.modal = 'cube';
+  }
+  function takeCube() {
+    if (state.modal !== 'cube') return;
+    state.modal = null;
+    state.hasCube = true;
+    log('THE CVBE IS YOVRS. IT IS THE ONLY DOOR.', 'good');
+  }
+
   // The Hermit's bargain: one daemon joins, the choice is final, and the
   // descent happens in the same breath. Roster order IS command order, so
   // the starter falls in directly behind the OPERATOR.
   function chooseStarter(name) {
     if (state.modal !== 'hermit') return;
     state.modal = null;
-    state.roster.push(name);
+    state.hermitMet = true;
+    recruit(name);
     log(`THE HERMIT UNBINDS ${name}. IT FALLS IN BEHIND YOU.`, 'good');
-    log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
-    loadFloor(state.floor + 1);
+    log('THE HERMIT STEPS BACK INTO THE STATIC. THE WAY EAST OPENS.', 'dim');
   }
 
   // Hazards bite on EVERY entry. Revealing one is not the same as disarming
@@ -983,6 +1047,13 @@
     log(label + ' BITES \u2014 ' + m.name + ' ' + dmg + '.', 'bad');
     if (m.hp === 0) log(`${m.name} IS SEVERED BY THE ${label}.`, 'bad');
   }
+
+  // NPCs are props that BLOCK their tile and talk when bumped. Only the
+  // Hermit for now; the helper keeps every walkability check honest. Once
+  // the bargain is done he steps into the static: no body, no block --
+  // keyed off state so a fresh run brings him back.
+  const npcAt = (c, r) => !state.hermitMet &&
+    F.props.find(p => p.kind === 'hermit' && p.c === c && p.r === r);
 
   // Naming a key to a player who has no keyboard is worse than saying nothing.
   const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
@@ -1022,6 +1093,23 @@
     float(p.c, p.r, '+' + argent + ' ARGENT', 'f-argent', pick.rarity && 'COMMON');
     float(p.c, p.r, pick.label, 'f-' + pick.kind.toLowerCase(), pick.rarity);
     log(`${p.label} OPENED \u2014 ${argent} ARGENT, ${pick.label}.`, 'good');
+
+    // Prop-carried ampoules: the first healing of the run, so the pickup IS
+    // the tutorial -- brief, and on the warn banner so phones (no record
+    // panel) see it too.
+    if (p.ampoules) {
+      const room = 3 - state.ampoules;                 // cap mirrors combat SATCHEL_MAX
+      const got = Math.max(0, Math.min(p.ampoules, room));
+      if (got > 0) {
+        state.ampoules += got;
+        float(p.c, p.r, `+${got} AMPVLLA`, 'f-argent');
+        warn(`AMPVLLA VITAE \u00d7${got} \u2014 HEALS +8 IN THE CHAMBER.`);
+        log(`AMPVLLA VITAE \u00d7${got}: DRINK OR HVRL MID-FIGHT \u2014 +8 VITAE. ONE VSE EACH.`, 'good');
+        log('THE SATCHEL HOLDS 3. SPARES STAY WHERE THEY LIE.', 'dim');
+      } else {
+        log('THE SATCHEL IS FVLL \u2014 3 AMPVLLAE HELD. THE SPARES STAY.', 'dim');
+      }
+    }
     resolveRound(null);
   }
 
@@ -1158,7 +1246,9 @@
 
   function stageStep(dc, dr) {
     const nc = lead().c + dc, nr = lead().r + dr;
-    if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
+    // Foe and NPC tiles skip the two-tap stage: the Fight? dialog / the
+    // bargain IS the confirmation, so one tap goes straight to the bump.
+    if (foeAt(nc, nr) || npcAt(nc, nr)) { moveInput(dc, dr); return; }
     if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
     state.staged = { dc, dr };
   }
@@ -1213,7 +1303,7 @@
     }
   }
 
-  // WASD is movement only. Walking into an enemy is simply blocked.
+  // WASD moves; walking into an enemy is BUMP-TO-ENGAGE (contact trigger).
   // Walking into a FOLLOWER swaps with it; otherwise the leader steps and the
   // trail cascades: each follower moves into the tile the member ahead of it
   // just vacated. The chain is contiguous at spawn and both moves preserve
@@ -1222,7 +1312,24 @@
     if (blocked() || state.mode === 'act' || !lead()) return;
     const L = lead();
     const nc = L.c + dc, nr = L.r + dr;
-    if (foeAt(nc, nr)) { warn('AN ENEMY BLOCKS THE WAY.'); return; }
+    const bumped = foeAt(nc, nr);
+    if (bumped) {
+      // Bump-to-engage: stepping into a foe IS the contact trigger. The step
+      // is spent closing and the round resolves into the Fight? dialog. This
+      // is also the hardlock cure: a full-health skirmisher never swings
+      // first, so without the bump it could never be brought to battle.
+      state.pendingEngage = state.pendingEngage || bumped;
+      log(`${L.name} CLOSES WITH ${bumped.kind} \u2014 CONTACT.`, 'good');
+      resolveRound({ kind: 'hold' });
+      return;
+    }
+    if (npcAt(nc, nr)) {
+      // Bump-to-talk, the same verb as bump-to-engage. Talking is free:
+      // no step spent, no round resolved.
+      state.modal = 'hermit';
+      log('A HOODED PROCESS RESOLVES OVT OF THE STATIC.', 'good');
+      return;
+    }
     if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
     // The step lands NOW -- hazards and drops fire per tile -- and the round
     // resolves only when the step allowance is spent. With one step banked
@@ -1410,6 +1517,7 @@
   }).join('');
 
   const propLayer = () => F.props.map(p => {
+    if (p.kind === 'hermit' && state.hermitMet) return '';
     const k = key(p.c, p.r);
     if (!state.seen.has(k)) return '';
     if (p.hidden && !state.revealed.has(k)) return '';
@@ -1949,6 +2057,12 @@
   const severEl = document.getElementById('sever');
   const ctlEl = document.getElementById('controls');
   const hermitEl = document.getElementById('hermit');
+  const cubeEl = document.getElementById('cube');
+  const fightEl = document.getElementById('fight');
+  if (fightEl) fightEl.querySelectorAll('[data-answer]').forEach(b =>
+    b.addEventListener('click', () => { answerFight(b.dataset.answer === 'yes'); draw(); }));
+  const cubeTakeEl = document.getElementById('cube-take');
+  if (cubeTakeEl) cubeTakeEl.addEventListener('click', () => { takeCube(); draw(); });
   const startersEl = document.getElementById('starters');
 
   // Starter cards, built once from the numbers bible. Presentation-layer
@@ -2020,7 +2134,9 @@
 
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
+    fightEl.classList.toggle('open', state.modal === 'fight');
     hermitEl.classList.toggle('open', state.modal === 'hermit');
+    cubeEl.classList.toggle('open', state.modal === 'cube');
     winEl.classList.toggle('open', state.over === 'WIN');
     severEl.classList.toggle('open', state.over === 'SEVERED');
 
@@ -2170,8 +2286,41 @@
   // the seam as a FRACTION of max: hp/vitae out, vitae/maxVitae back in.
   const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis' };
   const COMBAT_TPL = { TESTA: 't', SILIQVA: 's' };
-  function enterCombat(engaged) {
+
+  // Placeholder crawl -> tactical transition. Full-screen flash: void black,
+  // gold rule lines, ENGAGED wordmark. Holds ~0.8s, then hands off to the
+  // combat module and fades over it. Input is already locked because
+  // state.scene flips to 'combat' before the timer, and DW_COMBAT ignores
+  // input until start() sets it active.
+  let transEl = null;
+  function combatTransition(done) {
+    if (!transEl) {
+      transEl = document.createElement('div');
+      transEl.id = 'dw-transition';
+      transEl.style.cssText =
+        'position:fixed;inset:0;z-index:950;background:#04050A;display:none;' +
+        'flex-direction:column;align-items:center;justify-content:center;gap:14px;' +
+        "font:14px/1.4 'Courier New',monospace;color:#E7E2D2;letter-spacing:6px;" +
+        'transition:opacity .25s ease;';
+      transEl.innerHTML =
+        '<div style="width:min(60vw,420px);height:2px;background:#E3B347;box-shadow:0 0 10px #E3B347aa;"></div>' +
+        '<div style="font-size:30px;font-weight:bold;color:#46F0DC;text-shadow:0 0 12px #46F0DC88;">ENGAGED</div>' +
+        '<div style="color:#5a7876;font-size:12px;letter-spacing:3px;">TRANSLATING TO THE CHAMBER\u2026</div>' +
+        '<div style="width:min(60vw,420px);height:2px;background:#E3B347;box-shadow:0 0 10px #E3B347aa;"></div>';
+      document.body.appendChild(transEl);
+    }
+    transEl.style.display = 'flex';
+    transEl.style.opacity = '1';
+    setTimeout(() => {
+      done();                              // combat root appears underneath
+      transEl.style.opacity = '0';         // then the flash lifts off it
+      setTimeout(() => { transEl.style.display = 'none'; }, 260);
+    }, 800);
+  }
+
+  function enterCombat(engaged, opts) {
     if (!window.DW_COMBAT) { log('COMBAT MODULE MISSING.', 'bad'); return; }
+    opts = opts || {};
     engaged = (engaged || []).filter(f => f.hp > 0 && COMBAT_TPL[f.kind]);
     state.scene = 'combat';
     const party = state.circle.members
@@ -2179,9 +2328,11 @@
       .map(m => ({ id: COMBAT_ID[m.name], frac: m.hp / m.vitae }));
     const foes = engaged.map(f => ({
       srcId: f.id, tpl: COMBAT_TPL[f.kind], frac: f.hp / f.vitae }));
-    window.DW_COMBAT.start({
+    combatTransition(() => window.DW_COMBAT.start({
       fight: 1,
       party,
+      guests: opts.guests,
+      items: { AMPVLLA: state.ampoules },
       foes: foes.length ? foes : undefined,   // debug entry keeps the FIGHTS spec
       onEnd(res) {
         state.scene = 'crawl';
@@ -2213,10 +2364,12 @@
           }
           log('DRIVEN BACK. THE CRAWL RESVMES.', 'bad');
         }
+        if (res.items) state.ampoules = Math.max(0, res.items.AMPVLLA | 0);
+        if (res.won && opts.sacrifice) hermitSacrifice();
         checkEnd();
         draw();
       },
-    });
+    }));
   }
 
   const DEBUG = typeof location !== 'undefined' && /[?&]debug/.test(location.search);
@@ -2228,7 +2381,11 @@
     if (animating()) settle();       // a keypress finishes the round in flight
     // Debug seam (?debug only): B forces the canned FIGHTS[1] encounter.
     if (k === 'b' && DEBUG && !state.modal && !finished()) {
-      e.preventDefault(); enterCombat([]); return;
+      e.preventDefault();
+      // Until the scripted ambush lands, debug B carries the hermit + the
+      // sacrifice beat (once per run) so the whole handoff is testable.
+      enterCombat([], state.hermitGone ? {} : { guests: ['hermit'], sacrifice: true });
+      return;
     }
 
     // A focused button owns ENTER and SPACE. Without this the window handler
@@ -2242,11 +2399,23 @@
       draw();
       return;
     }
+    if (state.modal === 'fight') {
+      e.preventDefault();
+      if (k === 'y' || k === 'enter') { answerFight(true); draw(); }
+      if (k === 'n' || k === 'escape') { answerFight(false); draw(); }
+      return;
+    }
     if (state.modal === 'exit') {
       e.preventDefault();
       if (k === 'y' || k === 'enter') answerExit(true);
       if (k === 'n' || k === 'escape') answerExit(false);
       draw();
+      return;
+    }
+    // The cube grant IS dismissible -- any confirm/escape key takes it.
+    if (state.modal === 'cube') {
+      e.preventDefault();
+      if (k === 'enter' || k === ' ' || k === 'escape' || k === '1') { takeCube(); draw(); }
       return;
     }
     // The Hermit's bargain has no escape key: the choice is the only door.
@@ -2959,7 +3128,8 @@
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp,
-                  loadFloor, recruit, chooseStarter, recomputeFOV };
+                  loadFloor, recruit, chooseStarter, recomputeFOV,
+                  hermitSacrifice, takeCube, enterCombat, answerFight };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.

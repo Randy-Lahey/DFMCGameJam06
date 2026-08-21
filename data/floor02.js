@@ -17,12 +17,12 @@
 //   5    . . . . . . . # # # . . . . . . .
 //   6    . . . . . . . # T # . . . . . . .
 //   7    # # # # . . . # # # . . . . . . .
-//   8    @ @ @ @ = = = # # # . . . # # # #
+//   8    # # # H = = = # # # . . . # # # #
 //   9    # # # # . . . # # # = = = # T # #
-//  10    # # # # . . . # # # . . . # x C #
+//  10    @ @ @ @ . . . # # # . . . # x C #
 //  11    . . . . . . . . . . . . . # # # #
 //
-//   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes
+//   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes   H hermit
 //   = corridor tile (drawn identically in game; marked here for review)
 //
 //   Rooms: ENTRY (0-3, 7-10) - SPINE (7-9, 1-10)
@@ -53,8 +53,15 @@
     ],
 
     props: [
+      // THE HERMIT gates the corridor mouth: the only way east runs
+      // through him, so the bargain cannot be walked past. He blocks his
+      // tile until the choice is made, then steps into the static.
+      { kind: 'hermit', c: 3, r: 8, hidden: false, label: 'THE HERMIT' },
       { kind: 'stairs', c: 15, r: 1,  hidden: false, label: 'DESCENT' },
-      { kind: 'chest',  c: 15, r: 10, hidden: false, label: 'CACHE' },
+      // First healing of the run: two doses ride in this cache. The pickup
+      // also teaches the rule (one use each, satchel holds 3) -- see
+      // openCache in game.js.
+      { kind: 'chest',  c: 15, r: 10, hidden: false, label: 'CACHE', ampoules: 2 },
       // Inside the cache room (see floor 01's note): bites once on the way
       // in, routable-around once revealed. Never on a 1-wide corridor.
       { kind: 'spikes', c: 14, r: 10, hidden: true,  label: 'SPIKE ARRAY' },
@@ -63,11 +70,14 @@
     // Party spawns, in command order, west wall of the ENTRY room. Four
     // tiles so any roster size seats cleanly; the jam flow arrives here
     // with two (OPERATOR + the Hermit's starter).
+    // Bottom-LEFT corner of the ENTRY room: leader in the corner itself,
+    // tail trailing east. The Hermit gates the corridor mouth up at (3,8),
+    // so the first walk crosses the room -> bump -> bargain -> east.
     spawns: [
-      { c: 3, r: 8 },
-      { c: 2, r: 8 },
-      { c: 1, r: 8 },
-      { c: 0, r: 8 },
+      { c: 0, r: 10 },
+      { c: 1, r: 10 },
+      { c: 2, r: 10 },
+      { c: 3, r: 10 },
     ],
 
     // Foe placements. `kind` keys into BALANCE.foes.

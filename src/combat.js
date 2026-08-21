@@ -7,7 +7,7 @@
      config.fight : FIGHTS spec index when no foes given (default 1)
      config.onEnd : function({won, party:[{id,frac}], foes:[{srcId,frac}]}) after RETVRN */
 (function(){
-const DWC_CSS = '#dwc-root{\n    --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;\n    --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;\n  }\n#dwc-root{position:fixed;inset:0;z-index:900;background:var(--bg);color:var(--white);\n    font:14px/1.35 "Courier New",monospace; -webkit-user-select:none;user-select:none;\n    touch-action:manipulation; overflow:hidden;}\n#dwc-root #dwc-wrap{display:flex;flex-direction:column;height:100%;}\n#dwc-root /* timeline strip */\n  #dwc-tl{display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;flex:0 0 auto;}\n#dwc-root .chip{width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;\n    border:1px solid var(--tealdim);border-radius:4px;font-weight:bold;font-size:16px;\n    background:#0a1214;position:relative;opacity:.55;}\n#dwc-root .chip.party{color:var(--gold);border-color:#6b5322;}\n#dwc-root .chip.foe{color:#e26a7c;border-color:#5c1220;}\n#dwc-root .chip.now{opacity:1;box-shadow:0 0 8px var(--teal);border-color:var(--teal);}\n#dwc-root .chip .hp{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:#222;}\n#dwc-root .chip .hp i{display:block;height:100%;background:var(--teal);}\n#dwc-root #dwc-board{flex:1 1 auto;min-height:0;}\n#dwc-root #dwc-board svg{width:100%;height:100%;display:block;}\n#dwc-root /* HUD */\n  #dwc-hud{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--line);\n    display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:56px;}\n#dwc-root #dwc-stat{flex:1 1 100%;color:var(--dim);letter-spacing:.5px;}\n#dwc-root #dwc-stat b{color:var(--white);}\n#dwc-root button{background:#0a1214;color:var(--white);border:1px solid var(--tealdim);\n    border-radius:4px;padding:8px 12px;font:inherit;letter-spacing:1px;cursor:pointer;}\n#dwc-root button:disabled{opacity:.35;cursor:default;}\n#dwc-root button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}\n#dwc-root button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}\n#dwc-root button.item{border-color:#7a2a20;}\n#dwc-root button.item.sel{border-color:#D6402A;color:#e28a76;box-shadow:0 0 6px #d6402a66;}\n#dwc-root button.item svg{width:11px;height:15px;vertical-align:-3px;margin-right:1px;}\n#dwc-root #dwc-engage{position:fixed;left:50%;bottom:30%;transform:translateX(-50%);z-index:20;padding:16px 44px;font-size:20px;font-weight:bold;letter-spacing:4px;color:#3dffd0;border:2px solid #3dffd0;background:#06201cee;border-radius:4px;box-shadow:0 0 14px #3dffd0aa, inset 0 0 10px #3dffd033;text-shadow:0 0 8px #3dffd0;}\n#dwc-root #dwc-engage:disabled{color:var(--dim);border-color:var(--tealdim);background:#0a1214;box-shadow:none;text-shadow:none;opacity:.5;}\n#dwc-root .cost{color:var(--dim);font-size:11px;}\n#dwc-root /* overlay */\n  #dwc-over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;\n    background:#05080ae6;flex-direction:column;gap:16px;z-index:9;}\n#dwc-root #dwc-over h1{font-size:28px;letter-spacing:6px;margin:0;color:var(--teal);}\n#dwc-root /* tiles */\n  .tile{fill:#0a1a18;fill-opacity:.42;stroke:#2f7a72;stroke-width:1;}\n#dwc-root .tile.hl-move{fill:#12503c;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-rng{fill:#4a1626;fill-opacity:.75;stroke:#d94a63;stroke-width:1.5;}\n#dwc-root .tile.hl-heal{fill:#0f3a2a;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-place{fill:#3a3012;fill-opacity:.75;stroke:#d9a441;stroke-width:1.5;}\n#dwc-root .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}\n#dwc-root .unit{transition:transform .18s ease;}\n#dwc-root .fx-dmg{font-weight:bold;font-size:19px;paint-order:stroke;stroke:#000;stroke-width:3px;\n    animation:dwc-rise .8s ease-out forwards;pointer-events:none;}\n@keyframes dwc-rise{from{opacity:1;}\n#dwc-root to{opacity:0;transform:translateY(-26px);}\n#dwc-root }{';
+const DWC_CSS = '#dwc-root{\n    --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;\n    --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;\n  }\n#dwc-root{position:fixed;inset:0;z-index:900;background:var(--bg);color:var(--white);\n    font:14px/1.35 "Courier New",monospace; -webkit-user-select:none;user-select:none;\n    touch-action:manipulation; overflow:hidden;}\n#dwc-root #dwc-wrap{display:flex;flex-direction:column;height:100%;}\n#dwc-root /* timeline strip */\n  #dwc-tl{display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;flex:0 0 auto;}\n#dwc-root .chip{width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;\n    border:1px solid var(--tealdim);border-radius:4px;font-weight:bold;font-size:16px;\n    background:#0a1214;position:relative;opacity:.55;}\n#dwc-root .chip.party{color:var(--gold);border-color:#6b5322;}\n#dwc-root .chip.foe{color:#e26a7c;border-color:#5c1220;}\n#dwc-root .chip.now{opacity:1;box-shadow:0 0 8px var(--teal);border-color:var(--teal);}\n#dwc-root .chip .hp{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:#222;}\n#dwc-root .chip .hp i{display:block;height:100%;background:var(--teal);}\n#dwc-root #dwc-board{flex:1 1 auto;min-height:0;}\n#dwc-root #dwc-board svg{width:100%;height:100%;display:block;}\n#dwc-root /* HUD */\n  #dwc-hud{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--line);\n    display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:56px;}\n#dwc-root #dwc-stat{flex:1 1 100%;color:var(--dim);letter-spacing:.5px;}\n#dwc-root #dwc-stat b{color:var(--white);}\n#dwc-root button{background:#0a1214;color:var(--white);border:1px solid var(--tealdim);\n    border-radius:4px;padding:8px 12px;font:inherit;letter-spacing:1px;cursor:pointer;}\n#dwc-root button:disabled{opacity:.35;cursor:default;}\n#dwc-root button.off{opacity:.35;cursor:default;}\n#dwc-root #dwc-stat .warn{color:#e26a7c;letter-spacing:.5px;}\n#dwc-root button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}\n#dwc-root button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}\n#dwc-root button.item{border-color:#7a2a20;}\n#dwc-root button.item.sel{border-color:#D6402A;color:#e28a76;box-shadow:0 0 6px #d6402a66;}\n#dwc-root button.item svg{width:11px;height:15px;vertical-align:-3px;margin-right:1px;}\n#dwc-root #dwc-engage{position:fixed;left:50%;bottom:30%;transform:translateX(-50%);z-index:20;padding:16px 44px;font-size:20px;font-weight:bold;letter-spacing:4px;color:#3dffd0;border:2px solid #3dffd0;background:#06201cee;border-radius:4px;box-shadow:0 0 14px #3dffd0aa, inset 0 0 10px #3dffd033;text-shadow:0 0 8px #3dffd0;}\n#dwc-root #dwc-engage:disabled{color:var(--dim);border-color:var(--tealdim);background:#0a1214;box-shadow:none;text-shadow:none;opacity:.5;}\n#dwc-root .cost{color:var(--dim);font-size:11px;}\n#dwc-root /* overlay */\n  #dwc-over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;\n    background:#05080ae6;flex-direction:column;gap:16px;z-index:9;}\n#dwc-root #dwc-over h1{font-size:28px;letter-spacing:6px;margin:0;color:var(--teal);}\n#dwc-root /* tiles */\n  .tile{fill:#0a1a18;fill-opacity:.42;stroke:#2f7a72;stroke-width:1;}\n#dwc-root .tile.hl-move{fill:#12503c;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-rng{fill:#4a1626;fill-opacity:.75;stroke:#d94a63;stroke-width:1.5;}\n#dwc-root .tile.hl-heal{fill:#0f3a2a;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-place{fill:#3a3012;fill-opacity:.75;stroke:#d9a441;stroke-width:1.5;}\n#dwc-root .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}\n#dwc-root .unit{transition:transform .18s ease;}\n#dwc-root .fx-dmg{font-weight:bold;font-size:19px;paint-order:stroke;stroke:#000;stroke-width:3px;\n    animation:dwc-rise .8s ease-out forwards;pointer-events:none;}\n@keyframes dwc-rise{from{opacity:1;}\n#dwc-root to{opacity:0;transform:translateY(-26px);}\n#dwc-root }{';
 const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo" style="color:var(--dim);text-align:center;line-height:1.7;"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
@@ -47,7 +47,7 @@ const inB = (x,y)=>x>=0&&x<W&&y>=0&&y<H;
 // dmg = round(mult * caster ATK) ±1 − target DEF. Each bank casts once per
 // turn (Dofus-style cap; main's depleting-PNEUMA model doesn't need one).
 const BANKS = {
-  PERCVSSIO:{name:"PERCVSSIO",kind:"strike",cost:0,mult:1,min:1,max:1,los:true,
+  PERCVSSIO:{name:"PERCVSSIO",kind:"strike",cost:4,mult:1,flat:1,min:1,max:1,los:true,repeat:true,
     desc:"Melee. One enemy, adjacent."},
   ABRASIO:{name:"ABRASIO",kind:"sweep",cost:3,mult:1.3,min:0,max:0,los:false,
     desc:"Melee sweep. Every enemy touching you."},
@@ -62,6 +62,16 @@ const BANKS = {
 };
 
 function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,x:-1,y:-1,cds:{},cast:{}},o); }
+// Guest allies (FFT-style): party-side for targeting and win/loss, but
+// control:"ai" -- the player never selects them, their turn runs the same
+// brain as the foes with the target side flipped. guest:true keeps them out
+// of the crawl write-back (they are not in PARTY) and out of placement
+// (auto-seated in the gold zone). Passed per-fight via cfg.guests.
+const GUEST_TPL = {
+  hermit:{id:"hermit", name:"THE HERMIT", side:"party", glyph:"H",
+    maxVitae:34, atk:6, def:2, speed:10, maxCycles:3, maxPneuma:10,
+    banks:["PERCVSSIO"], control:"ai", guest:true},
+};
 // Party stats + loadouts from data/balance.js (members / defaultLoadout).
 const PARTY = [
   mkUnit({id:"op", name:"OPERATOR", side:"party", glyph:"O", maxVitae:24, atk:7, def:2, speed:12, maxCycles:3, maxPneuma:10, banks:["PERCVSSIO"]}),
@@ -104,7 +114,7 @@ const state = {
   sel:null,                // selected bank id or null
   busy:false,              // input locked during move animation
   toPlace:UNITS.filter(u=>u.side==="party").map(u=>u.id),
-  items:{AMPVLLA:2},       // party satchel; tile-flavored loot in the full game
+  items:{AMPVLLA:0},       // party satchel; EMPTY until loot types ship -- ampoules arrive as drops later
   // SATCHEL RULES (anti-hoarding, StS potion-belt model): SATCHEL_MAX doses
   // total across all item types, ever. Full satchel at a chest = swap or
   // leave, decided at the chest. No item menu exists anywhere in the game.
@@ -169,9 +179,30 @@ function inRange(u,bank,x,y){
   if(bank.los && !los(u,{x,y})) return false;
   return true;
 }
+// The reason a bank is off, in words the HUD can show. null = castable.
+// 'USED' alone answered nothing -- the player could not tell a spent bank
+// from a cooldown from a pneuma shortfall, and disabled buttons ate the
+// click silently. Every off state now names itself and answers taps.
+function whyNot(u,id){
+  const bk=BANKS[id];
+  if(u.cds[id]>0) return bk.name+" RECHARGES IN "+u.cds[id]+" TVRN"+(u.cds[id]>1?"S":"");
+  if(!bk.repeat&&u.cast[id]) return bk.name+" IS SPENT \u2014 ONE CAST PER TVRN";
+  if(u.pneuma<bk.cost) return "NEED "+bk.cost+"\u25c6 PNEUMA \u2014 "+u.pneuma+"\u25c6 LEFT";
+  return null;
+}
+let statFlashT=null;
+function flashStat(msg){
+  const stat=document.getElementById("dwc-stat");
+  if(!stat) return;
+  stat.innerHTML='<span class="warn">'+msg+'</span>';
+  if(statFlashT) clearTimeout(statFlashT);
+  statFlashT=setTimeout(()=>{ statFlashT=null; drawHud(); },1400);
+}
 function canCast(u,id){
   const bk=BANKS[id];
-  return u.pneuma>=bk.cost && !(u.cds[id]>0) && !u.cast[id];
+  // repeat banks are pneuma-limited, not once-per-turn: PERCVSSIO costs 4 of
+  // the OPERATOR's 10, so he swings twice a turn with 2 left for an ampoule.
+  return u.pneuma>=bk.cost && !(u.cds[id]>0) && (bk.repeat?true:!u.cast[id]);
 }
 function rangeCells(u,bank){
   const out=[];
@@ -199,14 +230,23 @@ function buildEncounter(foes){
 function setupFight(n){
   state.fight=n;
   const spec=(cfg&&cfg.foes&&cfg.foes.length)?buildEncounter(cfg.foes):FIGHTS[n-1];
-  for(const p of PARTY){
+  // The crawl decides who fights: only units named in cfg.party enter the
+  // chamber (solo-OPERATOR tutorial fields exactly one token). No cfg.party
+  // (debug B, direct start) keeps the full trio.
+  const roster=(cfg&&cfg.party&&cfg.party.length)
+    ? PARTY.filter(u=>cfg.party.some(pp=>pp.id===u.id))
+    : PARTY;
+  for(const p of roster){
     if(!p.alive){ p.alive=true; p.vitae=Math.round(p.maxVitae*0.5); } // dead daemons reboot at 50%
     if(n===3){ p.vitae=p.maxVitae; p.alive=true; }                    // full restore before the Archon
     p.x=-1; p.y=-1; p.cds={}; p.cast={};
   }
-  if(n>1) state.items.AMPVLLA=Math.min(SATCHEL_MAX, state.items.AMPVLLA+1); // chest stand-in
+  // The crawl owns the satchel: whatever it sends is the fight's stock,
+  // clamped to the belt. No cfg.items (debug direct start) keeps the local
+  // count so the canned sequence still behaves.
+  if(cfg&&cfg.items) state.items.AMPVLLA=Math.max(0,Math.min(SATCHEL_MAX,cfg.items.AMPVLLA|0));
   state.units.length=0;
-  state.units.push(...PARTY);
+  state.units.push(...roster);
   for(const f of spec.foes){
     const tpl=FOE_TPL[f.tpl];
     SPR[f.id]=SPR[tpl.spr];
@@ -216,7 +256,20 @@ function setupFight(n){
     if(typeof f.frac==="number") fu.vitae=Math.max(1,Math.min(fu.maxVitae,Math.round(f.frac*fu.maxVitae)));
     state.units.push(fu);
   }
-  state.toPlace=PARTY.map(u=>u.id);
+  // Guests: spawn from cfg, auto-seat on the first free cell of the gold
+  // placement zone (x<2). Never enters toPlace -- the player seats only
+  // units they command.
+  for(const g of (cfg&&cfg.guests)||[]){
+    const tpl=GUEST_TPL[typeof g==="string"?g:g.tpl]; if(!tpl) continue;
+    const gu=mkUnit(Object.assign({},tpl,{banks:tpl.banks.slice(),cds:{},cast:{}}));
+    if(typeof g.frac==="number")
+      gu.vitae=Math.max(1,Math.min(gu.maxVitae,Math.round(g.frac*gu.maxVitae)));
+    seat: for(let x=0;x<2;x++) for(let y=0;y<H;y++){
+      if(!isObst(x,y)&&!unitAt(x,y)){ gu.x=x; gu.y=y; break seat; }
+    }
+    state.units.push(gu);
+  }
+  state.toPlace=roster.map(u=>u.id);
   state.phase="place"; state.round=1; state.sel=null; state.busy=false;
   document.getElementById("dwc-over").style.display="none";
   draw();
@@ -241,7 +294,7 @@ function startTurn(){
   u.cast={};
   u.cycles=u.maxCycles; u.pneuma=u.maxPneuma; state.sel=null;
   draw();
-  if(u.side==="foe") setTimeout(()=>foeTurn(u), 350);
+  if(u.side==="foe"||u.control==="ai") setTimeout(()=>aiTurn(u), 350);
 }
 function endTurn(){
   state.turn++;
@@ -266,14 +319,14 @@ function animateMove(u,path){
   step(0);
 }
 function hitUnit(u,bank,t){
-  const raw=Math.round(u.atk*bank.mult)+(Math.floor(Math.random()*3)-1);
+  const raw=Math.round(u.atk*bank.mult)+(bank.flat||0)+(Math.floor(Math.random()*3)-1);
   const dmg=Math.max(1,raw-t.def);
   t.vitae-=dmg; fxText(t.x,t.y,"-"+dmg, t.side==="party"?"#e26a7c":"#d9a441");
   if(t.vitae<=0){ t.alive=false; t.vitae=0; }
 }
 function castAt(u,bank,x,y){
   u.pneuma-=bank.cost;
-  u.cast[bank.name]=1;
+  if(!bank.repeat) u.cast[bank.name]=1;
   if(bank.cd) u.cds[bank.name]=bank.cd;
   if(bank.kind==="sweep"){
     for(const [ax,ay] of cross(u.x,u.y).slice(1)){ // 4 neighbors, not self
@@ -323,8 +376,8 @@ function useItemAt(u,id,x,y){
   return true;
 }
 function checkOver(){
-  const op=PARTY.find(v=>v.id==="op");
-  if(!op.alive){ endRun(false,"OPERATOR TERMINATED"); return true; } // hardware down = run over
+  const op=state.units.find(v=>v.id==="op");
+  if(op&&!op.alive){ endRun(false,"OPERATOR TERMINATED"); return true; } // hardware down = run over
   const p=state.units.some(u=>u.alive&&u.side==="party");
   const f=state.units.some(u=>u.alive&&u.side==="foe");
   if(!p){ endRun(false,"PARTY TERMINATED"); return true; }
@@ -333,10 +386,12 @@ function checkOver(){
 }
 
 /* ============================ foe AI ============================== */
-function foeTurn(u){
+function aiTurn(u){
   if(state.phase!=="battle"||!u.alive){ endTurn(); return; }
+  (state.aiActs=state.aiActs||[]).push({round:state.round,id:u.id});
   const bank=BANKS[u.banks[0]];
-  const foes=()=>state.units.filter(v=>v.alive&&v.side==="party");
+  // One brain, both sides: foes hunt the party, guest allies hunt the foes.
+  const foes=()=>state.units.filter(v=>v.alive&&v.side!==u.side);
   const step=()=>{
     if(state.phase!=="battle") return;
     const targets=foes(); if(!targets.length) return;
@@ -388,7 +443,7 @@ function renderHover(x,y){
   hoverLayer.innerHTML="";
   hoverDiamond(x,y,{fill:"none",stroke:"#cfe6e4","stroke-width":1.5,opacity:.8});
   if(state.phase!=="battle") return;
-  const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
+  const u=cur(); if(!u||u.side!=="party"||u.control==="ai"||!u.alive) return;
   if(state.sel){
     const bk=selDef();
     if(selUsable(u)&&inRange(u,bk,x,y)){
@@ -563,25 +618,39 @@ function drawHud(){
   endb.style.display="";
   const u=cur(); if(!u) return;
   stat.innerHTML=`<b>${u.name}</b> · VITAE ${u.vitae}/${u.maxVitae} · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
-  if(u.side==="party"){
+  if(u.side==="party"&&u.control!=="ai"){
     for(const id of u.banks){
       const bk=BANKS[id], b=document.createElement("button");
-      b.className=state.sel===id?"sel":"";
-      b.disabled=!canCast(u,id);
+      const off=!canCast(u,id);
+      b.className=(state.sel===id?"sel":"")+(off?" off":"");
       const rng=bk.kind==="sweep"?"self":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max)+" range";
-      const st=u.cds[id]>0?` · CD ${u.cds[id]}`:(u.cast[id]?" · USED":"");
+      const st=u.cds[id]>0?` · RECHARGE ${u.cds[id]}`
+        :(!bk.repeat&&u.cast[id]?" · SPENT THIS TVRN"
+        :(u.pneuma<bk.cost?` · NEED ${bk.cost}\u25c6`:""));
       b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${rng}${st}</span>`;
       b.title=bk.desc;
-      b.onclick=()=>{if(!canCast(u,id)&&state.sel!==id)return; state.sel=state.sel===id?null:id; draw();};
+      b.onclick=()=>{
+        if(off&&state.sel!==id){ flashStat(whyNot(u,id)); return; }  // answered, not eaten
+        state.sel=state.sel===id?null:id; draw();
+      };
       banks.appendChild(b);
     }
     if(u.id==="op") for(const id in ITEMS){ // items are OPERATOR-only
+      if(!state.items[id]) continue;        // empty satchel: no button, no noise
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
-      b.className="item"+(state.sel===sid?" sel":"");
-      b.disabled = !canUseItem(u,id)&&state.sel!==sid;
+      const ioff=!canUseItem(u,id)&&state.sel!==sid;
+      b.className="item"+(state.sel===sid?" sel":"")+(ioff?" off":"");
       b.title=it.desc;
-      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${VIAL_SVG}${it.name} <span class="cost">${it.cost}◆ ${it.min}-${it.max} range · ${n}/${SATCHEL_MAX}${u.cast[sid]?" · USED":""}</span>`;
-      b.onclick=()=>{if(!canUseItem(u,id)&&state.sel!==sid)return; state.sel=state.sel===sid?null:sid; draw();};
+      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${VIAL_SVG}${it.name} <span class="cost">${it.cost}◆ ${it.min}-${it.max} range · ${n}/${SATCHEL_MAX}${u.cast[sid]?" · SPENT THIS TVRN":""}</span>`;
+      b.onclick=()=>{
+        if(ioff){
+          flashStat(u.cast[sid]?it.name+" IS SPENT \u2014 ONE VSE PER TVRN"
+            :(u.pneuma<it.cost?"NEED "+it.cost+"\u25c6 PNEUMA \u2014 "+u.pneuma+"\u25c6 LEFT"
+            :"SATCHEL EMPTY"));
+          return;
+        }
+        state.sel=state.sel===sid?null:sid; draw();
+      };
       banks.appendChild(b);
     }
     endb.disabled=false;
@@ -602,7 +671,7 @@ function tileClick(x,y){
     return;
   }
   if(state.phase!=="battle") return;
-  const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
+  const u=cur(); if(!u||u.side!=="party"||u.control==="ai"||!u.alive) return;
   if(state.sel){
     if(isItemSel(state.sel)){
       if(useItemAt(u,state.sel.slice(5),x,y)){ state.sel=null; draw(); }
@@ -625,7 +694,7 @@ function tileClick(x,y){
 }
 document.getElementById("dwc-endbtn").onclick=()=>{
   if(state.busy) return;
-  if(state.phase==="battle"&&cur()&&cur().side==="party") endTurn();
+  if(state.phase==="battle"&&cur()&&cur().side==="party"&&cur().control!=="ai") endTurn();
 };
 document.addEventListener("keydown",e=>{ if(!active) return;
   // Placement: space/enter is the keyboard ENGAGE, once everyone is seated.
@@ -635,11 +704,12 @@ document.addEventListener("keydown",e=>{ if(!active) return;
     return;
   }
   if(state.phase!=="battle"||state.busy) return;
-  const u=cur(); if(!u||u.side!=="party"||!u.alive) return;
+  const u=cur(); if(!u||u.side!=="party"||u.control==="ai"||!u.alive) return;
   if(e.key>="1"&&e.key<="4"){
     const slot=+e.key-1;
     const id=u.banks[slot];
     if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
+    else if(id){ flashStat(whyNot(u,id)); }
     else if(slot===u.banks.length&&u.id==="op"){
       const iid=Object.keys(ITEMS)[0], sid="item:"+iid;
       if(canUseItem(u,iid)||state.sel===sid){ state.sel=state.sel===sid?null:sid; draw(); }
@@ -663,7 +733,9 @@ function finish(won){
   active=false; root.style.display="none";
   document.getElementById("dwc-over").style.display="none";
   const res={won,
-    party:PARTY.map(u=>({id:u.id, frac:Math.max(0,u.vitae)/u.maxVitae})),
+    items:{...state.items},   // doses spent in the chamber stay spent
+    party:state.units.filter(u=>u.side==="party"&&!u.guest)
+      .map(u=>({id:u.id, frac:Math.max(0,u.vitae)/u.maxVitae})),
     foes:state.units.filter(u=>u.side==="foe").map(u=>(
       {srcId:u.srcId, frac:u.alive?Math.max(0,u.vitae)/u.maxVitae:0}))};
   if(cfg&&cfg.onEnd) cfg.onEnd(res);
@@ -673,6 +745,9 @@ apiStart=function(){
   applyParty();
   draw(); drawTimeline(); drawHud();
 };
+// Headless-test seam: live references into the closure so node tests can
+// drive placement/rounds. The game itself never reads this.
+window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur };
 }
 window.DW_COMBAT={
   start(config){

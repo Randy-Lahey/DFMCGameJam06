@@ -87,16 +87,32 @@ ok(allOps().length === 1 && allOps()[0].op.name === 'PERCVSSIO',
    'solo op set is PERCVSSIO alone -- no bank ops before a daemon joins');
 
 // ------------------------------------------------------------- hermit flow
-// Clear the floor, take the stairs: the solo descent must open the Hermit's
-// bargain instead of dropping through, and the choice must land the party
-// on FLOOR 02 spawns with fresh foes and reset fog.
+// Clear the floor, take the stairs: the solo descent drops straight through
+// now -- the Hermit is an NPC standing in FLOOR 02's ENTRY room. Bumping
+// him opens the bargain; the choice recruits IN PLACE (no floor change).
 state.foes.forEach(f => { f.hp = 0; });
 state.modal = 'exit';
 answerExit(true);
-ok(state.modal === 'hermit', 'descending floor 01 solo opens the Hermit, not the drop');
+ok(state.modal === null && state.floor === 1, 'solo descent drops straight to floor 02, no gate');
+ok(state.circle.members.length === 1, 'still solo on arrival: the bargain is in the room, not the stairs');
+
+// Walk the bump: teleport the leader next to the Hermit and step into him.
+const H = F2.props.find(p => p.kind === 'hermit');
+ok(!!H, 'floor 02 carries the Hermit prop');
+lead().c = H.c; lead().r = H.r - 1;
+moveInput(0, 1);
+ok(state.modal === 'hermit', 'bumping the Hermit opens the bargain');
+ok(lead().c === H.c && lead().r === H.r - 1, 'the bump does not enter his tile');
 chooseStarter('CALX');
-ok(state.modal === null && state.floor === 1, 'the bargain descends: floor 02 loads');
+ok(state.modal === null && state.floor === 1, 'the choice closes the modal and stays on floor 02');
 ok(state.roster.join(',') === 'OPERATOR,CALX', 'CALX joins the roster behind the OPERATOR');
+ok(state.circle.members.length === 2, 'CALX takes a body next to the circle');
+moveInput(0, 1);
+ok(state.modal === null && lead().c === H.c && lead().r === H.r,
+   'the Hermit is gone after the bargain: his tile opens and the way east is clear');
+
+// Reset to spawns so the seating assertion below keeps its meaning.
+loadFloor(1);
 ok(state.circle.members.length === 2 &&
    state.circle.members.every((m, i) => m.c === F2.spawns[i].c && m.r === F2.spawns[i].r),
    'both members seat on FLOOR 02 spawns in command order');

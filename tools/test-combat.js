@@ -81,7 +81,7 @@ for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
-const { state, resolveRound, lead } = window.__DW;
+const { state, resolveRound, lead, answerFight, moveInput } = window.__DW;
 
 // The run now starts SOLO (tutorial); these assertions were written for the
 // full 4-member board. Recruit everyone and reload floor 01 first.
@@ -103,6 +103,12 @@ const hpAll = () => M.reduce((s, m) => s + m.hp, 0);
 // distances tie -- the old tests got this disambiguation for free from
 // contact damage, which no longer exists: contact now ENGAGES.
 const foe = state.foes[0];
+// The pack tests need three foe bodies to position. The tutorial floor only
+// carries two, and the test repositions everything anyway -- so pad with
+// clones rather than lean on floor content. Plain data objects, safe to copy.
+while (state.foes.length < 3) {
+  state.foes.push(Object.assign({}, foe, { id: state.foes.length + 100 }));
+}
 state.foes.forEach(f => { f.hp = 0; });
 const arm = (c, r) => Object.assign(foe, {
   hp: foe.vitae, c, r, awake: true, ai: 'flank', atk: Math.max(foe.atk, 3) });
@@ -121,7 +127,20 @@ arm(L.c, L.r - 1);
 let before = hpAll();
 resolveRound({ kind: 'hold' });
 ok(hpAll() === before, 'contact deals no crawl damage -- it engages');
-ok(calls.length === 1, 'adjacent foe triggers exactly one tactical handoff');
+ok(calls.length === 0 && state.modal === 'fight', 'contact opens the Fight? dialog, not the fight');
+
+// Decline: no handoff, one round of quarter, then contact asks again.
+answerFight(false);
+ok(state.modal === null && calls.length === 0, 'NO closes the dialog without a handoff');
+ok(foe.grace === 1, 'declining grants the pack one round of grace');
+resolveRound({ kind: 'hold' });
+ok(state.modal === null && calls.length === 0, 'a graced foe does not re-prompt');
+ok(foe.grace === 0, 'grace decays in the upkeep phase');
+resolveRound({ kind: 'hold' });
+ok(state.modal === 'fight', 'grace over, contact asks again');
+
+answerFight(true);
+ok(calls.length === 1, 'YES triggers exactly one tactical handoff');
 ok(calls[0].foes && calls[0].foes.length === 1 && calls[0].foes[0].srcId === foe.id,
    'the touching foe crosses the seam by srcId');
 ok(calls[0].foes[0].frac === 1, 'an unhurt foe crosses at full VITAE fraction');
@@ -145,6 +164,7 @@ arm(L.c, L.r - 1);
 Object.assign(near, { hp: near.vitae, c: foe.c + 1, r: foe.r - 1, awake: true, ai: 'flank' });
 Object.assign(far,  { hp: far.vitae,  c: foe.c + 5, r: foe.r - 5, awake: false });
 resolveRound({ kind: 'hold' });
+answerFight(true);
 ok(calls.length === 1, 'a pack engagement is still one handoff');
 const ids = calls.length ? calls[0].foes.map(f => f.srcId) : [];
 ok(ids.includes(foe.id) && ids.includes(near.id), 'foes within radius 2 are pulled in');
@@ -164,10 +184,28 @@ resolveRound({ kind: 'hold' });
 ok(calls.length === 0 && hpAll() === before, 'a graced foe neither strikes nor engages');
 ok(foe.grace === 0, 'grace decays in the upkeep phase');
 resolveRound({ kind: 'hold' });
+answerFight(true);
 ok(calls.length === 1, 'grace over, contact engages again');
 calls[0].onEnd({ won: true, party: [{ id: 'op', frac: 1 }],
                  foes: [{ srcId: foe.id, frac: 0 }, { srcId: near.id, frac: 0 }] });
 ok(foe.hp === 0 && near.hp === 0, 'victory severs the whole engaged pack');
+
+// ------------------------------------------------- 3b. bump-to-engage
+// The player can INITIATE: stepping into a foe is the contact trigger.
+// This is the hardlock cure -- a full-health skirmisher never swings first,
+// so the bump is the only way to bring it to battle.
+calls.length = 0;
+arm(L.c, L.r - 1);                       // foe standing directly north
+const lc = L.c, lr = L.r;
+moveInput(0, -1);                        // walk INTO it
+ok(L.c === lc && L.r === lr, 'the bump spends the step without moving onto the foe');
+ok(state.modal === 'fight', 'bumping a foe opens the Fight? dialog');
+answerFight(true);
+ok(calls.length === 1 && calls[0].foes.some(f => f.srcId === foe.id),
+   'the bumped foe crosses the seam on YES');
+calls[0].onEnd({ won: true, party: [{ id: 'op', frac: 1 }],
+                 foes: [{ srcId: foe.id, frac: 0 }] });
+ok(state.scene === 'crawl' && foe.hp === 0, 'bump-initiated fight resolves like any other');
 
 // ------------------------------------------------- 4. kills cancel contact
 // A RANGED queued op (range 2 stays crawl chip damage) that drops the foe in
