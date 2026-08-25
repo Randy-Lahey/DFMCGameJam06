@@ -33,7 +33,6 @@
       // 3 to restore one-act-per-member.
       actionsPerRound: 2,
       minDamage: 1,     // a hit always does something
-      pneumaRegen: 1,   // per living member, per round, move or act
     },
 
     // Readability toggles. Not cosmetic — these change what the player knows
@@ -59,15 +58,15 @@
     // Party. Order here is display order in the CIRCLE panel and left-to-right
     // order of the VITAE pips above the token. `tint` is a CSS var name.
     party: {
-      OPERATOR: { vitae: 24, pneuma: 10, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
-      CALX:     { vitae: 26, pneuma: 14, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
-      CINIS:    { vitae: 18, pneuma: 10, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
+      OPERATOR: { vitae: 24, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
+      CALX:     { vitae: 26, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
+      CINIS:    { vitae: 18, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
       // The third of the tria prima: quicksilver, the volatile. Paper-thin,
       // but while GVTTA stands the whole circle walks one extra tile a round
       // (aura.steps is summed over LIVING members by stepsMax() in game.js).
       // Interim: spawns as a 4th follower until the starter-choice system
       // prunes the party to OPERATOR + one daemon.
-      GVTTA:    { vitae: 16, pneuma: 12, atk: 5, def: 0, type: 'MERCVRIVS', role: 'FVGA', tint: 'shell-txt',
+      GVTTA:    { vitae: 16, atk: 5, def: 0, type: 'MERCVRIVS', role: 'FVGA', tint: 'shell-txt',
                   aura: { steps: 1 } },
     },
 

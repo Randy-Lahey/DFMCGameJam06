@@ -198,12 +198,10 @@ ok(M.map(pos).join('|') === tiles.join('|'),
    'swap preserves the chain tiles exactly (identities exchange, tiles do not)');
 ok(new Set(M.map(pos)).size === N, 'PERMVTO never stacks members');
 // Cast again from point: quicksilver runs to where it isn't -- the rear.
-gv.pn = B.party.GVTTA.pneuma;                 // refund the test cast
 applyOp({ member: gv, op: permvto });
 ok(lead() === oldLead, 'PERMVTO from point trades with the rear, restoring the old leader');
 ok(M[M.length - 1] === gv, 'GVTTA now holds the rear slot');
 ok(M.map(pos).join('|') === tiles.join('|'), 'chain tiles still unchanged after the return swap');
-gv.pn = B.party.GVTTA.pneuma;
 state.cd = {};                                 // clear PERMVTO cooldown for later sections
 
 // ------------------------------------------------------------- targeting
@@ -270,7 +268,7 @@ state.acted = [];
 // a tap between TWO valid targets stays ambiguous and refuses.
 const { chooseOp, clickTile, allOps: ops2, recomputeFOV } = window.__DW;
 state.foes.forEach(f => { f.hp = 0; });
-M.forEach(m => { m.hp = m.vitae; m.pn = m.pneuma; });
+M.forEach(m => { m.hp = m.vitae; });
 state.acted = []; state.queued = []; state.mode = 'move'; state.cd = {};
 const cinis = M.find(m => m.name === 'CINIS');
 // Foes must stand on REAL floor to be in sight; derive adjacent walkable

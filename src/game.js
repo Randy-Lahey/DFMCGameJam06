@@ -1,5 +1,5 @@
 // DAEMONWARE — Floor 1 vertical slice.
-// Contains: floor render, leader+trail party (PMD-style), VITAE + PNEUMA, foes + pursuit
+// Contains: floor render, leader+trail party (PMD-style), VITAE, foes + pursuit
 //           AI, simultaneous round resolution, five operations, click-to-target,
 //           drops + pickup, spike hazard, openable cache, exit dialog + win
 //           screen, particle bursts and floating combat text.
@@ -18,7 +18,7 @@
 //   1. every foe commits an intent, read off PRE-MOVE positions
 //   2. MOVEMENT phase   — circle steps (move rounds), then foes step
 //   3. ATTACK phase     — queued operations fire, then foe attacks
-//   4. PNEUMA regen, turn ticks
+//   4. turn ticks
 // Intents lock before movement, so an attack aimed at a tile its target
 // vacates whiffs. That cuts both ways: foes miss you, and your ranged
 // operations miss foes that walked out of range.
@@ -98,12 +98,11 @@
 
   // -------------------------------------------------------------- state
 
-  // Fresh member at the floor's i-th spawn tile, full VITAE/PNEUMA.
+  // Fresh member at the floor's i-th spawn tile, full VITAE.
   const mkMember = (name, i) => ({
     name, ...B.party[name],
     c: F.spawns[i].c, r: F.spawns[i].r,
     hp: B.party[name].vitae,
-    pn: B.party[name].pneuma,
   });
   const mkFoes = () => F.foes.map((f, i) => ({
     id: i, kind: f.kind, c: f.c, r: f.r,
@@ -633,7 +632,7 @@
     return walkable.has(key(c, r)) && !foeAt(c, r) && !npcAt(c, r);
   });
   const affordable = (m, op) =>
-    m.pn >= op.pn && (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
+    (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
 
   // Foes a given op could legally hit right now. Targeting is gated on sight
   // and not merely on range: an unseen foe drawn no sprite, so a reticle over
@@ -649,7 +648,6 @@
   function applyOp(entry) {
     const { member, op } = entry;
     if (member.hp <= 0) return;
-    member.pn -= op.pn;
     if (op.cd) state.cd[op.name] = op.cd;
 
     if (op.vitaeCost) {
@@ -839,7 +837,6 @@
           }
         }
 
-        living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
         state.wards.forEach(w => { w.left--; });
         state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
         state.wards = state.wards.filter(w => w.left > 0);
@@ -925,7 +922,7 @@
 
   // ---------------------------------------------------------- floor loader
   // Descending is the ONLY way floors change, and this is the only function
-  // that swaps F. Carries across floors: roster, VITAE/PNEUMA (a severed
+  // that swaps F. Carries across floors: roster, VITAE (a severed
   // daemon limps back at half VITAE -- the descent knits, it does not heal),
   // bag, argent, loadout, the turn counter. Resets: foes, drops, fog, wards,
   // cooldowns, camera, props (caches close again on THEIR floor -- each
@@ -943,7 +940,6 @@
       const m = mkMember(name, idx);
       if (prev) {
         m.hp = prev.hp > 0 ? prev.hp : Math.ceil(m.vitae / 2);
-        m.pn = prev.pn;
       }
       return m;
     });
@@ -1193,8 +1189,8 @@
     state.sel = next ? next.name : null;
   }
 
-  // Take back the last queued operation. Nothing has been spent yet — pneuma,
-  // vitae and cooldowns are all charged by applyOp during resolveRound, not at
+  // Take back the last queued operation. Nothing has been spent yet — vitae
+  // and cooldowns are all charged by applyOp during resolveRound, not at
   // queue time — so this is a clean pop, not a refund. Unwinding the whole
   // queue is what lets a player who has started an act round change their mind
   // and move instead.
@@ -1826,9 +1822,8 @@
                 </div>
                 <div class="bars">
                   <div class="vitae"><i></i></div>
-                  <div class="pneuma"><i></i></div>
                 </div>
-                <div class="unit-meta"><span class="mv"></span><span class="mp"></span></div>
+                <div class="unit-meta"><span class="mv"></span></div>
               </div>`;
     }).join('');
 
@@ -1837,9 +1832,7 @@
       cards[m.name] = {
         el,
         vitae: el.querySelector('.vitae i'),
-        pneuma: el.querySelector('.pneuma i'),
         mv: el.querySelector('.mv'),
-        mp: el.querySelector('.mp'),
       };
     });
 
@@ -1886,9 +1879,7 @@
       c.el.classList.toggle('severed', m.hp <= 0);
 
       c.vitae.style.width  = Math.max(0, m.hp / m.vitae) * 100 + '%';
-      c.pneuma.style.width = Math.max(0, m.pn / m.pneuma) * 100 + '%';
       c.mv.textContent = m.hp <= 0 ? 'SEVERED' : 'V ' + m.hp + '/' + m.vitae;
-      c.mp.textContent = m.hp <= 0 ? '\u2014' : 'P ' + m.pn + '/' + m.pneuma;
 
     });
   }
@@ -2065,7 +2056,7 @@
       const done = hasActed(m), dead = m.hp <= 0;
       g.el.classList.toggle('done', done || dead);
       g.el.classList.toggle('acting', state.aiming === m.name);
-      g.tag.textContent = dead ? 'SEVERED' : done ? 'DONE' : 'P ' + m.pn;
+      g.tag.textContent = dead ? 'SEVERED' : done ? 'DONE' : 'RDY';
 
       // Folded ops, not the raw table: a chip must show what the op COSTS AS
       // SEATED. A FVLMINANS'd PERCVSSIO burns vitae per swing -- reading raw
@@ -2078,7 +2069,7 @@
         chip.querySelector('.cc').textContent =
           cd > 0 ? 'CD ' + cd
           : blind ? 'NO TARGET'
-          : (op.pn ? op.pn + 'P' : '\u2014') + (op.vitaeCost ? ' +' + op.vitaeCost + 'V' : '');
+          : op.vitaeCost ? '+' + op.vitaeCost + 'V' : '\u2014';
         const locked = !usable(m, op) || !canAct(m);
         chip.setAttribute('aria-disabled', String(locked));
         chip.classList.toggle('locked', locked);
@@ -2146,7 +2137,7 @@
         <span class="st-name">${name}</span>
         <span class="st-role">${p.type} \u00b7 ${p.role}</span>
         <span class="st-pitch">${STARTER_PITCH[name]}</span>
-        <span class="st-stats">V ${p.vitae} \u00b7 P ${p.pneuma} \u00b7 ATK ${p.atk} \u00b7 DEF ${p.def}</span>
+        <span class="st-stats">V ${p.vitae} \u00b7 ATK ${p.atk} \u00b7 DEF ${p.def}</span>
       </button>`;
   }).join('');
   startersEl.addEventListener('click', e => {
@@ -2616,7 +2607,7 @@
     } else if (memberAt(c, r)) {
       const m = memberAt(c, r);
       html = `<b>${m.name}</b><span>${m.role}</span>` +
-        `<span>V ${m.hp}/${m.vitae} · P ${m.pn}/${m.pneuma}</span>` +
+        `<span>V ${m.hp}/${m.vitae}</span>` +
         (m === lead() ? '<span>ON POINT</span>' : '<span>IN TRAIL</span>');
     } else if (prop && (!prop.hidden || state.revealed.has(key(c, r)))) {
       html = `<b>${prop.label}</b><span>${prop.kind.toUpperCase()}</span>`;
@@ -3002,7 +2993,7 @@
       }).join('');
       return `<div class="ipanel${ptype === 'SVLPHVR' ? ' gold' : ''}">
           <div class="ipanel-h"><span>${who}</span><em>${ptype}</em></div>
-          <div class="ipanel-s">VITAE <b>${m.hp}</b>/${m.vitae} &nbsp; PNEVMA <b>${m.pn}</b>/${m.pneuma}</div>
+          <div class="ipanel-s">VITAE <b>${m.hp}</b>/${m.vitae}</div>
           <div class="ibanks">${banks}</div>
         </div>`;
     }).join('');

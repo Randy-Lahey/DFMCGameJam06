@@ -78,7 +78,7 @@
 
   /* At 375px a card is 111.7px wide but .unit-head needs ~158px and
      .unit-meta ~98px — and .unit has a clip-path, so the overflow is not
-     merely ugly, the VITAE / PNEUMA readout is silently cut off. */
+     merely ugly, the VITAE readout is silently cut off. */
   @media (max-width:600px){
     header{overflow:hidden}
     .brand{font-size:11px;letter-spacing:.24em}
@@ -418,7 +418,7 @@
   .chip .cc{color:var(--shell-txt);font-size:9px;letter-spacing:.06em}
   /* .42 was authored as a hover-reveal, and touch never gets the hover — so
      the only text explaining an operation sat at ~3.3:1 while the player was
-     asked to spend pneuma on it. */
+     asked to commit to it. */
   .chip .cnote{
     grid-column:2 / 4;font-size:9px;line-height:1.4;letter-spacing:.05em;
     opacity:.72;text-transform:none;transition:opacity .14s ease;
@@ -453,12 +453,10 @@
 
   /* ---- bars ---- */
   .bars{display:grid;gap:2px;margin-top:5px}
-  .vitae,.pneuma{height:4px;background:rgba(231,226,210,.10);overflow:hidden}
-  .pneuma{height:2.5px}
-  .vitae i,.pneuma i{display:block;height:100%;background:var(--tint);
+  .vitae{height:4px;background:rgba(231,226,210,.10);overflow:hidden}
+  .vitae i{display:block;height:100%;background:var(--tint);
                      transition:width .25s cubic-bezier(.16,.9,.24,1)}
-  .pneuma i{background:var(--shell)}
-  /* these are the live VITAE / PNEUMA numbers — they were at ~4.35:1 */
+  /* these are the live VITAE numbers — they were at ~4.35:1 */
   .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.78;margin-top:4px}
 
   /* ---- effects + prompt ---- */
@@ -695,7 +693,7 @@
        padding-right:env(safe-area-inset-right)}
 
   @media (prefers-reduced-motion:reduce){
-    #fan,.grp,.chip,.vitae i,.pneuma i,.unit,#hint,
+    #fan,.grp,.chip,.vitae i,.unit,#hint,
     #confirm,#cancel,#toast,#inspect{transition-duration:.01ms!important}
     /* the fan staggers its groups with transition-delay, which zeroing the
        duration does not touch */
@@ -1340,7 +1338,6 @@
       // 3 to restore one-act-per-member.
       actionsPerRound: 2,
       minDamage: 1,     // a hit always does something
-      pneumaRegen: 1,   // per living member, per round, move or act
     },
 
     // Readability toggles. Not cosmetic — these change what the player knows
@@ -1366,15 +1363,15 @@
     // Party. Order here is display order in the CIRCLE panel and left-to-right
     // order of the VITAE pips above the token. `tint` is a CSS var name.
     party: {
-      OPERATOR: { vitae: 24, pneuma: 10, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
-      CALX:     { vitae: 26, pneuma: 14, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
-      CINIS:    { vitae: 18, pneuma: 10, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
+      OPERATOR: { vitae: 24, atk: 7, def: 2, type: '\u2014',  role: 'ARCANVM', tint: 'cyan' },
+      CALX:     { vitae: 26, atk: 3, def: 4, type: 'SAL',     role: 'WARD',    tint: 'bone' },
+      CINIS:    { vitae: 18, atk: 6, def: 1, type: 'SVLPHVR', role: 'BVRN',    tint: 'gold' },
       // The third of the tria prima: quicksilver, the volatile. Paper-thin,
       // but while GVTTA stands the whole circle walks one extra tile a round
       // (aura.steps is summed over LIVING members by stepsMax() in game.js).
       // Interim: spawns as a 4th follower until the starter-choice system
       // prunes the party to OPERATOR + one daemon.
-      GVTTA:    { vitae: 16, pneuma: 12, atk: 5, def: 0, type: 'MERCVRIVS', role: 'FVGA', tint: 'shell-txt',
+      GVTTA:    { vitae: 16, atk: 5, def: 0, type: 'MERCVRIVS', role: 'FVGA', tint: 'shell-txt',
                   aura: { steps: 1 } },
     },
 
@@ -2775,7 +2772,7 @@ window.DW_COMBAT={
 </script>
 <script>
 // DAEMONWARE — Floor 1 vertical slice.
-// Contains: floor render, leader+trail party (PMD-style), VITAE + PNEUMA, foes + pursuit
+// Contains: floor render, leader+trail party (PMD-style), VITAE, foes + pursuit
 //           AI, simultaneous round resolution, five operations, click-to-target,
 //           drops + pickup, spike hazard, openable cache, exit dialog + win
 //           screen, particle bursts and floating combat text.
@@ -2794,7 +2791,7 @@ window.DW_COMBAT={
 //   1. every foe commits an intent, read off PRE-MOVE positions
 //   2. MOVEMENT phase   — circle steps (move rounds), then foes step
 //   3. ATTACK phase     — queued operations fire, then foe attacks
-//   4. PNEUMA regen, turn ticks
+//   4. turn ticks
 // Intents lock before movement, so an attack aimed at a tile its target
 // vacates whiffs. That cuts both ways: foes miss you, and your ranged
 // operations miss foes that walked out of range.
@@ -2874,12 +2871,11 @@ window.DW_COMBAT={
 
   // -------------------------------------------------------------- state
 
-  // Fresh member at the floor's i-th spawn tile, full VITAE/PNEUMA.
+  // Fresh member at the floor's i-th spawn tile, full VITAE.
   const mkMember = (name, i) => ({
     name, ...B.party[name],
     c: F.spawns[i].c, r: F.spawns[i].r,
     hp: B.party[name].vitae,
-    pn: B.party[name].pneuma,
   });
   const mkFoes = () => F.foes.map((f, i) => ({
     id: i, kind: f.kind, c: f.c, r: f.r,
@@ -3409,7 +3405,7 @@ window.DW_COMBAT={
     return walkable.has(key(c, r)) && !foeAt(c, r) && !npcAt(c, r);
   });
   const affordable = (m, op) =>
-    m.pn >= op.pn && (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
+    (!op.vitaeCost || m.hp > op.vitaeCost) && cdLeft(op) === 0;
 
   // Foes a given op could legally hit right now. Targeting is gated on sight
   // and not merely on range: an unseen foe drawn no sprite, so a reticle over
@@ -3425,7 +3421,6 @@ window.DW_COMBAT={
   function applyOp(entry) {
     const { member, op } = entry;
     if (member.hp <= 0) return;
-    member.pn -= op.pn;
     if (op.cd) state.cd[op.name] = op.cd;
 
     if (op.vitaeCost) {
@@ -3615,7 +3610,6 @@ window.DW_COMBAT={
           }
         }
 
-        living().forEach(m => { m.pn = Math.min(m.pneuma, m.pn + B.combat.pneumaRegen); });
         state.wards.forEach(w => { w.left--; });
         state.wards.filter(w => w.left <= 0).forEach(w => log(`${w.name} DECAYS.`));
         state.wards = state.wards.filter(w => w.left > 0);
@@ -3701,7 +3695,7 @@ window.DW_COMBAT={
 
   // ---------------------------------------------------------- floor loader
   // Descending is the ONLY way floors change, and this is the only function
-  // that swaps F. Carries across floors: roster, VITAE/PNEUMA (a severed
+  // that swaps F. Carries across floors: roster, VITAE (a severed
   // daemon limps back at half VITAE -- the descent knits, it does not heal),
   // bag, argent, loadout, the turn counter. Resets: foes, drops, fog, wards,
   // cooldowns, camera, props (caches close again on THEIR floor -- each
@@ -3719,7 +3713,6 @@ window.DW_COMBAT={
       const m = mkMember(name, idx);
       if (prev) {
         m.hp = prev.hp > 0 ? prev.hp : Math.ceil(m.vitae / 2);
-        m.pn = prev.pn;
       }
       return m;
     });
@@ -3969,8 +3962,8 @@ window.DW_COMBAT={
     state.sel = next ? next.name : null;
   }
 
-  // Take back the last queued operation. Nothing has been spent yet — pneuma,
-  // vitae and cooldowns are all charged by applyOp during resolveRound, not at
+  // Take back the last queued operation. Nothing has been spent yet — vitae
+  // and cooldowns are all charged by applyOp during resolveRound, not at
   // queue time — so this is a clean pop, not a refund. Unwinding the whole
   // queue is what lets a player who has started an act round change their mind
   // and move instead.
@@ -4602,9 +4595,8 @@ window.DW_COMBAT={
                 </div>
                 <div class="bars">
                   <div class="vitae"><i></i></div>
-                  <div class="pneuma"><i></i></div>
                 </div>
-                <div class="unit-meta"><span class="mv"></span><span class="mp"></span></div>
+                <div class="unit-meta"><span class="mv"></span></div>
               </div>`;
     }).join('');
 
@@ -4613,9 +4605,7 @@ window.DW_COMBAT={
       cards[m.name] = {
         el,
         vitae: el.querySelector('.vitae i'),
-        pneuma: el.querySelector('.pneuma i'),
         mv: el.querySelector('.mv'),
-        mp: el.querySelector('.mp'),
       };
     });
 
@@ -4662,9 +4652,7 @@ window.DW_COMBAT={
       c.el.classList.toggle('severed', m.hp <= 0);
 
       c.vitae.style.width  = Math.max(0, m.hp / m.vitae) * 100 + '%';
-      c.pneuma.style.width = Math.max(0, m.pn / m.pneuma) * 100 + '%';
       c.mv.textContent = m.hp <= 0 ? 'SEVERED' : 'V ' + m.hp + '/' + m.vitae;
-      c.mp.textContent = m.hp <= 0 ? '\u2014' : 'P ' + m.pn + '/' + m.pneuma;
 
     });
   }
@@ -4841,7 +4829,7 @@ window.DW_COMBAT={
       const done = hasActed(m), dead = m.hp <= 0;
       g.el.classList.toggle('done', done || dead);
       g.el.classList.toggle('acting', state.aiming === m.name);
-      g.tag.textContent = dead ? 'SEVERED' : done ? 'DONE' : 'P ' + m.pn;
+      g.tag.textContent = dead ? 'SEVERED' : done ? 'DONE' : 'RDY';
 
       // Folded ops, not the raw table: a chip must show what the op COSTS AS
       // SEATED. A FVLMINANS'd PERCVSSIO burns vitae per swing -- reading raw
@@ -4854,7 +4842,7 @@ window.DW_COMBAT={
         chip.querySelector('.cc').textContent =
           cd > 0 ? 'CD ' + cd
           : blind ? 'NO TARGET'
-          : (op.pn ? op.pn + 'P' : '\u2014') + (op.vitaeCost ? ' +' + op.vitaeCost + 'V' : '');
+          : op.vitaeCost ? '+' + op.vitaeCost + 'V' : '\u2014';
         const locked = !usable(m, op) || !canAct(m);
         chip.setAttribute('aria-disabled', String(locked));
         chip.classList.toggle('locked', locked);
@@ -4922,7 +4910,7 @@ window.DW_COMBAT={
         <span class="st-name">${name}</span>
         <span class="st-role">${p.type} \u00b7 ${p.role}</span>
         <span class="st-pitch">${STARTER_PITCH[name]}</span>
-        <span class="st-stats">V ${p.vitae} \u00b7 P ${p.pneuma} \u00b7 ATK ${p.atk} \u00b7 DEF ${p.def}</span>
+        <span class="st-stats">V ${p.vitae} \u00b7 ATK ${p.atk} \u00b7 DEF ${p.def}</span>
       </button>`;
   }).join('');
   startersEl.addEventListener('click', e => {
@@ -5392,7 +5380,7 @@ window.DW_COMBAT={
     } else if (memberAt(c, r)) {
       const m = memberAt(c, r);
       html = `<b>${m.name}</b><span>${m.role}</span>` +
-        `<span>V ${m.hp}/${m.vitae} · P ${m.pn}/${m.pneuma}</span>` +
+        `<span>V ${m.hp}/${m.vitae}</span>` +
         (m === lead() ? '<span>ON POINT</span>' : '<span>IN TRAIL</span>');
     } else if (prop && (!prop.hidden || state.revealed.has(key(c, r)))) {
       html = `<b>${prop.label}</b><span>${prop.kind.toUpperCase()}</span>`;
@@ -5778,7 +5766,7 @@ window.DW_COMBAT={
       }).join('');
       return `<div class="ipanel${ptype === 'SVLPHVR' ? ' gold' : ''}">
           <div class="ipanel-h"><span>${who}</span><em>${ptype}</em></div>
-          <div class="ipanel-s">VITAE <b>${m.hp}</b>/${m.vitae} &nbsp; PNEVMA <b>${m.pn}</b>/${m.pneuma}</div>
+          <div class="ipanel-s">VITAE <b>${m.hp}</b>/${m.vitae}</div>
           <div class="ibanks">${banks}</div>
         </div>`;
     }).join('');

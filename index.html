@@ -78,7 +78,7 @@
 
   /* At 375px a card is 111.7px wide but .unit-head needs ~158px and
      .unit-meta ~98px — and .unit has a clip-path, so the overflow is not
-     merely ugly, the VITAE / PNEUMA readout is silently cut off. */
+     merely ugly, the VITAE readout is silently cut off. */
   @media (max-width:600px){
     header{overflow:hidden}
     .brand{font-size:11px;letter-spacing:.24em}
@@ -418,7 +418,7 @@
   .chip .cc{color:var(--shell-txt);font-size:9px;letter-spacing:.06em}
   /* .42 was authored as a hover-reveal, and touch never gets the hover — so
      the only text explaining an operation sat at ~3.3:1 while the player was
-     asked to spend pneuma on it. */
+     asked to commit to it. */
   .chip .cnote{
     grid-column:2 / 4;font-size:9px;line-height:1.4;letter-spacing:.05em;
     opacity:.72;text-transform:none;transition:opacity .14s ease;
@@ -453,12 +453,10 @@
 
   /* ---- bars ---- */
   .bars{display:grid;gap:2px;margin-top:5px}
-  .vitae,.pneuma{height:4px;background:rgba(231,226,210,.10);overflow:hidden}
-  .pneuma{height:2.5px}
-  .vitae i,.pneuma i{display:block;height:100%;background:var(--tint);
+  .vitae{height:4px;background:rgba(231,226,210,.10);overflow:hidden}
+  .vitae i{display:block;height:100%;background:var(--tint);
                      transition:width .25s cubic-bezier(.16,.9,.24,1)}
-  .pneuma i{background:var(--shell)}
-  /* these are the live VITAE / PNEUMA numbers — they were at ~4.35:1 */
+  /* these are the live VITAE numbers — they were at ~4.35:1 */
   .unit-meta{display:flex;justify-content:space-between;font-size:9.5px;opacity:.78;margin-top:4px}
 
   /* ---- effects + prompt ---- */
@@ -695,7 +693,7 @@
        padding-right:env(safe-area-inset-right)}
 
   @media (prefers-reduced-motion:reduce){
-    #fan,.grp,.chip,.vitae i,.pneuma i,.unit,#hint,
+    #fan,.grp,.chip,.vitae i,.unit,#hint,
     #confirm,#cancel,#toast,#inspect{transition-duration:.01ms!important}
     /* the fan staggers its groups with transition-delay, which zeroing the
        duration does not touch */
@@ -1126,13 +1124,13 @@
 </div>
 
 <div id="inv" aria-hidden="false"></div>
-<script src="data/floor01.js?v=07b40b7e"></script>
-<script src="data/floor02.js?v=07b40b7e"></script>
-<script src="data/balance.js?v=07b40b7e"></script>
-<script src="data/fxsheets.js?v=07b40b7e"></script>
-<script src="src/sprites.js?v=07b40b7e"></script>
-<script src="src/audio.js?v=07b40b7e"></script>
-<script src="src/combat.js?v=07b40b7e"></script>
-<script src="src/game.js?v=07b40b7e"></script>
+<script src="data/floor01.js?v=6a36021a"></script>
+<script src="data/floor02.js?v=6a36021a"></script>
+<script src="data/balance.js?v=6a36021a"></script>
+<script src="data/fxsheets.js?v=6a36021a"></script>
+<script src="src/sprites.js?v=6a36021a"></script>
+<script src="src/audio.js?v=6a36021a"></script>
+<script src="src/combat.js?v=6a36021a"></script>
+<script src="src/game.js?v=6a36021a"></script>
 </body>
 </html>
