@@ -1996,23 +1996,32 @@ function setupFight(n){
 function endRun(win,msg){
   state.phase="over";
   document.getElementById("dwc-overmsg").textContent=msg;
-  document.getElementById("dwc-overinfo").innerHTML=win?"The chamber falls silent.":"You are dragged back to the corridor.";
+  document.getElementById("dwc-overinfo").innerHTML=
+    (win&&cfg&&cfg.archon)
+      ? 'The hooded process steps between you and the vast thing.<br>"GO. I HOLD THE BREACH."'
+      : (win?"The chamber falls silent.":"You are dragged back to the corridor.");
   const b=document.getElementById("dwc-overbtn");
   b.textContent="RETVRN"; b.onclick=()=>finish(win);
   document.getElementById("dwc-over").style.display="flex";
 }
-function fightWon(){ endRun(true,"CHAMBER PVRGED"); }
+function fightWon(){
+  // Exit-ambush beat order: last enemy killed -> THE ARCHON COMES -> the
+  // hermit sacrifice (crawl-side, after RETVRN). Presentation only: the
+  // apparition is not a unit and cannot be fought. THRONVS keeps that job.
+  if(cfg && cfg.archon && !state.archonShown){
+    state.archonShown=true;
+    state.phase="beat";                 // input-dead; not yet "over"
+    draw();                             // the apparition resolves on the board
+    fxText(Math.floor(W/2), 0, "SOMETHING VAST RESOLVES", "var(--ox)");
+    setTimeout(()=>fxText(Math.floor(W/2), 0, "THE ARCHON OF NIGREDO", "#e26a7c"), 900);
+    setTimeout(()=>endRun(true, "THE ARCHON COMES"), 2200);
+    return;
+  }
+  endRun(true,"CHAMBER PVRGED");
+}
 function newRound(){
   state.order = state.units.filter(u=>u.alive).sort((a,b)=>b.speed-a.speed);
   state.turn = 0;
-  // Scripted dread: in the exit ambush the NIGREDO Archon resolves at the
-  // chamber's edge at round 2. Presentation only -- it is not a unit, it
-  // takes no turns, and it cannot be targeted. THRONVS keeps the real fight.
-  if(cfg && cfg.archon && state.round>=2 && !state.archonShown){
-    state.archonShown=true;
-    fxText(Math.floor(W/2), 0, "SOMETHING VAST RESOLVES", "var(--ox)");
-    setTimeout(()=>fxText(Math.floor(W/2), 0, "THE ARCHON OF NIGREDO", "#e26a7c"), 700);
-  }
   startTurn();
 }
 function startTurn(){
