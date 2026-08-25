@@ -159,8 +159,13 @@
       },
       PERMVTO: {
         kind: 'swap', targets: 'circle', range: 0,
-        pn: 2, cd: 2, fx: 'hex',
-        note: 'Trade places with the point.',
+        pn: 4, cd: 3, fx: 'hex',
+        note: 'Trade places with an ally.',
+      },
+      IMPVLSVS: {
+        kind: 'strike', targets: 'foe', range: 1,
+        pn: 3, mult: 1, cd: 2, fx: 'strike',
+        note: 'Melee shove. Knockback 1; blocked = stun.',
       },
       // Findable banks. Not in any default loadout; they enter play only as
       // DATA BANK drops, rolled off drops.bankPool (no duplicates, ever).
@@ -193,13 +198,14 @@
       IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
       LORICA:    { type: 'SAL',     bays: 1 },
       PERMVTO:   { type: 'MERCVRIVS', bays: 1 },
+      IMPVLSVS:  { type: 'MERCVRIVS', bays: 2 },
       VAPOR:     { type: 'SVLPHVR', bays: 2 },
     },
     defaultLoadout: {
       OPERATOR: ['PERCVSSIO'],
       CALX:  ['ABRASIO', 'CONCRETIO'],
       CINIS: ['FVLGVR', 'IMMOLATIO'],
-      GVTTA: ['PERMVTO'],
+      GVTTA: ['PERMVTO', 'IMPVLSVS'],
     },
 
     // ------------------------------------------------------------- fluxes

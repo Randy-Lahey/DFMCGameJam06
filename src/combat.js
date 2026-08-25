@@ -66,11 +66,15 @@ const BANKS = {
     desc:"Sniper bolt. Long range, low damage."},
   IMMOLATIO:{name:"IMMOLATIO",kind:"strike",cost:5,mult:2.2,selfVitae:4,aoe:true,min:1,max:3,los:true,
     desc:"Cross blast. Heavy. Hits allies. Burns the caster."},
+  PERMVTO:{name:"PERMVTO",kind:"swap",cost:4,cd:3,min:1,max:5,los:true,
+    desc:"Trade places with an ally. Range 1-5."},
+  IMPVLSVS:{name:"IMPVLSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,push:1,cd:2,
+    desc:"Melee shove. Knocks the target back one tile; a blocked shove stuns."},
   MORSVS:{name:"MORSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,desc:"foe melee"},
   IACVLVM:{name:"IACVLVM",kind:"strike",cost:3,mult:1,min:2,max:4,los:true,desc:"foe shot"},
 };
 
-function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,x:-1,y:-1,cds:{},cast:{}},o); }
+function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,stun:0,x:-1,y:-1,cds:{},cast:{}},o); }
 // Guest allies (FFT-style): party-side for targeting and win/loss, but
 // control:"ai" -- the player never selects them, their turn runs the same
 // brain as the foes with the target side flipped. guest:true keeps them out
@@ -86,6 +90,10 @@ const PARTY = [
   mkUnit({id:"op", name:"OPERATOR", side:"party", glyph:"O", maxVitae:24, atk:7, def:2, speed:12, maxCycles:3, maxPneuma:10, banks:["PERCVSSIO"]}),
   mkUnit({id:"calx", name:"CALX", side:"party", glyph:"C", maxVitae:26, atk:3, def:4, speed:8, maxCycles:3, maxPneuma:14, banks:["ABRASIO","CONCRETIO"]}),
   mkUnit({id:"cinis",name:"CINIS", side:"party", glyph:"I", maxVitae:18, atk:6, def:1, speed:14, maxCycles:4, maxPneuma:10, banks:["FVLGVR","IMMOLATIO"]}),
+  // Quicksilver: fastest unit on the board, paper armor. Speed 15 outruns
+  // even CINIS; the tempo identity lives in PERMVTO (reposition an ally)
+  // and IMPVLSVS (shove a foe out of its spot).
+  mkUnit({id:"gvtta",name:"GVTTA", side:"party", glyph:"G", maxVitae:16, atk:5, def:0, speed:15, maxCycles:4, maxPneuma:12, banks:["PERMVTO","IMPVLSVS"]}),
 ];
 const UNITS = PARTY.slice(); // setupFight appends the current fight's foes
 
@@ -432,6 +440,13 @@ function newRound(){
 }
 function startTurn(){
   const u=cur(); if(!u) return;
+  // Stun = the whole turn: no cycles, no casts. Ticks down as it is spent.
+  if(u.stun>0){
+    u.stun--; u.cycles=0; state.sel=null; draw();
+    fxText(u.x,u.y,u.name+" STVNNED","#b48ef0");
+    setTimeout(()=>endTurn(),700);
+    return;
+  }
   for(const k in u.cds) if(u.cds[k]>0) u.cds[k]--;
   u.cast={};
   u.cycles=u.maxCycles; u.pneuma=u.maxPneuma; state.sel=null;
@@ -482,11 +497,37 @@ function castAt(u,bank,x,y){
   } else if(bank.kind==="hex"){
     const t=unitAt(x,y);
     if(t){ t.atk=Math.max(1,t.atk-bank.debuffAtk); fxText(t.x,t.y,"ATK-"+bank.debuffAtk,"#b48ef0"); }
+  } else if(bank.kind==="swap"){
+    // Trade places with a living ally. tileClick has already verified the
+    // target; the guard here keeps debug/AI paths honest.
+    const t=unitAt(x,y);
+    if(t&&t.side===u.side&&t!==u){
+      const ux=u.x, uy=u.y;
+      u.x=t.x; u.y=t.y; t.x=ux; t.y=uy;
+      fxText(u.x,u.y,"PERMVTO","#b48ef0");
+    }
   } else { // strike
     const cells=bank.aoe?cross(x,y):[[x,y]];
     for(const [ax,ay] of cells){
       const t=unitAt(ax,ay);
       if(t&&t!==u) hitUnit(u,bank,t); // friendly fire; caster exempt from blast
+    }
+    // Knockback rider (IMPVLSVS): shove the target one tile along the attack
+    // vector. Blocked shove -- wall, edge, or another unit -- stuns the
+    // target for a turn; a blocking UNIT is stunned too (both ate the impact).
+    if(bank.push){
+      const t=unitAt(x,y);
+      if(t&&t.alive&&t!==u){
+        const dx=Math.sign(x-u.x), dy=Math.sign(y-u.y);
+        const nx=t.x+dx, ny=t.y+dy;
+        const blocker=inB(nx,ny)?unitAt(nx,ny):null;
+        if(inB(nx,ny)&&!isObst(nx,ny)&&!blocker){
+          t.x=nx; t.y=ny;
+        } else {
+          t.stun=Math.max(t.stun||0,1); fxText(t.x,t.y,"STVNNED","#b48ef0");
+          if(blocker&&blocker.alive){ blocker.stun=Math.max(blocker.stun||0,1); fxText(blocker.x,blocker.y,"STVNNED","#b48ef0"); }
+        }
+      }
     }
     if(bank.selfVitae){
       u.vitae-=bank.selfVitae; fxText(u.x,u.y,"-"+bank.selfVitae,"#e26a7c");
@@ -650,7 +691,7 @@ function draw(){
   if(state.phase==="place") for(const [x,y] of placeCells()) hlPlace.add(x+","+y);
   if(state.phase==="battle"&&u&&u.side==="party"){
     if(state.sel){
-      const set=isItemSel(state.sel)?hlHeal:hlRng;
+      const set=(isItemSel(state.sel)||(selDef()&&selDef().kind==="swap"))?hlHeal:hlRng;
       for(const [x,y] of rangeCells(u,selDef())) set.add(x+","+y);
     }
     else hlMove=reachable(u);
@@ -834,7 +875,10 @@ function tileClick(x,y){
     }
     const bk=bankFor(u,state.sel);
     if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
-      if(bk.kind!=="sweep"&&!bk.aoe){
+      if(bk.kind==="swap"){
+        const t=unitAt(x,y);
+        if(!t||t.side!==u.side||t===u||t.guest) return; // swap needs a commanded ally
+      } else if(bk.kind!=="sweep"&&!bk.aoe){
         const t=unitAt(x,y);
         if(!t||t.side===u.side) return;      // foe-targeted ops need a foe
       }
@@ -906,7 +950,7 @@ apiStart=function(){
 };
 // Headless-test seam: live references into the closure so node tests can
 // drive placement/rounds. The game itself never reads this.
-window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
+window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
 }
 window.DW_COMBAT={
   start(config){

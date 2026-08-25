@@ -2349,7 +2349,7 @@
   // ------------------------------------------------------- combat handoff
   // Crawl and tactical combat use different VITAE scales, so state crosses
   // the seam as a FRACTION of max: hp/vitae out, vitae/maxVitae back in.
-  const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis' };
+  const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis', GVTTA: 'gvtta' };
   const COMBAT_TPL = { TESTA: 't', SILIQVA: 's' };
 
   // Placeholder crawl -> tactical transition. Full-screen flash: void black,
