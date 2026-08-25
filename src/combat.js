@@ -14,7 +14,9 @@ const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc
 const DWC_SAY_CSS = '#dwc-root .fx-say{font-weight:bold;font-size:16px;paint-order:stroke;'
   +'stroke:#000;stroke-width:3.5px;animation:dwc-say 3s ease-out forwards;pointer-events:none;}'
   +'@keyframes dwc-say{0%{opacity:0;transform:translateY(6px);}8%{opacity:1;transform:translateY(0);}'
-  +'82%{opacity:1;}100%{opacity:0;transform:translateY(-10px);}}';
+  +'82%{opacity:1;}100%{opacity:0;transform:translateY(-10px);}}'
+  +'#dwc-root .fx-blink{animation:dwc-blink 1.1s ease-in-out infinite;}'
+  +'@keyframes dwc-blink{0%{opacity:.15;}50%{opacity:1;}100%{opacity:.15;}}';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -312,6 +314,7 @@ function endRun(win,msg){
 }
 function fightWon(){ endRun(true,"CHAMBER PVRGED"); }
 /* ===================== the sacrifice script ======================= */
+let beatAdvance=null;   // set while the bequest runs; tap/click advances
 // cfg.archon fights are a scripted set-piece, not a winnable battle:
 //   R1  honest fight against the ambush pack
 //   R2  the Archon resolves as a unit (SPD 99, leads the round) and
@@ -377,14 +380,44 @@ function hermitBeat(){
     }
   }
   draw();
-  // Lines render top-center of the board, not at the Hermit: 50+ chars
-  // anchored at an edge tile clip off the viewBox.
-  const sx=Math.floor(W/2), sy=0;
-  const say=(txt,at)=>setTimeout(()=>fxText(sx,sy,txt,"#3ecf95",3000),at);
-  say('HERMIT: "THE CVBE \u2014 IT IS A DOOR. THE ONLY DOOR BACK TO THE REAL."',0);
-  say('HERMIT: "TAKE IT. FLEE. FIND GROVND. BVILD A BASE OF OPERATIONS."',3200);
-  say('HERMIT: "SOLVE THE CVBE AND YOV ESCAPE. GO \u2014 I HOLD THE BREACH."',6400);
-  setTimeout(()=>{ state.beatDone=true; endRun(true,"FLEE"); },9900);
+  // Tap-to-advance dialogue: each line HOLDS until the player clicks/taps
+  // anywhere, then the next appears; the tap after the last line ends the
+  // fight. Lines render top-center of the board, not at the Hermit: 50+
+  // chars anchored at an edge tile clip off the viewBox.
+  const LINES=[
+    'HERMIT: "THE CVBE \u2014 IT IS A DOOR. THE ONLY DOOR BACK TO THE REAL."',
+    'HERMIT: "TAKE IT. FLEE. FIND GROVND. BVILD A BASE OF OPERATIONS."',
+    'HERMIT: "SOLVE THE CVBE AND YOV ESCAPE. GO \u2014 I HOLD THE BREACH."'];
+  const cx=isoX(Math.floor(W/2),0)+PADX, cy=isoY(Math.floor(W/2),0)+PADY+TH/2;
+  let node=null, idx=0;
+  const show=()=>{
+    if(node){ node.remove(); node=null; }
+    if(idx>=LINES.length){
+      root.removeEventListener("click",onTap,true);
+      beatAdvance=null;
+      state.beatDone=true; endRun(true,"FLEE");
+      return;
+    }
+    node=el("g",{"pointer-events":"none"},fxLayer);
+    const t=el("text",{x:cx, y:cy, fill:"#3ecf95",
+      "text-anchor":"middle", class:"fx-say"},node);
+    t.style.animation="none";               // dialogue holds; no timed fade
+    t.textContent=LINES[idx++];
+    // Blinking cue arrow at the line's left edge. getBBox needs the text in
+    // the DOM (it is, via el), and headless stubs answer width 10 -- harmless.
+    let lw=0; try{ lw=t.getBBox().width; }catch(e){}
+    const arrow=el("text",{x:cx-lw/2-16, y:cy, fill:"var(--teal)",
+      "text-anchor":"middle", "font-size":"15", class:"fx-blink"},node);
+    arrow.textContent="\u25B8";
+    const hint=el("text",{x:cx, y:cy+24, fill:"var(--teal)", opacity:".9",
+      "text-anchor":"middle", "font-size":"13","letter-spacing":"3",
+      class:"fx-blink"},node);
+    hint.textContent="TAP";
+  };
+  const onTap=e=>{ e.stopPropagation(); e.preventDefault(); show(); };
+  beatAdvance=show;                          // headless-test seam
+  root.addEventListener("click",onTap,true);
+  show();
 }
 function newRound(){
   if(cfg&&cfg.archon&&state.archonSpawned&&state.round>=3&&!state.beatDone){
@@ -873,7 +906,7 @@ apiStart=function(){
 };
 // Headless-test seam: live references into the closure so node tests can
 // drive placement/rounds. The game itself never reads this.
-window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, finish };
+window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
 }
 window.DW_COMBAT={
   start(config){

@@ -100,10 +100,16 @@ ok(op.alive && op.vitae === 1, 'OPERATOR clamped at 1, never terminated');
 s.units.filter(u => u.side === 'foe' && !u.scripted).forEach(u => { u.alive = false; u.vitae = 0; });
 ok(T.checkOver() === false && s.phase === 'battle', 'pack wipe does not win the scripted fight');
 
-console.log('-- R3: the bequest ends it in FLEE');
+console.log('-- R3: the bequest holds for taps, then ends it in FLEE');
 guard = 20;
 while (s.round === 2 && s.phase === 'battle' && guard--) T.endTurn();
-ok(s.beatDone === true, 'R3 plays the bequest');
+ok(s.phase === 'beat' && s.beatDone === false,
+   'R3 opens the bequest and WAITS -- no timer railroads the reader');
+T.advanceBeat();                    // line 2
+T.advanceBeat();                    // line 3
+ok(s.beatDone === false && s.phase === 'beat', 'three lines, three holds');
+T.advanceBeat();                    // past the last line
+ok(s.beatDone === true, 'the tap after the last line arms FLEE');
 ok(s.phase === 'over', 'fight ends by script, not by kill count');
 
 console.log('-- finish: full reboot for everyone who fled');
