@@ -321,7 +321,7 @@ function endRun(win,msg){
   b.textContent=(win&&cfg&&cfg.archon)?"FLEE":"RETVRN"; b.onclick=()=>finish(win);
   document.getElementById("dwc-over").style.display="flex";
 }
-function fightWon(){ endRun(true,"CHAMBER PVRGED"); }
+function fightWon(){ if(window.DW_SFX) DW_SFX.play("victory"); endRun(true,"CHAMBER PVRGED"); }
 /* ===================== the sacrifice script ======================= */
 let beatAdvance=null;   // set while the bequest runs; tap/click advances
 // cfg.archon fights are a scripted set-piece, not a winnable battle:
@@ -453,6 +453,7 @@ function startTurn(){
   u.cycles=u.maxCycles; u.pneuma=u.maxPneuma; state.sel=null;
   draw();
   if(u.side==="foe"||u.control==="ai") setTimeout(()=>aiTurn(u), 350);
+  else if(window.DW_SFX) DW_SFX.play("turn");
 }
 function endTurn(){
   state.turn++;
@@ -484,7 +485,8 @@ function hitUnit(u,bank,t){
   let dmg=Math.max(bank.minDmg||1,raw-t.def);
   if(cfg&&cfg.archon&&t.id==="op"&&t.vitae-dmg<1) dmg=Math.max(0,t.vitae-1);
   t.vitae-=dmg; fxText(t.x,t.y,"-"+dmg, t.side==="party"?"#e26a7c":"#d9a441");
-  if(t.vitae<=0){ t.alive=false; t.vitae=0; }
+  if(window.DW_SFX) DW_SFX.play("hit");
+  if(t.vitae<=0){ t.alive=false; t.vitae=0; if(window.DW_SFX) DW_SFX.play("death"); }
 }
 function castAt(u,bank,x,y){
   u.pneuma-=bank.cost;

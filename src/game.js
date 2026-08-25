@@ -1398,6 +1398,7 @@
       if (state.escort && !state.hermitGone) { state.escort.c = vc; state.escort.r = vr; }
     }
     state.stepsUsed++;
+    if (window.DW_SFX) DW_SFX.play('step');
     onEnter();
     collectDrops();
     maybeAmbush();
@@ -2423,6 +2424,7 @@
       while (foes.length < want)
         foes.push({ tpl: Math.random() < 0.5 ? 't' : 's', frac: 1 });
     }
+    if (window.DW_SFX) DW_SFX.play('combatStart');
     combatTransition(() => window.DW_COMBAT.start({
       fight: 1,
       party,
@@ -2532,6 +2534,7 @@
     // The satchel opens from anywhere outside a modal, including the win
     // screen: reading your haul after the descent is half the reward.
     if (k === 'i') { e.preventDefault(); openInv(); draw(); return; }
+    if (k === 'm' && window.DW_SFX) { e.preventDefault(); log(DW_SFX.toggle() ? 'AVDIO MVTED.' : 'AVDIO LIVE.', 'good'); draw(); return; }
     if (finished()) return;
 
     // ? is a reference lookup, so it stays available mid-round.
