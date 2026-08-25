@@ -265,5 +265,32 @@ console.log('-- empty-foes debug entry is never padded');
   ok(lastCfg.foes === undefined, 'debug entry keeps the FIGHTS spec (no synthetic pack)');
 }
 
+// ============================================================ ?sacrifice seam
+console.log('-- debugSacrifice: CALX aboard, straight into the sacrifice fight');
+{
+  T.loadFloor(0);
+  s.modal = null; s.hermitMet = false; s.hermitGone = false; s.ambushDone = false;
+  s.circle.members.length = 1;                       // solo OPERATOR, pre-bargain
+  s.roster.length = 0; s.roster.push('OPERATOR');    // forget earlier recruits
+  lastCfg = undefined;
+  T.debugSacrifice();
+  ok(s.circle.members.some(m => m.name === 'CALX'), 'seam recruits CALX');
+  ok(s.hermitMet === true, 'seam takes the bargain');
+  ok(s.ambushDone === true, 'seam fires the scripted ambush');
+  ok(lastCfg && lastCfg.archon === true, 'combat cfg carries the archon flag');
+  // sacrifice is not a cfg field: game.js consumes opts.sacrifice in its own
+  // win handler -- the hermitGone/cube checks below prove that path.
+  ok(Array.isArray(lastCfg.guests) && lastCfg.guests[0] === 'hermit',
+     'hermit guests the seam fight');
+  // The stub auto-wins, so the whole beat resolves:
+  ok(s.hermitGone === true && s.modal === 'cube',
+     'winning the seam fight plays sacrifice -> cube');
+  s.modal = null;
+  // one-shot: a second call must stay quiet
+  lastCfg = undefined;
+  T.debugSacrifice();
+  ok(lastCfg === undefined, 'seam is one-shot per run');
+}
+
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

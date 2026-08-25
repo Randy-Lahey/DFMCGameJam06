@@ -1034,13 +1034,23 @@
     scriptAmbush();
   }
 
+  // Debug seam (?sacrifice): boot straight into the exit-ambush sacrifice
+  // fight with CALX recruited. URL-driven so it works on phone (no keyboard):
+  // load index.html?sacrifice and you are in the forced fight; winning plays
+  // the full archon-apparition -> sacrifice -> cube handoff.
+  function debugSacrifice() {
+    if (state.ambushDone) return;
+    state.hermitMet = true;
+    recruit('CALX');
+    scriptAmbush();
+  }
+
   function hermitSacrifice() {
     if (state.hermitGone) return;            // fires exactly once per run
     state.hermitGone = true;
     state.escort = null;
     log('THE HERMIT PLANTS HIMSELF IN THE BREACH BEHIND YOV.', 'bad');
     log('HERMIT VITAE \u2192 0. THE SEAL TAKES EVERYTHING HE HAS.', 'bad');
-    log('HERMIT: "TAKE THIS \u2014 IT IS THE KEY. THE ONLY WAY OVT, BACK TO THE REAL."', 'good');
     log('THE STATIC GOES QVIET.', 'dim');
     state.modal = 'cube';
   }
@@ -3212,7 +3222,7 @@
                   lead, memberAt, foeTarget, validTargets, resolveRound,
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
-                  hermitSacrifice, takeCube, enterCombat, answerFight };
+                  hermitSacrifice, takeCube, enterCombat, answerFight, debugSacrifice };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.
@@ -3235,6 +3245,9 @@
   log(`${F.name} COMPILED. ${F.tiles.length} CELLS, ${F.foes.length} ENEMIES.`);
   // Set before the first draw so the overlay is up on the first painted frame,
   // rather than flashing the board and then covering it.
-  if (!seenControls()) state.modal = 'controls';
+  const SKIP_TO_SACRIFICE =
+    typeof location !== 'undefined' && /[?&]sacrifice/.test(location.search);
+  if (SKIP_TO_SACRIFICE) debugSacrifice();
+  else if (!seenControls()) state.modal = 'controls';
   draw();
 })();
