@@ -95,7 +95,7 @@ ok(state.loadout.CALX.length === 2 && state.loadout.CINIS.length === 2,
    'daemons start with two seated banks');
 ok(state.loadout.CALX[0].fluxes.length === 2 && state.loadout.CALX[1].fluxes.length === 1,
    'bay counts follow banks table (ABRASIO 2, CONCRETIO 1)');
-ok(allOps().length === 6, 'six hotkeys: PERCVSSIO + five seated banks');
+ok(allOps().length === 7, 'seven hotkeys: PERCVSSIO + six seated banks (GVTTA runs two)');
 ok(allOps()[0].op.name === 'PERCVSSIO', 'OPERATOR intrinsic holds hotkey 1');
 
 // PERCVSSIO now rides a fixed loadout slot so it can seat ONE flux. The

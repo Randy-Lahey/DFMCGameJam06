@@ -107,7 +107,7 @@ console.log('-- guest spawn & placement');
   ok(h && h.control === 'ai' && h.guest === true, 'hermit is control:"ai", guest:true');
   ok(h && h.x >= 0 && h.x < 2, 'hermit auto-seated in the gold zone (x<2), no player placement');
   ok(!s.toPlace.includes('hermit'), 'hermit is NOT in toPlace');
-  ok(s.toPlace.length === 3, 'player still places exactly the 3 PARTY units');
+  ok(s.toPlace.length === 4, 'player still places exactly the 4 PARTY units');
 }
 
 // =========================================================== 2. no control
