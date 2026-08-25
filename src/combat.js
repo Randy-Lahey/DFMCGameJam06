@@ -67,8 +67,8 @@ const BANKS = {
     desc:"Sniper bolt. Long range, low damage."},
   IMMOLATIO:{name:"IMMOLATIO",kind:"strike",cost:5,mult:2.2,selfVitae:4,aoe:true,min:1,max:3,los:true,
     desc:"Cross blast. Heavy. Hits allies. Burns the caster."},
-  PERMVTO:{name:"PERMVTO",kind:"swap",cost:4,cd:3,min:1,max:5,los:true,
-    desc:"Trade places with an ally. Range 1-5."},
+  PERMVTO:{name:"PERMVTO",kind:"swap",cost:4,cd:3,min:1,max:5,los:false,
+    desc:"Trade places with an ally. Range 1-5, through walls."},
   IMPVLSVS:{name:"IMPVLSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,push:1,cd:2,
     desc:"Melee shove. Knocks the target back one tile; a blocked shove stuns."},
   MORSVS:{name:"MORSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,desc:"foe melee"},
@@ -94,7 +94,7 @@ const PARTY = [
   // Quicksilver: fastest unit on the board, paper armor. Speed 15 outruns
   // even CINIS; the tempo identity lives in PERMVTO (reposition an ally)
   // and IMPVLSVS (shove a foe out of its spot).
-  mkUnit({id:"gvtta",name:"GVTTA", side:"party", glyph:"G", maxVitae:16, atk:5, def:0, speed:15, maxCycles:4, maxPneuma:12, banks:["PERMVTO","IMPVLSVS"]}),
+  mkUnit({id:"gvtta",name:"GVTTA", side:"party", glyph:"G", maxVitae:16, atk:5, def:0, speed:15, maxCycles:4, maxPneuma:12, banks:["IMPVLSVS","PERMVTO"]}),
 ];
 const UNITS = PARTY.slice(); // setupFight appends the current fight's foes
 
@@ -878,7 +878,7 @@ function tileClick(x,y){
     if(canCast(u,state.sel)&&inRange(u,bk,x,y)){
       if(bk.kind==="swap"){
         const t=unitAt(x,y);
-        if(!t||t.side!==u.side||t===u||t.guest) return; // swap needs a commanded ally
+        if(!t||t.side!==u.side||t===u) return; // swap needs a living ally (guests included)
       } else if(bk.kind!=="sweep"&&!bk.aoe){
         const t=unitAt(x,y);
         if(!t||t.side===u.side) return;      // foe-targeted ops need a foe

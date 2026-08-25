@@ -82,11 +82,11 @@ ok(g.maxVitae === 16 && g.atk === 5 && g.def === 0 && g.maxPneuma === 12,
    'statline matches balance.js (16/5/0, 12 pneuma)');
 ok(g.speed === 15, 'GVTTA is speed 15');
 ok(s.units.every(u => u === g || u.speed < g.speed), 'fastest unit on the board');
-ok(g.banks[0] === 'PERMVTO' && g.banks[1] === 'IMPVLSVS', 'default banks seated');
+ok(g.banks[0] === 'IMPVLSVS' && g.banks[1] === 'PERMVTO', 'IMPVLSVS is hotkey 1, PERMVTO hotkey 2');
 
 const PERM = T.bankFor(g, 'PERMVTO'), IMP = T.bankFor(g, 'IMPVLSVS');
-ok(PERM.kind === 'swap' && PERM.cost === 4 && PERM.cd === 3 && PERM.max === 5,
-   'PERMVTO: swap, 4 pneuma, CD 3, range 1-5');
+ok(PERM.kind === 'swap' && PERM.cost === 4 && PERM.cd === 3 && PERM.max === 5 && PERM.los === false,
+   'PERMVTO: swap, 4 pneuma, CD 3, range 1-5, no LoS');
 ok(IMP.kind === 'strike' && IMP.push === 1 && IMP.cost === 3 && IMP.cd === 2,
    'IMPVLSVS: strike, push 1, 3 pneuma, CD 2');
 
@@ -115,6 +115,16 @@ ok(s.sel === 'PERMVTO', 'selection survives the rejected click');
 T.tileClick(g.x, g.y);
 ok(g.x === 4 && g.y === 5, 'swap onto self does nothing');
 s.sel = null;
+
+console.log('-- PERMVTO: guests ARE swappable (the Hermit rides along)');
+const asGuest = s.units.find(u => u.id === 'op'); // borrow: mark op guest briefly
+asGuest.guest = true;
+const gpos = { x: g.x, y: g.y }, hpos = { x: asGuest.x, y: asGuest.y };
+T.castAt(g, T.bankFor(g, 'PERMVTO'), asGuest.x, asGuest.y);
+ok(g.x === hpos.x && g.y === hpos.y && asGuest.x === gpos.x && asGuest.y === gpos.y,
+   'swap with a guest-flagged ally trades places');
+asGuest.guest = false;
+g.cds = {}; g.cast = {}; g.pneuma = g.maxPneuma;
 
 console.log('-- IMPVLSVS: clean shove moves the target one tile');
 g.x = 4; g.y = 5; foe.x = 5; foe.y = 5; // attack vector +x; (6,5) is free

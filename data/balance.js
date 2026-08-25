@@ -205,7 +205,7 @@
       OPERATOR: ['PERCVSSIO'],
       CALX:  ['ABRASIO', 'CONCRETIO'],
       CINIS: ['FVLGVR', 'IMMOLATIO'],
-      GVTTA: ['PERMVTO', 'IMPVLSVS'],
+      GVTTA: ['IMPVLSVS', 'PERMVTO'],
     },
 
     // ------------------------------------------------------------- fluxes
