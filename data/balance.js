@@ -32,11 +32,6 @@
       // refits spend from this same pool. Movement is NOT in the pool. Set to
       // 3 to restore one-act-per-member.
       actionsPerRound: 2,
-      // A refit (seat / vnseat / swap) is FREE unless an awake foe stands
-      // within this Chebyshev range of any living member. Inside it, the rig
-      // stays shut: no action-cost workaround, the fight comes first. Awake
-      // foes beyond it count as disengaged -- kiting away to refit is play.
-      refitLockRange: 6,
       minDamage: 1,     // a hit always does something
       pneumaRegen: 1,   // per living member, per round, move or act
     },

@@ -128,6 +128,8 @@
     hermitMet: false,              // bargain done; the NPC goes quiet afterwards
     ampoules: 0,                   // AMPVLLA VITAE doses; carried across floors, spent in the chamber (cap 3, mirrors combat SATCHEL_MAX)
     hermitGone: false,             // sacrifice beat fired; it fires exactly once per run
+    escort: null,                  // {c,r} — THE HERMIT trailing the snake on the crawl (bargain -> sacrifice)
+    ambushDone: false,             // floor-2 exit ambush fired (scripted, once per run)
     scene: 'crawl',                // 'crawl' | 'combat' — which game owns input
     mode: 'move',                  // 'move' | 'act'
     sel: null,                     // member whose op menu is open (nameplate tap)
@@ -906,7 +908,7 @@
       return;
     }
     state.over = 'WIN';
-    log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
+    log('THE SEAL HOLDS BEHIND YOV. THE CIRCLE BREAKS BACK TOWARD THE REAL.', 'good');
   }
 
   function checkEnd() {
@@ -933,6 +935,7 @@
     F = FLOORS[i];
     walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
     F.props.forEach(p => { p.opened = false; });
+    state.escort = null;                 // the escort does not descend ahead of the beat
 
     const old = state.circle.members;
     state.circle.members = state.roster.map((name, idx) => {
@@ -1006,11 +1009,38 @@
   // The Hermit's sacrifice: scripted beat after the ambush is cleared. He
   // burns out sealing the breach, and his last act hands over THE CVBE --
   // for now an inventory flag; entering/solving it is later tutorial work.
+  // The scripted floor-2 exit ambush. Springs when the leader enters the
+  // stairs room after the bargain: forced combat (no Fight? prompt), the
+  // NIGREDO Archon apparition at round 2, and the sacrifice beat on the win.
+  const AMBUSH_ROOM = { c0: 13, c1: 16, r0: 0, r1: 3 };
+  function scriptAmbush() {
+    state.ambushDone = true;
+    // Pull the live foes already in the room (the stairs guard, if it still
+    // stands, severs honestly via srcId); the chamber pads the rest to 3.
+    let pack = liveFoes().filter(f =>
+      f.c >= AMBUSH_ROOM.c0 && f.c <= AMBUSH_ROOM.c1 &&
+      f.r >= AMBUSH_ROOM.r0 && f.r <= AMBUSH_ROOM.r1);
+    if (!pack.length) pack = [{ kind: 'TESTA', hp: 4, vitae: 4 }];
+    log('THE FLOOR ERVPTS \u2014 AMBVSH.', 'bad');
+    log('SHAPES POVR FROM THE SEAMS. NO QVARTER OFFERED.', 'bad');
+    enterCombat(pack, { sacrifice: true, archon: true });
+  }
+  function maybeAmbush() {
+    if (state.floor !== 1 || state.ambushDone ||
+        !state.hermitMet || state.hermitGone) return;
+    const L = lead();
+    if (!L || L.c < AMBUSH_ROOM.c0 || L.c > AMBUSH_ROOM.c1 ||
+        L.r < AMBUSH_ROOM.r0 || L.r > AMBUSH_ROOM.r1) return;
+    scriptAmbush();
+  }
+
   function hermitSacrifice() {
     if (state.hermitGone) return;            // fires exactly once per run
     state.hermitGone = true;
+    state.escort = null;
     log('THE HERMIT PLANTS HIMSELF IN THE BREACH BEHIND YOV.', 'bad');
     log('HERMIT VITAE \u2192 0. THE SEAL TAKES EVERYTHING HE HAS.', 'bad');
+    log('HERMIT: "TAKE THIS \u2014 IT IS THE KEY. THE ONLY WAY OVT, BACK TO THE REAL."', 'good');
     log('THE STATIC GOES QVIET.', 'dim');
     state.modal = 'cube';
   }
@@ -1029,8 +1059,13 @@
     state.modal = null;
     state.hermitMet = true;
     recruit(name);
+    // The NPC body stops blocking (npcAt keys off hermitMet); from here he
+    // walks the crawl as a ghost segment at the rear of the snake.
+    const hp = F.props.find(p => p.kind === 'hermit');
+    const tail = living()[living().length - 1] || operator();
+    state.escort = hp ? { c: hp.c, r: hp.r } : { c: tail.c, r: tail.r };
     log(`THE HERMIT UNBINDS ${name}. IT FALLS IN BEHIND YOU.`, 'good');
-    log('THE HERMIT STEPS BACK INTO THE STATIC. THE WAY EAST OPENS.', 'dim');
+    log('THE HERMIT FALLS IN AT THE REAR. THE WAY EAST OPENS.', 'dim');
   }
 
   // Hazards bite on EVERY entry. Revealing one is not the same as disarming
@@ -1066,7 +1101,7 @@
     if (!p) return null;
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
     if (p.kind === 'stairs') {
-      const left = liveFoes().length;
+      const left = state.hasCube ? 0 : liveFoes().length;
       // Sealed is a STATE, not a keybind. E still opens the act round here —
       // stealing that key at the exit while enemies close would be cruel.
       if (left) return { prop: p, locked: true,
@@ -1124,7 +1159,8 @@
     if (p.kind === 'spikes') triggerSpikes(p.label);
     if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. ' + actHint() + '.', 'good');
     if (p.kind === 'stairs') {
-      const left = liveFoes().length;
+      // The Cube IS the key: once granted, the descent ignores the seal.
+      const left = state.hasCube ? 0 : liveFoes().length;
       if (left) log('THE ' + p.label + ' IS SEALED. ' + left + ' STILL STAND.', 'bad');
       else log('THE ' + p.label + ' OPENS BELOW. ' + actHint() + '.', 'good');
     }
@@ -1347,10 +1383,15 @@
         f.c = vc; f.r = vr;
         vc = pc; vr = pr;
       }
+      // The escort is one more segment: he takes the tile the tail vacated.
+      // Ghost rules — he blocks nothing and nothing blocks him.
+      if (state.escort && !state.hermitGone) { state.escort.c = vc; state.escort.r = vr; }
     }
     state.stepsUsed++;
     onEnter();
     collectDrops();
+    maybeAmbush();
+    if (state.scene === 'combat') return;   // ambush owns the round now
     if (living().length === 0) { resolveRound(null); return; }
     if (state.stepsUsed >= stepsMax()) resolveRound({ kind: 'moved' });
   }
@@ -1592,6 +1633,17 @@
       placeActor(el, f.c, f.r);
     }
 
+    // THE HERMIT escort: sigil art at the rear of the snake, created before
+    // the members so the party always draws above him. No ring, no bar --
+    // he is not commandable and has no crawl VITAE.
+    if (state.escort && !state.hermitGone) {
+      const k = 'party-hermit';
+      seen.add(k);
+      const el = actorNode(k, true);
+      setActorContent(el, `<g opacity=".92">${S.hermit()}</g>`);
+      placeActor(el, state.escort.c, state.escort.r);
+    }
+
     // One node per living member. Created back-to-front (reverse command
     // order) so the OPERATOR is appended last and draws topmost when tokens
     // brush past each other mid-swap.
@@ -1724,6 +1776,9 @@
         g += `<circle cx="${f.c + .5}" cy="${f.r + .5}" r=".33" fill="var(--blood)"/>`;
     for (const m of living())
       g += `<circle cx="${m.c + .5}" cy="${m.r + .5}" r=".4" fill="var(--gold)"/>`;
+    if (state.escort && !state.hermitGone)
+      g += `<circle cx="${state.escort.c + .5}" cy="${state.escort.r + .5}" r=".33"
+                    fill="var(--bone)" opacity=".7"/>`;
     g += `<circle cx="${camAnchor().c + .5}" cy="${camAnchor().r + .5}" r=".72"
                   fill="none" stroke="var(--gold)" stroke-width=".14" opacity=".55"/>`;
     if (cam.w < F.cols * T - 1 || cam.h < F.rows * T - 1)
@@ -2321,17 +2376,49 @@
   function enterCombat(engaged, opts) {
     if (!window.DW_COMBAT) { log('COMBAT MODULE MISSING.', 'bad'); return; }
     opts = opts || {};
-    engaged = (engaged || []).filter(f => f.hp > 0 && COMBAT_TPL[f.kind]);
+    // From the bargain to the sacrifice, THE HERMIT walks into every chamber
+    // with the circle. Explicit guests (debug seam) are left untouched.
+    if (!opts.guests && state.hermitMet && !state.hermitGone) opts.guests = ['hermit'];
+    engaged = (engaged || []).filter(f => f.hp > 0 && COMBAT_TPL[f.kind]).slice(0, 3);
     state.scene = 'combat';
     const party = state.circle.members
       .filter(m => COMBAT_ID[m.name] && m.hp > 0)
       .map(m => ({ id: COMBAT_ID[m.name], frac: m.hp / m.vitae }));
     const foes = engaged.map(f => ({
       srcId: f.id, tpl: COMBAT_TPL[f.kind], frac: f.hp / f.vitae }));
+    // The rig crosses the seam: each seated flux becomes a per-bank DELTA the
+    // chamber merges over its own table (bankFor). Deltas -- range, damage,
+    // cost, self-vitae, min-damage -- so chamber rebalances stay authoritative.
+    const mods = {};
+    for (const m of state.circle.members) {
+      const cid = COMBAT_ID[m.name];
+      if (!cid) continue;
+      for (const slot of state.loadout[m.name] || []) {
+        const base = B.operations[slot.bank], op = fold(slot);
+        const d = {};
+        if (op.dmgBonus) d.dmg = op.dmgBonus;
+        if (op.range !== base.range) d.rng = op.range - base.range;
+        if (op.pn !== base.pn) d.pn = op.pn - base.pn;
+        if (op.minDmg) d.min = op.minDmg;
+        const vit = (op.vitaeCost || 0) - (base.vitaeCost || 0);
+        if (vit) d.vit = vit;
+        if (Object.keys(d).length) (mods[cid] = mods[cid] || {})[slot.bank] = d;
+      }
+    }
+    // Floor 2+ chambers field 2-3 foes. The crawl pack is honest -- only
+    // touched foes are severed on the board -- so the shortfall is made up
+    // with srcId-less reinforcements the write-back already ignores.
+    if (state.floor >= 1 && foes.length) {
+      const want = Math.min(3, Math.max(foes.length, 2 + (Math.random() < 0.5 ? 1 : 0)));
+      while (foes.length < want)
+        foes.push({ tpl: Math.random() < 0.5 ? 't' : 's', frac: 1 });
+    }
     combatTransition(() => window.DW_COMBAT.start({
       fight: 1,
       party,
       guests: opts.guests,
+      mods: Object.keys(mods).length ? mods : undefined,
+      archon: opts.archon,                    // exit-ambush apparition flag
       items: { AMPVLLA: state.ampoules },
       foes: foes.length ? foes : undefined,   // debug entry keeps the FIGHTS spec
       onEnd(res) {
@@ -2382,9 +2469,10 @@
     // Debug seam (?debug only): B forces the canned FIGHTS[1] encounter.
     if (k === 'b' && DEBUG && !state.modal && !finished()) {
       e.preventDefault();
-      // Until the scripted ambush lands, debug B carries the hermit + the
-      // sacrifice beat (once per run) so the whole handoff is testable.
-      enterCombat([], state.hermitGone ? {} : { guests: ['hermit'], sacrifice: true });
+      // Debug B jumps straight to the scripted exit ambush (the real beat),
+      // or a plain canned fight once the sacrifice has already fired.
+      if (state.hermitGone) { enterCombat([], {}); }
+      else { state.hermitMet = true; scriptAmbush(); }
       return;
     }
 
@@ -2672,26 +2760,21 @@
   // ---------------------------------------------------------- inventory
   const invEl = document.getElementById('inv');
 
-  // Refits are free OR forbidden, never an action tax. The old rule (spend
-  // the daemon's action while any foe was awake) trapped players mid-move-
-  // phase: the spent action lingered in state.acted until the round resolved,
-  // so refit -> step once -> refit again read as a stuck rig. The gate is now
-  // PROXIMITY: an awake foe within combat.refitLockRange of any living member
-  // means the fight is on and the rig stays shut; otherwise change freely --
-  // including with awake foes you have genuinely outrun.
-  const refitThreat = () => liveFoes().find(f => f.awake &&
-    living().some(m => cheb(f, m) <= B.combat.refitLockRange));
+  // Refits are free OR forbidden, never an action tax. The gate is the
+  // SCENE: inside the tactical chamber the rig is sealed; anywhere on the
+  // crawl -- foes awake, adjacent, mid-pursuit -- change freely. Proximity
+  // gating (the old rule) punished exactly the moment players most wanted
+  // to re-rig: right before answering the Fight? prompt.
   function payRefit(who) {
-    const foe = refitThreat();
-    if (foe) {
-      log(foe.kind + ' TOO CLOSE \u2014 THE RIG STAYS SHVT VNDER THREAT.', 'bad');
+    if (state.scene === 'combat') {
+      log('THE RIG IS SEALED MID-FIGHT.', 'bad');
       return false;
     }
     return true;
   }
 
   function openInv() {
-    if (state.modal) return;
+    if (state.modal || state.scene === 'combat') return;
     state.modal = 'inv'; state.invSel = null;
     renderInv();
     invEl.classList.add('show');
@@ -2933,9 +3016,9 @@
       insp = `<b>${sel.flux}</b> \u00b7 ${B.fluxes[sel.flux].note}` +
              ` CLICK A GLOWING BAY TO SEAT \u00b7 ONE PER BANK.`;
     }
-    const cost = refitThreat()
-      ? 'ENEMY IN RANGE \u2014 THE RIG IS SHVT VNTIL YOV BREAK AWAY'
-      : 'NO THREAT IN RANGE \u2014 REFITS ARE FREE';
+    const cost = state.scene === 'combat'
+      ? 'THE RIG IS SEALED MID-FIGHT'
+      : 'OVT OF COMBAT \u2014 REFITS ARE FREE';
 
     // --------------------------------------------------------- satchel
     // Identical items collapse into one card; data-i points at the first of

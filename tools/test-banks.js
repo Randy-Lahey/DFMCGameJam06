@@ -47,7 +47,8 @@ const liveIds = new Set(
 const byId = {};
 global.document = {
   getElementById: id => {
-    if (!liveIds.has(id)) return null;
+    // dwc-* ids are built at runtime by the chamber module, not index.html.
+    if (!liveIds.has(id) && !id.startsWith('dwc-')) return null;
     return (byId[id] = byId[id] || stubEl());
   },
   createElement: () => stubEl(),
@@ -55,12 +56,13 @@ global.document = {
   querySelector: () => stubEl(),
   querySelectorAll: () => [],
   addEventListener() {}, removeEventListener() {},
-  activeElement: null, body: stubEl(), documentElement: stubEl(),
+  activeElement: null, body: stubEl(), head: stubEl(), documentElement: stubEl(),
 };
 global.window = global;
 global.addEventListener = () => {};
 global.removeEventListener = () => {};
 global.requestAnimationFrame = () => 0;
+global.setTimeout = fn => { fn(); return 0; };  // combat transition resolves inline
 global.matchMedia = () => ({ matches: false, addEventListener() {}, addListener() {} });
 global.innerWidth = 1280; global.innerHeight = 800; global.devicePixelRatio = 1;
 Object.defineProperty(global, 'navigator', { value: { maxTouchPoints: 0 }, configurable: true });
@@ -160,21 +162,62 @@ ok(state.modal === null, 'inventory closes clean');
 }
 
 // ------------------------------------------------------- refit rule
-// Proximity-gated: an awake foe within combat.refitLockRange of any member
-// shuts the rig; asleep or genuinely-outrun foes leave it open. Never an
+// Scene-gated: the rig is sealed only inside the tactical chamber. On the
+// crawl -- even with an awake foe ADJACENT -- refits are free. Never an
 // action tax, so state.acted must stay untouched either way.
 state.foes.forEach(f => { f.awake = false; });
 ok(payRefit('CINIS') === true && state.acted.length === 0,
    'quiet floor: refit is free, no action spent');
 const near = state.foes[0], lead0 = state.circle.members[0];
 near.awake = true; near.hp = 5; near.c = lead0.c + 1; near.r = lead0.r;
+ok(payRefit('CINIS') === true && state.acted.length === 0,
+   'awake foe ADJACENT on the crawl: refit still free');
+state.scene = 'combat';
 ok(payRefit('CINIS') === false && payRefit('CINIS') === false &&
    state.acted.length === 0,
-   'awake foe in range: rig shut, repeatably, no action ever spent');
-near.c = lead0.c + window.BALANCE.combat.refitLockRange + 2; near.r = lead0.r;
-ok(payRefit('CINIS') === true,
-   'awake foe OUTRUN past refitLockRange: refit is free again');
+   'in combat: rig sealed, repeatably, no action ever spent');
+ok((state.modal = null, window.__DW.openInv(), state.modal === null),
+   'inventory refuses to open mid-fight');
+state.scene = 'crawl';
+ok(payRefit('CINIS') === true, 'back on the crawl: refit free again');
 near.awake = false; near.hp = 0;
+
+// ------------------------------------------- fluxes cross the chamber seam
+// Game side first: a seated VIVVM must cross enterCombat as a range delta.
+state.scene = 'crawl'; state.modal = null;
+state.loadout.OPERATOR[0].fluxes[0] = 'VIVVM';
+let seamCfg = null;
+window.DW_COMBAT = {
+  start(c) { seamCfg = c; c.onEnd({ won: true, party: [], foes: [] }); },
+  isActive: () => false,
+};
+const seamFoe = () => ({ id: 'sf' + Math.random(), kind: 'TESTA', hp: 4, vitae: 4, c: 0, r: 0, grace: 0 });
+window.__DW.enterCombat([seamFoe()]);
+ok(seamCfg && seamCfg.mods && seamCfg.mods.op &&
+   seamCfg.mods.op.PERCVSSIO && seamCfg.mods.op.PERCVSSIO.rng === 1,
+   'seated VIVVM crosses the seam as a +1 range delta on op/PERCVSSIO');
+const seamMods = seamCfg.mods;
+state.loadout.OPERATOR[0].fluxes[0] = null;
+seamCfg = null;
+window.__DW.enterCombat([seamFoe()]);
+ok(seamCfg && seamCfg.mods === undefined,
+   'bare rig: no mods field crosses at all');
+
+// Chamber side: load the real module, start a real fight with those mods,
+// and read the merged bank off the live OPERATOR unit.
+new Function(fs.readFileSync(path.join(root, 'src/combat.js'), 'utf8'))();
+window.DW_COMBAT.start({ fight: 1, party: [{ id: 'op', frac: 1 }], mods: seamMods });
+const DWC = window.__DWC_TEST;
+ok(!!DWC, 'chamber test seam is live after start()');
+const opU = DWC.state.units.find(u => u.id === 'op');
+const mg = DWC.bankFor(opU, 'PERCVSSIO');
+ok(mg.max === 2 && mg.min === 1,
+   'chamber PERCVSSIO under VIVVM reaches range 2 (min stays 1)');
+ok(DWC.bankFor({}, 'PERCVSSIO').max === 1,
+   'no mods: the shared table is returned untouched');
+ok(DWC.bankFor({ mods: { PERCVSSIO: { rng: 3 } } }, 'PERCVSSIO').max === 4 &&
+   DWC.bankFor({}, 'PERCVSSIO').max === 1,
+   'the merge clones -- the shared def is never mutated');
 
 console.log(fail ? `\n${pass} passed, ${fail} FAILED` : `all ${pass} checks passed`);
 process.exit(fail ? 1 : 0);
