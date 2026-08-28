@@ -1647,10 +1647,7 @@
       const k = 'party-' + m.name;
       seen.add(k);
       const el = actorNode(k, true);
-      const ring = m === chain[0]
-        ? `<polygon points="${plate(0, 0, 1)}" fill="none"
-                    stroke="var(--gold)" stroke-width="2.4"/>` : '';
-      setActorContent(el, ring + S[MEMBER_SPRITE[m.name]]() + memberBar(m));
+      setActorContent(el, S[MEMBER_SPRITE[m.name]]() + memberBar(m));
       placeActor(el, m.c, m.r);
     });
 
