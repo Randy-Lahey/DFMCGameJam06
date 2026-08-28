@@ -121,8 +121,7 @@
       ([who, banks]) => [who, banks.map(b =>
         ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
-    modal: null,                   // null | 'exit' | 'controls' | 'inv' | 'hermit' | 'cube' | 'fight'
-    pendingFight: null,            // engaged pack awaiting the player's Fight? answer
+    modal: null,                   // null | 'exit' | 'controls' | 'inv' | 'hermit' | 'cube'
     hasCube: false,                // THE CVBE granted (inventory flag; cube UI is post-jam-beat work)
     hermitMet: false,              // bargain done; the NPC goes quiet afterwards
     ampoules: 0,                   // AMPVLLA VITAE doses; carried across floors, spent in the chamber (cap 3, mirrors combat SATCHEL_MAX)
@@ -858,39 +857,11 @@
         if (!trigger || trigger.hp <= 0 || finished()) return;
         const engaged = liveFoes().filter(f => cheb(f, trigger) <= 2);
         if (!engaged.length) return;
-        // Contact ASKS before it commits: the Fight? dialog. The pack is
-        // frozen here and consumed by answerFight().
-        state.pendingFight = { engaged };
-        state.modal = 'fight';
-        const note = document.getElementById('fight-note');
-        if (note) {
-          const kinds = {};
-          for (const f of engaged) kinds[f.kind] = (kinds[f.kind] || 0) + 1;
-          note.textContent = Object.entries(kinds)
-            .map(([k, n]) => k + (n > 1 ? ' \u00d7' + n : '')).join(' \u00b7 ')
-            + ' IN CONTACT.';
-        }
+        // Contact COMMITS: no Fight? dialog. Either side touching the other
+        // starts the fight, full stop.
+        enterCombat(engaged.filter(f => f.hp > 0));
       },
     ]);
-  }
-
-  // The player's answer to contact. YES hands the frozen pack to the
-  // tactical layer; NO buys one round of quarter (grace) so declining is a
-  // real step-away window, not an instant re-prompt on the same tiles.
-  function answerFight(yes) {
-    if (state.modal !== 'fight') return;
-    state.modal = null;
-    const pf = state.pendingFight;
-    state.pendingFight = null;
-    if (!pf) return;
-    const pack = pf.engaged.filter(f => f.hp > 0);
-    if (!pack.length) return;
-    if (!yes) {
-      for (const f of pack) f.grace = Math.max(f.grace, 1);
-      log('THE CIRCLE REFVSES CONTACT. ONE ROVND OF QVARTER.', 'dim');
-      return;
-    }
-    enterCombat(pack);
   }
 
   // Leaving is a choice, not a state you fall into: CLEARED means the floor is
@@ -2132,9 +2103,6 @@
   const ctlEl = document.getElementById('controls');
   const hermitEl = document.getElementById('hermit');
   const cubeEl = document.getElementById('cube');
-  const fightEl = document.getElementById('fight');
-  if (fightEl) fightEl.querySelectorAll('[data-answer]').forEach(b =>
-    b.addEventListener('click', () => { answerFight(b.dataset.answer === 'yes'); draw(); }));
   const cubeTakeEl = document.getElementById('cube-take');
   if (cubeTakeEl) cubeTakeEl.addEventListener('click', () => { takeCube(); draw(); });
   const startersEl = document.getElementById('starters');
@@ -2208,7 +2176,6 @@
 
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
-    fightEl.classList.toggle('open', state.modal === 'fight');
     hermitEl.classList.toggle('open', state.modal === 'hermit');
     cubeEl.classList.toggle('open', state.modal === 'cube');
     winEl.classList.toggle('open', state.over === 'WIN');
@@ -2505,12 +2472,6 @@
       e.preventDefault();
       if (k === 'escape' || k === 'enter' || k === ' ' || k === '?') closeControls();
       draw();
-      return;
-    }
-    if (state.modal === 'fight') {
-      e.preventDefault();
-      if (k === 'y' || k === 'enter') { answerFight(true); draw(); }
-      if (k === 'n' || k === 'escape') { answerFight(false); draw(); }
       return;
     }
     if (state.modal === 'exit') {
@@ -3233,7 +3194,7 @@
                   lead, memberAt, foeTarget, validTargets, resolveRound,
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
-                  hermitSacrifice, takeCube, enterCombat, answerFight, debugSacrifice };
+                  hermitSacrifice, takeCube, enterCombat, debugSacrifice };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.
