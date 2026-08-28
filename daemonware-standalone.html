@@ -4322,6 +4322,22 @@ window.DW_COMBAT={
     return g;
   }
 
+  // Level bounds: a tile edge is a wall wherever the neighbour is not
+  // walkable. Full-edge lines (inset 0) so adjacent segments join into one
+  // continuous perimeter instead of reading as per-tile squares.
+  function boundEdges(c, r) {
+    const x = c * T, y = r * T;
+    let g = '';
+    const seg = (x1, y1, x2, y2) =>
+      `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--cyan)"
+             stroke-width="1.4" opacity=".5"/>`;
+    if (!walkable.has(key(c, r - 1))) g += seg(x, y, x + T, y);
+    if (!walkable.has(key(c, r + 1))) g += seg(x, y + T, x + T, y + T);
+    if (!walkable.has(key(c - 1, r))) g += seg(x, y, x, y + T);
+    if (!walkable.has(key(c + 1, r))) g += seg(x + T, y, x + T, y + T);
+    return g;
+  }
+
   const floorLayer = () => F.tiles.map(([c, r]) => {
     const k = key(c, r);
     if (!state.seen.has(k)) {
@@ -4331,9 +4347,10 @@ window.DW_COMBAT={
       return `<polygon points="${plate(c, r, 3)}" fill="none" stroke="var(--cyan)"
                        stroke-width=".9" stroke-dasharray="5 8" opacity=".22"/>`;
     }
+    // Invisible squares: seamless fill only, no per-tile strokes. The only
+    // lines are the level bounds traced by boundEdges().
     const tile =
-      `<polygon points="${plate(c, r, 3)}" fill="#071019" stroke="var(--cyan)" stroke-width=".7" opacity=".75"/>
-       <polygon points="${plate(c, r, 8)}" fill="none" stroke="var(--cyan)" stroke-width=".5" opacity=".16"/>`;
+      `<polygon points="${plate(c, r, 0)}" fill="#05080E" opacity=".75"/>` + boundEdges(c, r);
     return visible.has(k) ? tile : `<g opacity="${B.ui.fog.memory}">${tile}</g>`;
   }).join('');
 
