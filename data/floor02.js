@@ -19,10 +19,10 @@
 //   7    # # # # . . . # # # . . . . . . .
 //   8    # # # H = = = # # # . . . # # # #
 //   9    # # # # . . . # # # = = = # T # #
-//  10    @ @ @ @ . . . # # # . . . # x C #
+//  10    @ @ @ @ . . . # # # . . . # . C #
 //  11    . . . . . . . . . . . . . # # # #
 //
-//   @ party start   ^ stairs   C cache   x hidden spikes   T/S foes   H hermit
+//   @ party start   ^ stairs   C cache   T/S foes   H hermit
 //   = corridor tile (drawn identically in game; marked here for review)
 //
 //   Rooms: ENTRY (0-3, 7-10) - SPINE (7-9, 1-10)
@@ -64,7 +64,6 @@
       { kind: 'chest',  c: 15, r: 10, hidden: false, label: 'CACHE', ampoules: 2 },
       // Inside the cache room (see floor 01's note): bites once on the way
       // in, routable-around once revealed. Never on a 1-wide corridor.
-      { kind: 'spikes', c: 14, r: 10, hidden: true,  label: 'SPIKE ARRAY' },
     ],
 
     // Party spawns, in command order, west wall of the ENTRY room. Four

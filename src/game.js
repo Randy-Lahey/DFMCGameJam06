@@ -1,7 +1,7 @@
 // DAEMONWARE — Floor 1 vertical slice.
 // Contains: floor render, leader+trail party (PMD-style), VITAE, foes + pursuit
 //           AI, simultaneous round resolution, five operations, click-to-target,
-//           drops + pickup, spike hazard, openable cache, exit dialog + win
+//           drops + pickup, openable cache, exit dialog + win
 //           screen, particle bursts and floating combat text.
 // Does NOT contain: an inventory window, anything that SPENDS loot, floor 2.
 //
@@ -289,7 +289,6 @@
     // paying VITAE is a cost, not an impact: no ring, or IMMOLATIO draws two
     selfburn: { cls: 'p-blood', n: 10, spread: 20, dur: .50, sheet: 'selfburn', scale: 1.6 },
     foe:    { cls: 'p-blood', n: 8,  spread: 22, dur: .45 },
-    spike:  { cls: 'p-blood', n: 12, spread: 26, dur: .50 },
     pickup: { cls: 'p-gold',  n: 6,  spread: 16, dur: .50 },
   };
 
@@ -549,7 +548,7 @@
   }
 
   // Display only, and only for foes that are already awake — waking one is
-  // still a surprise. Gated by BALANCE.ui.showFoeIntent.
+  // still a surprise.
   //
   // `claimed` must be ONE Set shared across a whole render pass, walked in
   // state.foes order, exactly as resolveRound does it: claimTile() hands out
@@ -1045,21 +1044,6 @@
     log('THE HERMIT FALLS IN AT THE REAR. THE WAY EAST OPENS.', 'dim');
   }
 
-  // Hazards bite on EVERY entry. Revealing one is not the same as disarming
-  // it. Only the LEADER triggers and takes it: followers walk the exact same
-  // path, so per-follower triggers would just triple every hazard -- a tax,
-  // not a tactic.
-  function triggerSpikes(label) {
-    const m = lead();
-    if (!m) return;
-    const dmg = Math.max(1, Math.round(m.vitae * B.hazards.spikes.pct));
-    m.hp = Math.max(0, m.hp - dmg);
-    float(m.c, m.r, '-' + dmg, 'f-hurt', m.name);
-    burst(m.c, m.r, 'spike');
-    log(label + ' BITES \u2014 ' + m.name + ' ' + dmg + '.', 'bad');
-    if (m.hp === 0) log(`${m.name} IS SEVERED BY THE ${label}.`, 'bad');
-  }
-
   // NPCs are props that BLOCK their tile and talk when bumped. Only the
   // Hermit for now; the helper keeps every walkability check honest. Once
   // the bargain is done he steps into the static: no body, no block --
@@ -1133,7 +1117,6 @@
       state.revealed.add(k);
       log('THE CIRCLE TRIPS A CONCEALED ' + p.label + '.', 'bad');
     }
-    if (p.kind === 'spikes') triggerSpikes(p.label);
     if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. ' + actHint() + '.', 'good');
     if (p.kind === 'stairs') {
       // The Cube IS the key: once granted, the descent ignores the seal.
@@ -1344,7 +1327,7 @@
       return;
     }
     if (!walkable.has(key(nc, nr))) { warn('THE FLOOR ENDS THERE.'); return; }
-    // The step lands NOW -- hazards and drops fire per tile -- and the round
+    // The step lands NOW -- drops and prop triggers fire per tile -- and the round
     // resolves only when the step allowance is spent. With one step banked
     // the player may still open the act menu: move-then-act.
     const swap = memberAt(nc, nr);
@@ -1614,17 +1597,11 @@
       // the SPRITE the player sees, not the tile the camera math lands on.
       // Actors glide on a CSS transition while state teleports, so mid-step
       // the two disagree -- taps must side with the pixels.
-      const pct = f.hp / f.vitae;
-      const alert = f.awake
-        ? `<polygon points="${plate(0, 0, 2)}" fill="none" stroke="var(--blood)"
-                    stroke-width="1.4" opacity=".7"/>` : '';
-      const bar = `<rect x="14" y="6" width="36" height="3.5"
-                         fill="var(--void)" stroke="var(--blood)" stroke-width=".6" opacity=".8"/>
-                   <rect x="14" y="6" width="${36 * pct}" height="3.5"
-                         fill="var(--blood)"/>`;
+      // No ring, no bar: rings and HP bars were crawl-combat furniture; foe
+      // state now reads through the inspect panel (long-press) and the log.
       const el = actorNode(key);
       el.dataset.foe = f.id;
-      setActorContent(el, alert + S[f.sprite]() + bar);
+      setActorContent(el, S[f.sprite]());
       placeActor(el, f.c, f.r);
     }
 
@@ -1647,7 +1624,7 @@
       const k = 'party-' + m.name;
       seen.add(k);
       const el = actorNode(k, true);
-      setActorContent(el, S[MEMBER_SPRITE[m.name]]() + memberBar(m));
+      setActorContent(el, S[MEMBER_SPRITE[m.name]]());
       placeActor(el, m.c, m.r);
     });
 
@@ -1658,13 +1635,6 @@
   // Presentation-only mapping; the numbers bible stays numbers.
   const MEMBER_SPRITE = { OPERATOR: 'hero', CALX: 'calx', CINIS: 'cinis', GVTTA: 'gvtta' };
 
-  // Per-token VITAE bar in the member's own tint, same geometry as foe bars.
-  function memberBar(m) {
-    const w = 36 * Math.max(0, m.hp / m.vitae);
-    return `<rect x="14" y="6" width="36" height="3.5"
-                  fill="var(--void)" stroke="var(--${m.tint})" stroke-width=".6" opacity=".8"/>
-            <rect x="14" y="6" width="${w}" height="3.5" fill="var(--${m.tint})"/>`;
-  }
 
   // The four legal steps, outlined. Nothing on the board used to say which
   // tiles were the move buttons, so a diagonal tap did nothing with no feedback.
@@ -1679,43 +1649,10 @@
     }).join('');
   }
 
-  // What each awake foe has already committed to this round. The turn model's
-  // whole point is that intents lock before movement, so stepping out of reach
-  // makes an attack whiff — a player who cannot see the intent cannot make
-  // that read, and on touch the commit is a single irreversible tap.
-  function intentLayer() {
-    if (!B.ui || !B.ui.showFoeIntent || finished()) return '';
-    let g = '';
-    const struckTiles = new Set();
-    // Decide for EVERY live foe, in state.foes order, off one shared claim Set
-    // — the identical allocation resolveRound will make. Skipping the fogged
-    // ones here instead would free their claims and hand the visible ones
-    // different tiles than they actually take.
-    const claimed = new Set();
-    const preview = liveFoes().map(f => ({ f, it: previewIntent(f, claimed) }));
-    for (const { f, it } of preview) {
-      // An unseen foe telegraphs nothing: a chevron on a dark tile marks the
-      // foe as surely as its token would. Anything close enough to strike the
-      // circle is inside sight anyway, so the attack ring is unaffected.
-      if (!foeSeen(f) || !it) continue;
-      if (it.kind === 'attack' || it.strikes) {
-        for (const t of it.targets) {
-          const k = key(t.c, t.r);
-          if (struckTiles.has(k)) continue;
-          struckTiles.add(k);
-          g += `<polygon points="${plate(t.c, t.r, 5)}" fill="none"
-                         stroke="var(--blood)" stroke-width="1.6" stroke-dasharray="4 4"
-                         opacity=".75"/>`;
-        }
-        if (it.kind === 'attack') continue;         // striking steps fall
-      }                                             // through: destination too
-      if (!it.dc && !it.dr) continue;
-      g += `<polygon points="${plate(f.c + it.dc, f.r + it.dr, 20)}"
-                     fill="var(--blood)" opacity=".3"/>`;
-    }
-    return g;
-  }
-
+  // Foe intent TELEGRAPHS (rings + destination plates) were removed with the
+  // rest of the crawl-combat furniture: contact commits to the chamber now,
+  // so the read they enabled no longer exists. previewIntent() itself stays
+  // -- resolveRound and the inspect panel still run that one brain.
   // Foes the camera has cropped away, pinned to the edge they sit beyond. Only
   // ones the circle can see: a marker for a foe hidden by fog is the same
   // position leak as drawing its token, just parked on the frame instead.
@@ -2230,7 +2167,7 @@
     recomputeFOV();
     updateCamera();
     boardG.innerHTML = floorLayer() + propLayer() + aimLayer()
-                     + moveLayer() + intentLayer() + dropLayer() + stagedLayer();
+                     + moveLayer() + dropLayer() + stagedLayer();
     syncActors();
     overlayG.innerHTML = edgeLayer();
     syncMinimap();

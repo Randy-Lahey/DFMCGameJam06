@@ -10,7 +10,6 @@
 //     CALX     -> TESTA    1 (min)  => 4-5 hits (CALX wards, others sever)
 //     CALX     -> SILIQVA  3 +/-1   => 2 hits
 //     CINIS    -> TESTA    4 +/-1   => 2 hits
-//     SPIKES   -> OPERATOR 7   CALX 8   CINIS 5   (30% of max, each entry)
 //     TESTA    -> OPERATOR 5 +/-1   => 5 hits
 //     TESTA    -> CALX     3 +/-1   => 9 hits   (CALX is still the wall)
 //     TESTA    -> CINIS    6 +/-1   => 3 hits   (CINIS is glass)
@@ -38,14 +37,9 @@
     // Readability toggles. Not cosmetic — these change what the player knows
     // when they commit, which changes how hard the floor plays.
     ui: {
-      // Draw what each AWAKE foe has committed to this round: a chevron on the
-      // tile it will step to, a ring on the circle if it will attack. Sleeping
-      // foes stay hidden, so waking one is still a surprise.
-      //
-      // The turn model's whole point is that intents lock BEFORE movement, so
-      // stepping out of reach makes an attack whiff — a player who cannot see
-      // the intent cannot make that read. Set false to restore blind commits.
-      showFoeIntent: true,
+      // showFoeIntent retired: foe telegraphs (rings + destination plates)
+      // went out with the rest of the crawl-combat furniture — contact
+      // commits to the chamber, so the dodge-read they enabled is gone.
 
       // Fog of war. Sight spreads by BFS through floor tiles (8-way), so it
       // cannot cross a void — corridors stay blind corners. Terrain you have
@@ -92,13 +86,6 @@
     cache: {
       argentMin: 10,
       argentMax: 22,
-    },
-
-    // Floor hazards. `pct` is a fraction of each member's MAX vitae, so a
-    // spike array hurts the whole circle proportionally rather than flat.
-    // Fires every time the tile is entered, not just on the reveal.
-    hazards: {
-      spikes: { pct: 0.30 },
     },
 
     // Foes. `aggro` is Chebyshev distance at which they wake and pursue.
