@@ -129,6 +129,13 @@ ok(B.operations.FVLGVR.pn === 3 && B.operations.FVLGVR.range === 2,
 // rollItem is internal; reach it through rollDrop determinism instead:
 // force DATA rolls by emptying the RNG path. Simpler: statistical check.
 // Pool rule at the data level (rollItem itself is exercised below via __DW):
+// ------------------------------------------------------- amperage data
+ok(Object.values(B.fluxes).every(f => (f.draw || 0) >= 1), 'every flux draws at least 1A');
+ok(B.fluxes.FVLMINANS.draw === 4, 'FVLMINANS pulls 4A (the greedy coil)');
+ok(Object.values(B.banks).every(k => k.amps >= B.ampBands.COMMON[0] && k.amps <= B.ampBands.COMMON[1]),
+   'every loadout bank sits in the COMMON amp band');
+ok(B.strain.burnAt === 10, 'strain burns a bank offline at 10');
+
 ok(B.drops.bankPool.length === 2 &&
    B.drops.bankPool.every(b => B.banks[b] && !Object.values(B.defaultLoadout).flat().includes(b)),
    'bank pool holds only findable banks, none from a default loadout');
@@ -200,8 +207,12 @@ const seamMods = seamCfg.mods;
 state.loadout.OPERATOR[0].fluxes[0] = null;
 seamCfg = null;
 window.__DW.enterCombat([seamFoe()]);
-ok(seamCfg && seamCfg.mods === undefined,
-   'bare rig: no mods field crosses at all');
+// Since the amperage system, EVERY seated bank crosses with its rating and
+// draw (the power ride-along) -- a bare rig sends amps + draw:0, no deltas.
+const bare = seamCfg && seamCfg.mods && seamCfg.mods.op && seamCfg.mods.op.PERCVSSIO;
+ok(bare && bare.amps === B.banks.PERCVSSIO.amps && bare.draw === 0 &&
+   bare.rng === undefined && bare.dmg === undefined,
+   'bare rig: amps + draw 0 cross, no stat deltas');
 
 // Chamber side: load the real module, start a real fight with those mods,
 // and read the merged bank off the live OPERATOR unit.
