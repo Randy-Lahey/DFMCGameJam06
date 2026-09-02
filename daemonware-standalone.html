@@ -1355,25 +1355,30 @@
                   aura: { steps: 1 } },
     },
 
-    // Drops. Exactly one per severed enemy, rolled off this weighted table.
-    // ARGENT is the currency and stacks as a number; FLUX and DATA are discrete
-    // items so the inventory grid has something to lay out. `rarity` is shown
-    // on the pickup floater and, later, in the inventory.
+    // Drops. FLAT TABLE for the whole NIGREDO face: every tile rolls the
+    // same odds. JAM RULING -- per-tile weighting is deferred post-jam.
+    // Hybrid model: every severed enemy pays ARGENT, then ONE item roll at
+    // `itemChance`, weighted off `items`. REAGENT enters the item table only
+    // once tile affixes exist (until then it has nothing to act on).
+    // Chamber kills -- including srcId-less reinforcements: the player
+    // fought three bodies, three bodies pay -- are rolled at fight end and
+    // presented on the victory screen (cfg.rollLoot seam). Rare crawl
+    // chip-kills still pay as floor drops through the same rolls.
     drops: {
-      table: [
-        { kind: 'ARGENT', label: 'ARGENT',    sprite: 'argent',   weight: 72, rarity: 'COMMON' },
-        { kind: 'FLUX',   label: 'FLUX CELL', sprite: 'flux',     weight: 20, rarity: 'UNCOMMON' },
-        { kind: 'DATA',   label: 'DATA BANK', sprite: 'databank', weight:  8, rarity: 'RARE' },
-      ],
       argentMin: 4,
       argentMax: 12,
+      itemChance: 0.5,
+      items: [
+        { kind: 'FLUX', label: 'FLUX CELL', sprite: 'flux',     weight: 60 },
+        { kind: 'DATA', label: 'DATA BANK', sprite: 'databank', weight: 30 },
+      ],
       // DATA BANK sub-roll pool. Found banks leave the pool permanently
       // (no duplicate drops); once empty, a DATA roll pays out as FLUX.
       bankPool: ['LORICA', 'VAPOR'],
     },
 
     // Opening a cache costs a turn and always pays: argent plus one guaranteed
-    // non-argent item, rolled off the drop table's FLUX/DATA weights.
+    // item, rolled off the drops.items weights.
     cache: {
       argentMin: 10,
       argentMax: 22,
@@ -1803,10 +1808,39 @@ const DWC_SAY_CSS = '#dwc-root .fx-say{font-weight:bold;font-size:16px;paint-ord
   +'82%{opacity:1;}100%{opacity:0;transform:translateY(-10px);}}'
   +'#dwc-root .fx-blink{animation:dwc-blink 1.1s ease-in-out infinite;}'
   +'@keyframes dwc-blink{0%{opacity:.15;}50%{opacity:1;}100%{opacity:.15;}}';
+// Spoils screen (Transistor-style tile row + details, in house palette):
+// gold frames by default, teal-dim UNCOMMON, glowing gold RARE; the selected
+// tile wears cyan brackets via outline; details panel sits on a teal rule.
+// Spoils screen: every card visible at once as a LIST (ruling: no
+// tap-to-inspect -- the player reads the whole haul in one glance).
+// Icon plaque wears the rarity frame: dim-gold COMMON, teal UNCOMMON,
+// glowing gold RARE. Own style element: the legacy DWC_CSS string ends in
+// a mangled dangling brace and error-recovery there eats appended rules.
+const DWC_SPL_CSS = '#dwc-root #dwc-over{overflow-y:auto;padding:24px 0;}'
+  +'#dwc-root .spl{width:min(92vw,520px);margin-top:2px;}'
+  +'#dwc-root .spl-hd{color:var(--gold);letter-spacing:3px;font-size:12px;text-align:left;'
+  +'border-bottom:1px solid var(--tealdim);padding:0 0 6px 2px;margin-bottom:10px;}'
+  +'#dwc-root .spl-hd::before{content:"";display:inline-block;width:4px;height:10px;'
+  +'background:var(--gold);margin-right:8px;}'
+  +'#dwc-root .spl-list{display:flex;flex-direction:column;gap:8px;text-align:left;}'
+  +'#dwc-root .spl-it{display:flex;gap:12px;align-items:center;background:#0a1214;'
+  +'border:1px solid var(--line);border-radius:3px;padding:6px 10px;}'
+  +'#dwc-root .spl-it .ic{width:52px;height:52px;flex:0 0 auto;display:flex;'
+  +'align-items:center;justify-content:center;background:#05080a;'
+  +'border:1.5px solid #6b5322;border-radius:3px;}'
+  +'#dwc-root .spl-it.r-uncommon .ic{border-color:var(--teal);}'
+  +'#dwc-root .spl-it.r-rare .ic{border-color:var(--gold);box-shadow:0 0 8px #d9a44155;}'
+  +'#dwc-root .spl-it b{color:var(--white);letter-spacing:1px;font-size:15px;}'
+  +'#dwc-root .spl-it .k{color:var(--gold);font-size:10px;letter-spacing:2px;margin-left:8px;}'
+  +'#dwc-root .spl-it p{margin:2px 0 0;color:var(--dim);line-height:1.4;}';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
-  const st=document.createElement("style"); st.textContent=DWC_CSS+DWC_SAY_CSS; document.head.appendChild(st);
+  const st=document.createElement("style"); st.textContent=DWC_CSS+DWC_SAY_CSS;
+  // Spoils CSS gets its OWN style element: DWC_CSS ends with a mangled
+  // dangling brace, and CSS error-recovery inside that sheet can swallow
+  // rules appended after it. A separate element is a fresh parser.
+  const st2=document.createElement("style"); st2.textContent=DWC_SPL_CSS; document.head.appendChild(st2); document.head.appendChild(st);
   root=document.createElement("div"); root.id="dwc-root"; root.innerHTML=DWC_HTML;
   root.style.display="none"; document.body.appendChild(root);
   initLogic();
@@ -2105,10 +2139,34 @@ function setupFight(n){
 function endRun(win,msg){
   state.phase="over";
   document.getElementById("dwc-overmsg").textContent=msg;
-  document.getElementById("dwc-overinfo").innerHTML=
-    (win&&cfg&&cfg.archon)
+  let info=(win&&cfg&&cfg.archon)
       ? 'He plants himself in the breach. Your daemon reboots in your grip.<br>Behind you, the corridor \u2014 RVN.'
       : (win?"The chamber falls silent.":"You are dragged back to the corridor.");
+  // SPOILS (RULED): per-kill rolls, presented per fight, right here on the
+  // victory screen -- as a LIST: every card fully readable at once, icon
+  // plaque + name + kind + note per row, no tap-to-inspect. The crawl owns
+  // the table, the bag, AND the card text (rollLoot returns finished
+  // cards); the chamber only renders. Every severed chamber foe pays,
+  // reinforcements included. The scripted sacrifice beat is narrative, not
+  // economy -- no spoils there.
+  if(win&&!(cfg&&cfg.archon)&&cfg&&cfg.rollLoot){
+    const dead=state.units.filter(u=>u.side==="foe"&&!u.alive).length;
+    const haul=cfg.rollLoot(dead);
+    if(haul&&(haul.argent||haul.items.length)){
+      const cards=[{name:haul.argent+' ARGENT',kind:'CVRRENCY',rarity:'COMMON',
+                    art:haul.argentArt||'',
+                    note:'Coin of the deep. Spend it at THE REFVGE.'}]
+        .concat(haul.items);
+      info+='<div class="spl"><div class="spl-hd">SPOILS \u00b7 '+dead+' SEVERED</div>'
+        +'<div class="spl-list">'
+        +cards.map(t=>'<div class="spl-it r-'+String(t.rarity||'COMMON').toLowerCase()+'">'
+          +'<span class="ic">'+(t.art||'')+'</span>'
+          +'<div><b>'+t.name+'</b><span class="k">'+t.kind+'</span>'
+          +'<p>'+t.note+'</p></div></div>').join('')
+        +'</div></div>';
+    }
+  }
+  document.getElementById("dwc-overinfo").innerHTML=info;
   const b=document.getElementById("dwc-overbtn");
   b.textContent=(win&&cfg&&cfg.archon)?"FLEE":"RETVRN"; b.onclick=()=>finish(win);
   document.getElementById("dwc-over").style.display="flex";
@@ -3157,21 +3215,50 @@ window.DW_COMBAT={
     return { kind: 'FLUX', flux, label: flux, sprite: 'flux', rarity: 'UNCOMMON' };
   }
 
-  // Exactly one drop per severed enemy, rolled off the weighted table.
-  function rollDrop(foe) {
-    const table = B.drops.table;
-    const total = table.reduce((s, e) => s + e.weight, 0);
-    let n = Math.random() * total;
-    const pick = table.find(e => (n -= e.weight) < 0) || table[0];
-    const d = pick.kind === 'ARGENT'
-      ? { id: dropSeq++, ...pick, c: foe.c, r: foe.r }
-      : { id: dropSeq++, ...rollItem(pick.kind), c: foe.c, r: foe.r };
-    if (d.kind === 'ARGENT') {
-      const { argentMin: lo, argentMax: hi } = B.drops;
-      d.amount = lo + Math.floor(Math.random() * (hi - lo + 1));
+  // One severed enemy's payout under the hybrid model (RULED): ARGENT
+  // always, plus one item roll at drops.itemChance off the weighted items
+  // table. Pure -- callers decide whether it lands as a floor drop
+  // (crawl chip-kill) or bag credit (fight-end spoils).
+  function rollKill() {
+    const D = B.drops;
+    const argent = D.argentMin + Math.floor(Math.random() * (D.argentMax - D.argentMin + 1));
+    let item = null;
+    if (Math.random() < D.itemChance) {
+      const total = D.items.reduce((s, e) => s + e.weight, 0);
+      let n = Math.random() * total;
+      const pick = D.items.find(e => (n -= e.weight) < 0) || D.items[0];
+      item = rollItem(pick.kind);
     }
-    state.drops.push(d);
-    log(`${foe.kind} LEAVES ${d.amount ? d.amount + ' ' : ''}${d.label}.`, 'good');
+    return { argent, item };
+  }
+
+  // Crawl chip-kills (rare ranged severs outside the chamber): the same
+  // hybrid roll, paid as floor drops on the corpse tile. Chamber kills are
+  // rolled at fight end instead -- see the rollLoot seam in enterCombat.
+  function rollDrop(foe) {
+    const { argent, item } = rollKill();
+    state.drops.push({ id: dropSeq++, kind: 'ARGENT', label: 'ARGENT', sprite: 'argent',
+                       rarity: 'COMMON', amount: argent, c: foe.c, r: foe.r });
+    if (item) state.drops.push({ id: dropSeq++, ...item, c: foe.c, r: foe.r });
+    log(`${foe.kind} LEAVES ${argent} ARGENT${item ? ' + ' + item.label : ''}.`, 'good');
+  }
+
+  // Present one rolled item as a spoils CARD for the victory screen. The
+  // chamber renders name/kind/note/art verbatim, so stats text stays
+  // single-sourced from the bible here on the crawl side. Sprites are <g>
+  // fragments for the board SVG, so cards wrap them into standalone <svg>.
+  const spoilArt = frag =>
+    '<svg viewBox="0 0 64 64" width="44" height="44">' + frag + '</svg>';
+  function spoilCard(it) {
+    if (it.kind === 'DATA') {
+      const bk = B.banks[it.bank] || {};
+      return { name: it.bank, kind: 'DATA BANK', rarity: it.rarity, art: spoilArt(S.databank()),
+               note: ((B.operations[it.bank] || {}).note || '') + ' ' + (bk.bays || 1) +
+                     (bk.bays > 1 ? ' BAYS' : ' BAY') + ' \u00b7 ' + (bk.amps || 0) + 'A.' };
+    }
+    const f = B.fluxes[it.flux] || {};
+    return { name: it.flux, kind: 'FLVX CELL', rarity: it.rarity, art: spoilArt(S.flux()),
+             note: (f.note || '') + ' DRAW ' + (f.draw || 0) + 'A.' };
   }
 
   function collectDrops() {
@@ -3856,7 +3943,7 @@ window.DW_COMBAT={
     const argent = lo + Math.floor(Math.random() * (hi - lo + 1));
     state.bag.argent += argent;
 
-    const pool = B.drops.table.filter(e => e.kind !== 'ARGENT');
+    const pool = B.drops.items;
     const total = pool.reduce((s, e) => s + e.weight, 0);
     let n = Math.random() * total;
     const pick = rollItem((pool.find(e => (n -= e.weight) < 0) || pool[0]).kind);
@@ -5123,6 +5210,26 @@ window.DW_COMBAT={
       mods: Object.keys(mods).length ? mods : undefined,
       archon: opts.archon,                    // exit-ambush apparition flag
       items: { AMPVLLA: state.ampoules },
+      // Fight-end loot seam (RULED: rolls are per-kill, the SCREEN is per
+      // fight). The chamber calls this on victory with its severed count --
+      // srcId-less reinforcements included. Rolls + credits the bag
+      // immediately and returns the lines the over screen prints.
+      rollLoot(n) {
+        const haul = { argent: 0, argentArt: spoilArt(S.argent()), items: [] };
+        for (let i = 0; i < (n | 0); i++) {
+          const k = rollKill();
+          haul.argent += k.argent;
+          if (!k.item) continue;
+          state.bag.items.push({ kind: k.item.kind, label: k.item.label, flux: k.item.flux,
+                                 bank: k.item.bank, sprite: k.item.sprite, rarity: k.item.rarity });
+          haul.items.push(spoilCard(k.item));
+        }
+        state.bag.argent += haul.argent;
+        if (haul.argent || haul.items.length)
+          log('SPOILS: ' + [haul.argent + ' ARGENT']
+            .concat(haul.items.map(t => t.name)).join(', ') + '.', 'good');
+        return haul;
+      },
       foes: foes.length ? foes : undefined,   // debug entry keeps the FIGHTS spec
       onEnd(res) {
         state.scene = 'crawl';
@@ -5133,14 +5240,14 @@ window.DW_COMBAT={
           m.hp = Math.max(0, Math.min(m.vitae, Math.round(r.frac * m.vitae)));
         }
         if (res.won) {
-          // Victory severs the whole engaged pack on the crawl floor, through
-          // the normal path so drops and CLEARED detection still fire.
+          // Victory severs the whole engaged pack on the crawl floor so
+          // CLEARED detection still fires. No floor drops here: the spoils
+          // were rolled + credited by rollLoot on the victory screen.
           for (const f of engaged) {
             if (f.hp <= 0) continue;
             f.hp = 0;
             log(`${f.kind} IS SEVERED IN THE CHAMBER.`, 'good');
             float(f.c, f.r, 'SEVERED', 'f-sever');
-            rollDrop(f);
           }
           log('THE CHAMBER IS PVRGED. THE CRAWL RESVMES.', 'good');
         } else {
@@ -5915,7 +6022,7 @@ window.DW_COMBAT={
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
-                  previewIntent, canAct, actionsLeft, stepsMax, applyOp,
+                  previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
                   hermitSacrifice, takeCube, enterCombat, debugSacrifice };
 
