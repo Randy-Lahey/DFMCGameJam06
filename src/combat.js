@@ -346,7 +346,7 @@ const DWC_CSS = `
   display:grid;
   grid-template-columns:auto auto minmax(0,1fr) auto;
   grid-template-areas:
-    "key ic nm   badge"
+    "key ic nm   nm"
     "key ic meta badge";
   align-items:center;
   column-gap:var(--s2); row-gap:0;
@@ -425,11 +425,12 @@ const DWC_CSS = `
 #dwc-root .op-badge{
   grid-area:badge; justify-self:end; align-self:center;
   display:inline-flex; align-items:center; gap:3px;
-  padding:1px 4px;
-  max-width:76px; overflow:hidden;
+  padding:1px 3px;
+  max-width:82px; overflow:hidden;
   border:var(--hair) solid currentColor; border-radius:var(--r1);
   font-size:var(--fs-micro); line-height:1.5;
-  letter-spacing:var(--ls-2); text-transform:uppercase; white-space:nowrap;
+  letter-spacing:0; text-transform:uppercase; white-space:nowrap;
+  text-overflow:ellipsis;
   color:var(--dim); background:#02080999;
 }
 #dwc-root .op-badge:empty{ display:none; }
@@ -439,6 +440,7 @@ const DWC_CSS = `
 #dwc-root .b-burnt{    color:#ffd3d9; background:var(--ox); border-color:var(--ox); }
 #dwc-root .b-strain{   color:var(--st-strain);   border-style:dashed; background:#1c160899; }
 #dwc-root .b-need{     color:var(--st-need);     background:var(--gold-ink); }
+#dwc-root .b-dose{     color:var(--dim);         border-color:var(--bd-live); }
 
 /* --- satchel item variant ------------------------------------------------- */
 #dwc-root .op.item{ border-color:var(--st-item); }
@@ -686,7 +688,7 @@ const DWC_CSS = `
     padding-right:calc(var(--s4) + var(--sa-r));
   }
   #dwc-root #dwc-stat{ white-space:normal; font-size:var(--fs-sm); }
-  #dwc-root .op{ width:210px; max-width:none; }
+  #dwc-root .op{ width:220px; max-width:none; }
   #dwc-root #dwc-tl{ padding-left:calc(var(--s4) + var(--sa-l));
                      padding-right:calc(var(--s4) + var(--sa-r)); }
 }
@@ -781,29 +783,6 @@ const DWC_CSS = `
   #dwc-root button:focus-visible{ outline-width:3px; }
   #dwc-root .tile{ stroke-width:1.25; }
 }
-
-
-/* ==========================================================================
-   11. LEGACY COMPAT
-   Kept so the sheet degrades gracefully if the action bar still emits the
-   old markup (bare .sel / .off / .item / .cost on a plain button). Delete
-   this block once the actionbar agent has landed the .op anatomy.
-   ========================================================================== */
-
-#dwc-root #dwc-banks > button:not(.op){
-  flex:0 0 auto; width:var(--op-w); max-width:70vw;
-  text-align:left; font-size:var(--fs-sm);
-}
-#dwc-root button.sel:not(.op){
-  border-color:var(--gold); color:var(--gold); box-shadow:inset 3px 0 0 var(--gold), var(--glow-gold);
-}
-#dwc-root button.off:not(.op){ opacity:.55; border-color:var(--st-off); color:var(--dim); }
-#dwc-root button.item:not(.op){ border-color:var(--st-item); }
-#dwc-root button.item.sel:not(.op){
-  border-color:var(--st-item-sel); color:#e28a76; box-shadow:inset 3px 0 0 var(--st-item-sel), 0 0 6px #d6402a66;
-}
-#dwc-root button.item:not(.op) svg{ width:11px; height:15px; vertical-align:-3px; margin-right:1px; }
-#dwc-root .cost{ color:var(--dim); font-size:var(--fs-xs); letter-spacing:var(--ls-1); }
 `;
 const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
@@ -1384,10 +1363,6 @@ const SATCHEL_MAX=3;
 const satchelCount=()=>Object.values(state.items).reduce((a,b)=>a+b,0);
 const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",icon:"ampvlla",cost:2,heal:8,min:0,max:5,
   desc:"Drink or hurl: heal a party unit +8. Range 0-5. Once per turn. OPERATOR only."}};
-const VIAL_SVG=`<svg viewBox="0 0 12 16" width="11" height="15" aria-hidden="true">
-  <path d="M4 1h4v1.6H4z" fill="#D6402A"/>
-  <path d="M4.6 3.4h2.8v2.6l2.6 5.6v2.6L8.8 15H3.2L2 14.2v-2.6l2.6-5.6z" fill="none" stroke="#D6402A" stroke-width="1.1"/>
-  <path d="M3 11.4h6v2.3l-.8.9H3.8l-.8-.9z" fill="#D6402A"/></svg>`;
 const isItemSel=s=>!!s&&s.indexOf("item:")===0;
 const selDef=()=>!state.sel?null:(isItemSel(state.sel)?ITEMS[state.sel.slice(5)]:bankFor(cur(),state.sel));
 function canUseItem(u,id){
@@ -1650,33 +1625,53 @@ function drawTimeline(){
   tl.appendChild(r);
 }
 
+// Icon guard: icons.js is a separate <script> loaded before this one, but a
+// stale index.html (or a headless test that skips it) must degrade to a bare
+// button rather than throw on every redraw.
+const ICO=(id,o)=>window.iconHTML?window.iconHTML(id,o):"";
+
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
         endb=document.getElementById("dwc-endbtn");
   banks.innerHTML="";
+  // ENGAGE moved to #dwc-board: it is position:fixed anyway, and inside the
+  // scrolling track it ate a flex slot and forced a :has() guard on the
+  // edge-fade mask. The banks wipe no longer reaps it, so drop it by hand on
+  // EVERY pass -- placement rebuilds it below, battle just leaves it gone.
+  const oldEng=document.getElementById("dwc-engage");
+  if(oldEng&&oldEng.remove) oldEng.remove();
   if(state.phase==="place"){
     stat.innerHTML="Seat your party in the gold zone. Tap a seated unit to pick it up.";
-    const b=document.createElement("button");
-    b.id="dwc-engage";
-    b.textContent="ENGAGE"; b.disabled=state.toPlace.length>0;
-    b.onclick=()=>{state.phase="battle"; newRound();};
-    banks.appendChild(b); endb.style.display="none"; return;
+    const board=document.getElementById("dwc-board");
+    if(board){
+      const b=document.createElement("button");
+      b.id="dwc-engage";
+      b.textContent="ENGAGE"; b.disabled=state.toPlace.length>0;
+      b.onclick=()=>{state.phase="battle"; newRound();};
+      board.appendChild(b);
+    }
+    endb.style.display="none"; return;
   }
   endb.style.display="";
   const u=cur(); if(!u) return;
-  stat.innerHTML=`<b>${u.name}</b> · VITAE ${u.vitae}/${u.maxVitae} · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
+  stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
     for(const id of u.banks){
       const bk=bankFor(u,id), b=document.createElement("button");
       const off=!canCast(u,id);
-      b.className=(state.sel===id?"sel":"")+(off?" off":"");
-      const rng=bk.kind==="sweep"?"self":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max)+" range";
-      const st=u.burnt&&u.burnt[id]?" · BVRNT"
-        :u.cds[id]>0?` · RECHARGE ${u.cds[id]}`
-        :(!bk.repeat&&u.cast[id]?" · SPENT THIS TVRN"
-        :(u.pneuma<bk.cost?` · NEED ${bk.cost}\u25c6`
-        :(u.strain&&u.strain[id]?` · STRAIN ${u.strain[id]}/${BURN_AT}`:"")));
-      b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${rng}${st}</span>`;
+      b.className="op"+(state.sel===id?" sel":"")+(off?" off":"");
+      const rng=bk.kind==="sweep"?"SELF":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max);
+      // One badge only, hardest state first: burnt > recharge > spent > need > strain.
+      const bd=u.burnt&&u.burnt[id]?["b-burnt","BVRNT"]
+        :u.cds[id]>0?["b-recharge",`RECHARGE ${u.cds[id]}`]
+        :(!bk.repeat&&u.cast[id]?["b-spent","SPENT"]
+        :(u.pneuma<bk.cost?["b-need",`NEED ${bk.cost}◆`]
+        :(u.strain&&u.strain[id]?["b-strain",`STRAIN ${u.strain[id]}/${BURN_AT}`]:["",""])));
+      b.innerHTML=`<span class="op-key">${u.banks.indexOf(id)+1}</span>`+
+        `<span class="op-ic">${ICO(bk.icon||bk.name,{size:20})}</span>`+
+        `<span class="op-nm">${bk.name}</span>`+
+        `<span class="op-meta">${bk.cost}◆ · ${rng}</span>`+
+        `<span class="op-badge ${bd[0]}">${bd[1]}</span>`;
       b.title=bk.desc;
       b.onclick=()=>{
         if(off&&state.sel!==id){ flashStat(whyNot(u,id)); return; }  // answered, not eaten
@@ -1688,9 +1683,13 @@ function drawHud(){
       if(!state.items[id]) continue;        // empty satchel: no button, no noise
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
       const ioff=!canUseItem(u,id)&&state.sel!==sid;
-      b.className="item"+(state.sel===sid?" sel":"")+(ioff?" off":"");
+      b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"");
       b.title=it.desc;
-      b.innerHTML=`<span class="cost">${u.banks.length+1}</span> ${VIAL_SVG}${it.name} <span class="cost">${it.cost}◆ ${it.min}-${it.max} range · ${n}/${SATCHEL_MAX}${u.cast[sid]?" · SPENT THIS TVRN":""}</span>`;
+      b.innerHTML=`<span class="op-key">${u.banks.length+1}</span>`+
+        `<span class="op-ic">${ICO(it.icon||id,{size:20})}</span>`+
+        `<span class="op-nm">${it.name}</span>`+
+        `<span class="op-meta">${it.cost}◆ · ${it.min}-${it.max}</span>`+
+        `<span class="op-badge ${u.cast[sid]?"b-spent":"b-dose"}">${u.cast[sid]?"SPENT":n+"/"+SATCHEL_MAX}</span>`;
       b.onclick=()=>{
         if(ioff){
           flashStat(u.cast[sid]?it.name+" IS SPENT \u2014 ONE VSE PER TVRN"
