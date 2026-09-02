@@ -80,7 +80,7 @@ const DWC_CSS = `
   /* --- controls ----------------------------------------------------------- */
   --hit:44px;             /* minimum touch target                            */
   --chip:44px;            /* timeline chip edge                              */
-  --op-w:196px;           /* ability button track width                      */
+  --op-w:208px;           /* ability button track width (widest name + badge) */
 
   /* --- focus ring (keyboard only) ---------------------------------------- */
   --focus:var(--teal-hi);
@@ -372,7 +372,6 @@ const DWC_CSS = `
   width:var(--op-w); max-width:70vw;
   padding:var(--s1) var(--s2);
   text-align:left;
-  scroll-snap-align:start;
 }
 
 /* hotkey plaque: 1-4, stencilled */
@@ -431,14 +430,16 @@ const DWC_CSS = `
 
 /* unavailable but still tappable (tapping answers WHY -- keep the pointer) */
 #dwc-root .op.off{
-  color:var(--dim); border-color:var(--st-off);
+  color:var(--white); border-color:var(--st-off);
   background:var(--surf-1); box-shadow:none;
-  opacity:.55; cursor:pointer;
+  opacity:.72; cursor:pointer;   /* .55 on --dim measured 2.0:1; this clears 4.5 */
 }
 #dwc-root .op.off:hover{ background:var(--surf-2); border-color:var(--bd-live); opacity:.75; }
 #dwc-root .op.off .op-nm{ font-weight:400; }
 /* selected wins over off (an armed-but-blocked spell still reads as armed) */
-#dwc-root .op.off.sel{ opacity:.8; color:var(--gold); border-color:var(--st-sel); }
+#dwc-root .op.off.sel{ opacity:.8; color:var(--gold); border-color:var(--st-sel);
+  box-shadow:inset 3px 0 0 var(--gold);    /* .off zeroes it later in the cascade */
+  background:linear-gradient(90deg, var(--gold-ink), var(--surf-1) 60%); }
 
 /* --- state badge --------------------------------------------------------- */
 #dwc-root .op-badge{
@@ -455,7 +456,7 @@ const DWC_CSS = `
 #dwc-root .op-badge:empty{ display:none; }
 /* variants */
 #dwc-root .b-recharge{ color:var(--st-recharge); background:#062023cc; }
-#dwc-root .b-spent{    color:var(--st-spent);    border-style:dotted; }
+#dwc-root .b-spent{    color:#8fb3b0;            border-style:dotted; }
 #dwc-root .b-burnt{    color:#ffd3d9; background:var(--ox); border-color:var(--ox); }
 #dwc-root .b-strain{   color:var(--st-strain);   border-style:dashed; background:#1c160899; }
 #dwc-root .b-need{     color:var(--st-need);     background:var(--gold-ink); }
@@ -478,15 +479,11 @@ const DWC_CSS = `
   display:flex; align-items:stretch; gap:var(--s2);
   overflow-x:auto; overflow-y:hidden;
   padding-bottom:var(--s1);           /* room for the scrollbar */
-  scroll-snap-type:x proximity;
   scrollbar-width:thin; scrollbar-color:var(--tealdim) var(--surf-sunk);
 }
 /* Visible affordance #1: the track fades out at both edges, so a clipped
-   button always reads as "there is more this way".
-   Guarded by :has() -- during PLACEMENT this same element hosts the fixed
-   ENGAGE button, and a mask would fade (and stacking-trap) it. Browsers
-   without :has() simply drop the mask and keep affordance #2. */
-#dwc-root #dwc-banks:not(:has(#dwc-engage)){
+   button always reads as "there is more this way". */
+#dwc-root #dwc-banks{
   -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 10px,
                      #000 calc(100% - 20px), transparent 100%);
           mask-image:linear-gradient(90deg, transparent 0, #000 10px,
@@ -563,12 +560,17 @@ const DWC_CSS = `
 }
 /* replaces the inline style="" on #dwc-overinfo */
 #dwc-root #dwc-overinfo{
-  width:min(92vw,520px);
+  width:min(100%,520px);        /* 92vw + the overlay's own padding overflowed by 2px */
   color:var(--dim); line-height:1.7; text-align:center;
 }
 #dwc-root #dwc-overinfo b{ color:var(--white); }
+/* sticky: with a long haul the button sat 300px below the fold and touch
+   shows no scrollbar, so the run read as stuck. Now it rides the bottom
+   edge until the list scrolls out from under it. */
 #dwc-root #dwc-overbtn{
   margin:0 0 auto;
+  position:sticky; bottom:0;
+  box-shadow:0 -10px 18px 6px var(--bg);
   padding:var(--s3) var(--s5); min-height:48px;
   border-color:var(--teal); color:var(--teal);
   letter-spacing:var(--ls-4); font-weight:700; text-transform:uppercase;
@@ -582,7 +584,7 @@ const DWC_CSS = `
    one glance. The icon plaque wears the rarity frame: dim-gold COMMON,
    teal UNCOMMON, glowing gold RARE.
    ------------------------------------------------------------------------ */
-#dwc-root .spl{ width:min(92vw,520px); margin-top:var(--s0); }
+#dwc-root .spl{ width:min(100%,520px); margin-top:var(--s0); }
 #dwc-root .spl-hd{
   display:flex; align-items:center; gap:var(--s2);
   color:var(--gold); letter-spacing:var(--ls-4); font-size:var(--fs-sm);
@@ -714,7 +716,7 @@ const DWC_CSS = `
 
 /* --- very narrow phones (<=360px): tighten, never wrap the track ------- */
 @media (max-width:360px){
-  #dwc-root{ --op-w:172px; --chip:40px; }
+  #dwc-root{ --op-w:200px; --chip:40px; }
   #dwc-root #dwc-hud{ padding-left:calc(var(--s2) + var(--sa-l));
                       padding-right:calc(var(--s2) + var(--sa-r)); }
   #dwc-root #dwc-endbtn{ padding:var(--s2); letter-spacing:var(--ls-2); }
@@ -734,7 +736,7 @@ const DWC_CSS = `
   }
   #dwc-root .dwc-chip{ font-size:var(--fs-md); }
   #dwc-root #dwc-hud{
-    grid-template-columns:minmax(150px,22%) minmax(0,1fr) auto;
+    grid-template-columns:minmax(176px,26%) minmax(0,1fr) auto;
     grid-template-areas:"stat ops end";
     align-items:center;
     gap:var(--s1) var(--s2);
@@ -743,11 +745,11 @@ const DWC_CSS = `
     min-height:0;
     max-height:38vh;
   }
-  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1);
-    white-space:nowrap; text-overflow:ellipsis; }
+  /* two short lines beat one ellipsised one: PNEUMA was never visible here */
+  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3; }
   #dwc-root #dwc-stat::before{ height:9px; }
   #dwc-root .op{
-    width:180px; padding:2px var(--s2);
+    width:188px; padding:2px var(--s2);
     column-gap:var(--s1);
   }
   #dwc-root .op-nm{ font-size:var(--fs-sm); }
@@ -760,6 +762,15 @@ const DWC_CSS = `
   }
   #dwc-root #dwc-over{ padding-top:calc(var(--s3) + var(--sa-t)); gap:var(--s2); }
   #dwc-root #dwc-over h1{ font-size:var(--fs-xl); letter-spacing:var(--ls-4); }
+}
+
+/* --- phone-width boards: the SVG scales to ~0.45, so 19px user units land
+   at ~8 CSS px. Grow the floating text to compensate. Dialogue is capped
+   where a 60-char line still fits inside the 832-unit viewBox. ------------ */
+@media (max-width:600px){
+  #dwc-root .fx-dmg{ font-size:28px; stroke-width:4px; }
+  #dwc-root .fx-say{ font-size:18px; }   /* 20 put the longest Hermit line 10px past a 390 edge */
+  #dwc-root .fx-blink{ font-size:20px; }
 }
 
 /* --- pointer:coarse: no hover repaint on touch ------------------------- */
@@ -1228,7 +1239,11 @@ function hermitBeat(){
     'HERMIT: "THE CVBE \u2014 IT IS A DOOR. THE ONLY DOOR BACK TO THE REAL."',
     'HERMIT: "TAKE IT. FLEE. FIND GROVND. BVILD A BASE OF OPERATIONS."',
     'HERMIT: "SOLVE THE CVBE AND YOV ESCAPE. GO \u2014 I HOLD THE BREACH."'];
-  const cx=isoX(Math.floor(W/2),0)+PADX, cy=isoY(Math.floor(W/2),0)+PADY+TH/2;
+  // Centre of the VIEWBOX, not of tile (6,0): the iso projection puts that
+  // tile 192 units right of centre, and a 60-char line anchored there ran off
+  // the 832-unit edge -- "THE ONLY DOOR BACK TO" with the end of the sentence
+  // gone, on every phone and on desktop. Measured, not eyeballed.
+  const cx=(W*TW+TW)/2, cy=isoY(Math.floor(W/2),0)+PADY+TH/2;
   let node=null, idx=0;
   const show=()=>{
     if(node){ node.remove(); node=null; }
@@ -1672,10 +1687,14 @@ function drawTimeline(){
 // button rather than throw on every redraw.
 const ICO=(id,o)=>window.iconHTML?window.iconHTML(id,o):"";
 
+// Which selection the track was last scrolled for. drawHud runs on every
+// draw(); scrolling on every pass would yank the row back under the thumb.
+let scrolledSel=null;
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
         endb=document.getElementById("dwc-endbtn");
   banks.innerHTML="";
+  let selBtn=null;
   // ENGAGE moved to #dwc-board: it is position:fixed anyway, and inside the
   // scrolling track it ate a flex slot and forced a :has() guard on the
   // edge-fade mask. The banks wipe no longer reaps it, so drop it by hand on
@@ -1702,6 +1721,7 @@ function drawHud(){
       const bk=bankFor(u,id), b=document.createElement("button");
       const off=!canCast(u,id);
       b.className="op"+(state.sel===id?" sel":"")+(off?" off":"");
+      if(state.sel===id) selBtn=b;
       const rng=bk.kind==="sweep"?"SELF":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max);
       // One badge only, hardest state first: burnt > recharge > spent > need > strain.
       const bd=u.burnt&&u.burnt[id]?["b-burnt","BVRNT"]
@@ -1726,6 +1746,7 @@ function drawHud(){
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
       const ioff=!canUseItem(u,id)&&state.sel!==sid;
       b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"");
+      if(state.sel===sid) selBtn=b;
       b.title=it.desc;
       b.innerHTML=`<span class="op-key">${u.banks.length+1}</span>`+
         `<span class="op-ic">${ICO(it.icon||id,{size:20})}</span>`+
@@ -1744,6 +1765,18 @@ function drawHud(){
       banks.appendChild(b);
     }
     endb.disabled=false;
+    // Hotkey 2 armed ABRASIO with 137 of its 196px behind the edge fade. Bring
+    // a NEWLY selected button into the track; leave the thumb alone otherwise.
+    if(!state.sel) scrolledSel=null;
+    else if(selBtn&&state.sel!==scrolledSel){
+      scrolledSel=state.sel;
+      const br=selBtn.getBoundingClientRect(), kr=banks.getBoundingClientRect();
+      if(typeof banks.scrollLeft==="number"&&typeof br.left==="number"){ // real DOM only
+        const left=br.left-kr.left+banks.scrollLeft, right=left+br.width;
+        if(left<banks.scrollLeft) banks.scrollLeft=Math.max(0,left-8);
+        else if(right>banks.scrollLeft+kr.width) banks.scrollLeft=right-kr.width+8;
+      }
+    }
   } else { endb.disabled=true; }
 }
 
@@ -1790,6 +1823,12 @@ document.getElementById("dwc-endbtn").onclick=()=>{
   if(state.phase==="battle"&&cur()&&cur().side==="party"&&cur().control!=="ai") endTurn();
 };
 document.addEventListener("keydown",e=>{ if(!active) return;
+  // A focused <button> owns Enter/Space: the browser turns them into its
+  // click, which is what the player meant. Without this, arming a bank by
+  // keyboard ended the turn instead (and Enter on ENGAGE ran newRound twice).
+  // Same guard the crawl uses. Headless stubs answer activeElement:null.
+  const fe=document.activeElement;
+  if(fe&&fe.tagName==="BUTTON"&&(e.key===" "||e.key==="Enter")) return;
   // Placement: space/enter is the keyboard ENGAGE, once everyone is seated.
   if(state.phase==="place"&&(e.key===" "||e.key==="Enter")){
     e.preventDefault();
