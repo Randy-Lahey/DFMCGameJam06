@@ -180,6 +180,23 @@
       },
     },
 
+    // ------------------------------------------------------------- power
+    // Amperage. Every bank has a rating (`amps` below); seated fluxes pull
+    // their `draw` per cast. Casting while total draw exceeds amps accrues
+    // STRAIN equal to the overdraw, PER CAST -- an overdrawn bank left
+    // untouched never strains; greed is only taxed when used. At burnAt the
+    // cast still resolves, THEN the bank burns offline for the rest of the
+    // fight. Strain clears at fight end. Combat-chamber only: crawl casts
+    // never strain. Loadout banks all sit in the COMMON band on purpose --
+    // every 2-bay bank carries two 2A workhorse fluxes exactly, and
+    // FVLMINANS (4A) overdraws almost anything COMMON. That is the envelope
+    // to push. ampBands are the DATA BANK drop bands, rolled 60/30/10
+    // COMMON/MAGIC/RARE (guaranteed RARE off the THRONVS Archon): RULED but
+    // not wired -- waits on the loot-table task, where a dropped bank rolls
+    // a band, then amps within it, stored on the item instance.
+    ampBands: { COMMON: [3, 4], MAGIC: [5, 6], RARE: [7, 8] },
+    strain: { burnAt: 10 },
+
     // ------------------------------------------------------------- banks
     // A DATA BANK *is* an operation: the archive that carries it. Daemons run
     // whatever banks are seated in their two slots; the OPERATOR's PERCVSSIO
@@ -190,15 +207,15 @@
     // `type` locks a bank to daemons of that alchemical type. `bays` is how
     // many FLUX cartridges it seats: workhorse ops get 2, spike ops get 1.
     banks: {
-      PERCVSSIO: { type: '\u2014',  bays: 1, intrinsic: true },
-      ABRASIO:   { type: 'SAL',     bays: 2 },
-      CONCRETIO: { type: 'SAL',     bays: 1 },
-      FVLGVR:    { type: 'SVLPHVR', bays: 2 },
-      IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
-      LORICA:    { type: 'SAL',     bays: 1 },
-      PERMVTO:   { type: 'MERCVRIVS', bays: 1 },
-      IMPVLSVS:  { type: 'MERCVRIVS', bays: 2 },
-      VAPOR:     { type: 'SVLPHVR', bays: 2 },
+      PERCVSSIO: { type: '\u2014',  bays: 1, amps: 3, intrinsic: true },
+      ABRASIO:   { type: 'SAL',     bays: 2, amps: 4 },
+      CONCRETIO: { type: 'SAL',     bays: 1, amps: 3 },
+      FVLGVR:    { type: 'SVLPHVR', bays: 2, amps: 4 },
+      IMMOLATIO: { type: 'SVLPHVR', bays: 1, amps: 3 },
+      LORICA:    { type: 'SAL',     bays: 1, amps: 3 },
+      PERMVTO:   { type: 'MERCVRIVS', bays: 1, amps: 3 },
+      IMPVLSVS:  { type: 'MERCVRIVS', bays: 2, amps: 4 },
+      VAPOR:     { type: 'SVLPHVR', bays: 2, amps: 4 },
     },
     defaultLoadout: {
       OPERATOR: ['PERCVSSIO'],
@@ -210,14 +227,16 @@
     // ------------------------------------------------------------- fluxes
     // A FLUX seats into a bank bay and modifies that operation only.
     // Effects are resolved by fold() in src/game.js. `weight` drives the
-    // FLUX CELL drop sub-roll. FVLMINANS is deliberately greedy: power the
-    // body pays for. Strain will formalise this post-jam.
+    // FLUX CELL drop sub-roll. `draw` is the amps a cell pulls per cast
+    // (see the power note above banks). FVLMINANS is deliberately greedy:
+    // power the body pays for -- and the coil pays for: 4A overdraws any
+    // stock 3A bank, strain burns it out after ~10 forced casts.
     fluxes: {
-      VITRIOL:   { weight: 30, dmgBonus: 2,               note: '+2 damage.' },
-      NITRVM:    { weight: 22, pnDelta: -1,               note: '\u22121 PNEUMA cost. Floor 1.' },
-      VIVVM:     { weight: 20, rangeDelta: 1,             note: '+1 range.' },
-      ADAMANS:   { weight: 18, minDmg: 3,                 note: 'Minimum damage 3.' },
-      FVLMINANS: { weight: 10, dmgBonus: 5, vitaeCost: 2, note: '+5 damage. \u22122 VITAE per cast.' },
+      VITRIOL:   { weight: 30, draw: 2, dmgBonus: 2,               note: '+2 damage.' },
+      NITRVM:    { weight: 22, draw: 1, pnDelta: -1,               note: '\u22121 PNEUMA cost. Floor 1.' },
+      VIVVM:     { weight: 20, draw: 2, rangeDelta: 1,             note: '+1 range.' },
+      ADAMANS:   { weight: 18, draw: 2, minDmg: 3,                 note: 'Minimum damage 3.' },
+      FVLMINANS: { weight: 10, draw: 4, dmgBonus: 5, vitaeCost: 2, note: '+5 damage. \u22122 VITAE per cast.' },
     },
   };
 })();
