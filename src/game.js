@@ -380,21 +380,50 @@
     return { kind: 'FLUX', flux, label: flux, sprite: 'flux', rarity: 'UNCOMMON' };
   }
 
-  // Exactly one drop per severed enemy, rolled off the weighted table.
-  function rollDrop(foe) {
-    const table = B.drops.table;
-    const total = table.reduce((s, e) => s + e.weight, 0);
-    let n = Math.random() * total;
-    const pick = table.find(e => (n -= e.weight) < 0) || table[0];
-    const d = pick.kind === 'ARGENT'
-      ? { id: dropSeq++, ...pick, c: foe.c, r: foe.r }
-      : { id: dropSeq++, ...rollItem(pick.kind), c: foe.c, r: foe.r };
-    if (d.kind === 'ARGENT') {
-      const { argentMin: lo, argentMax: hi } = B.drops;
-      d.amount = lo + Math.floor(Math.random() * (hi - lo + 1));
+  // One severed enemy's payout under the hybrid model (RULED): ARGENT
+  // always, plus one item roll at drops.itemChance off the weighted items
+  // table. Pure -- callers decide whether it lands as a floor drop
+  // (crawl chip-kill) or bag credit (fight-end spoils).
+  function rollKill() {
+    const D = B.drops;
+    const argent = D.argentMin + Math.floor(Math.random() * (D.argentMax - D.argentMin + 1));
+    let item = null;
+    if (Math.random() < D.itemChance) {
+      const total = D.items.reduce((s, e) => s + e.weight, 0);
+      let n = Math.random() * total;
+      const pick = D.items.find(e => (n -= e.weight) < 0) || D.items[0];
+      item = rollItem(pick.kind);
     }
-    state.drops.push(d);
-    log(`${foe.kind} LEAVES ${d.amount ? d.amount + ' ' : ''}${d.label}.`, 'good');
+    return { argent, item };
+  }
+
+  // Crawl chip-kills (rare ranged severs outside the chamber): the same
+  // hybrid roll, paid as floor drops on the corpse tile. Chamber kills are
+  // rolled at fight end instead -- see the rollLoot seam in enterCombat.
+  function rollDrop(foe) {
+    const { argent, item } = rollKill();
+    state.drops.push({ id: dropSeq++, kind: 'ARGENT', label: 'ARGENT', sprite: 'argent',
+                       rarity: 'COMMON', amount: argent, c: foe.c, r: foe.r });
+    if (item) state.drops.push({ id: dropSeq++, ...item, c: foe.c, r: foe.r });
+    log(`${foe.kind} LEAVES ${argent} ARGENT${item ? ' + ' + item.label : ''}.`, 'good');
+  }
+
+  // Present one rolled item as a spoils CARD for the victory screen. The
+  // chamber renders name/kind/note/art verbatim, so stats text stays
+  // single-sourced from the bible here on the crawl side. Sprites are <g>
+  // fragments for the board SVG, so cards wrap them into standalone <svg>.
+  const spoilArt = frag =>
+    '<svg viewBox="0 0 64 64" width="44" height="44">' + frag + '</svg>';
+  function spoilCard(it) {
+    if (it.kind === 'DATA') {
+      const bk = B.banks[it.bank] || {};
+      return { name: it.bank, kind: 'DATA BANK', rarity: it.rarity, art: spoilArt(S.databank()),
+               note: ((B.operations[it.bank] || {}).note || '') + ' ' + (bk.bays || 1) +
+                     (bk.bays > 1 ? ' BAYS' : ' BAY') + ' \u00b7 ' + (bk.amps || 0) + 'A.' };
+    }
+    const f = B.fluxes[it.flux] || {};
+    return { name: it.flux, kind: 'FLVX CELL', rarity: it.rarity, art: spoilArt(S.flux()),
+             note: (f.note || '') + ' DRAW ' + (f.draw || 0) + 'A.' };
   }
 
   function collectDrops() {
@@ -1079,7 +1108,7 @@
     const argent = lo + Math.floor(Math.random() * (hi - lo + 1));
     state.bag.argent += argent;
 
-    const pool = B.drops.table.filter(e => e.kind !== 'ARGENT');
+    const pool = B.drops.items;
     const total = pool.reduce((s, e) => s + e.weight, 0);
     let n = Math.random() * total;
     const pick = rollItem((pool.find(e => (n -= e.weight) < 0) || pool[0]).kind);
@@ -2346,6 +2375,26 @@
       mods: Object.keys(mods).length ? mods : undefined,
       archon: opts.archon,                    // exit-ambush apparition flag
       items: { AMPVLLA: state.ampoules },
+      // Fight-end loot seam (RULED: rolls are per-kill, the SCREEN is per
+      // fight). The chamber calls this on victory with its severed count --
+      // srcId-less reinforcements included. Rolls + credits the bag
+      // immediately and returns the lines the over screen prints.
+      rollLoot(n) {
+        const haul = { argent: 0, argentArt: spoilArt(S.argent()), items: [] };
+        for (let i = 0; i < (n | 0); i++) {
+          const k = rollKill();
+          haul.argent += k.argent;
+          if (!k.item) continue;
+          state.bag.items.push({ kind: k.item.kind, label: k.item.label, flux: k.item.flux,
+                                 bank: k.item.bank, sprite: k.item.sprite, rarity: k.item.rarity });
+          haul.items.push(spoilCard(k.item));
+        }
+        state.bag.argent += haul.argent;
+        if (haul.argent || haul.items.length)
+          log('SPOILS: ' + [haul.argent + ' ARGENT']
+            .concat(haul.items.map(t => t.name)).join(', ') + '.', 'good');
+        return haul;
+      },
       foes: foes.length ? foes : undefined,   // debug entry keeps the FIGHTS spec
       onEnd(res) {
         state.scene = 'crawl';
@@ -2356,14 +2405,14 @@
           m.hp = Math.max(0, Math.min(m.vitae, Math.round(r.frac * m.vitae)));
         }
         if (res.won) {
-          // Victory severs the whole engaged pack on the crawl floor, through
-          // the normal path so drops and CLEARED detection still fire.
+          // Victory severs the whole engaged pack on the crawl floor so
+          // CLEARED detection still fires. No floor drops here: the spoils
+          // were rolled + credited by rollLoot on the victory screen.
           for (const f of engaged) {
             if (f.hp <= 0) continue;
             f.hp = 0;
             log(`${f.kind} IS SEVERED IN THE CHAMBER.`, 'good');
             float(f.c, f.r, 'SEVERED', 'f-sever');
-            rollDrop(f);
           }
           log('THE CHAMBER IS PVRGED. THE CRAWL RESVMES.', 'good');
         } else {
@@ -3138,7 +3187,7 @@
   window.__DW = { state, chooseOp, clickTile, confirmTarget, cancel, passOrHold,
                   moveInput, openAct, draw, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, fanEl, interactable, answerExit, floatsEl,
                   lead, memberAt, foeTarget, validTargets, resolveRound,
-                  previewIntent, canAct, actionsLeft, stepsMax, applyOp,
+                  previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
                   hermitSacrifice, takeCube, enterCombat, debugSacrifice };
 

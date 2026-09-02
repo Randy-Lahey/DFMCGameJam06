@@ -64,25 +64,30 @@
                   aura: { steps: 1 } },
     },
 
-    // Drops. Exactly one per severed enemy, rolled off this weighted table.
-    // ARGENT is the currency and stacks as a number; FLUX and DATA are discrete
-    // items so the inventory grid has something to lay out. `rarity` is shown
-    // on the pickup floater and, later, in the inventory.
+    // Drops. FLAT TABLE for the whole NIGREDO face: every tile rolls the
+    // same odds. JAM RULING -- per-tile weighting is deferred post-jam.
+    // Hybrid model: every severed enemy pays ARGENT, then ONE item roll at
+    // `itemChance`, weighted off `items`. REAGENT enters the item table only
+    // once tile affixes exist (until then it has nothing to act on).
+    // Chamber kills -- including srcId-less reinforcements: the player
+    // fought three bodies, three bodies pay -- are rolled at fight end and
+    // presented on the victory screen (cfg.rollLoot seam). Rare crawl
+    // chip-kills still pay as floor drops through the same rolls.
     drops: {
-      table: [
-        { kind: 'ARGENT', label: 'ARGENT',    sprite: 'argent',   weight: 72, rarity: 'COMMON' },
-        { kind: 'FLUX',   label: 'FLUX CELL', sprite: 'flux',     weight: 20, rarity: 'UNCOMMON' },
-        { kind: 'DATA',   label: 'DATA BANK', sprite: 'databank', weight:  8, rarity: 'RARE' },
-      ],
       argentMin: 4,
       argentMax: 12,
+      itemChance: 0.5,
+      items: [
+        { kind: 'FLUX', label: 'FLUX CELL', sprite: 'flux',     weight: 60 },
+        { kind: 'DATA', label: 'DATA BANK', sprite: 'databank', weight: 30 },
+      ],
       // DATA BANK sub-roll pool. Found banks leave the pool permanently
       // (no duplicate drops); once empty, a DATA roll pays out as FLUX.
       bankPool: ['LORICA', 'VAPOR'],
     },
 
     // Opening a cache costs a turn and always pays: argent plus one guaranteed
-    // non-argent item, rolled off the drop table's FLUX/DATA weights.
+    // item, rolled off the drops.items weights.
     cache: {
       argentMin: 10,
       argentMax: 22,

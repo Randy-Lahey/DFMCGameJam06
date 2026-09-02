@@ -74,7 +74,7 @@ for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
-const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit } = window.__DW;
+const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, rollKill } = window.__DW;
 
 // The run now starts SOLO (tutorial); these assertions were written for the
 // full 4-member board. Recruit everyone and reload floor 01 first.
@@ -135,6 +135,23 @@ ok(B.fluxes.FVLMINANS.draw === 4, 'FVLMINANS pulls 4A (the greedy coil)');
 ok(Object.values(B.banks).every(k => k.amps >= B.ampBands.COMMON[0] && k.amps <= B.ampBands.COMMON[1]),
    'every loadout bank sits in the COMMON amp band');
 ok(B.strain.burnAt === 10, 'strain burns a bank offline at 10');
+
+// ------------------------------------------------------- hybrid drop table
+ok(B.drops.itemChance === 0.5 && !B.drops.table, 'hybrid table: itemChance 0.5, old single-roll table gone');
+ok(B.drops.items.length === 2 && B.drops.items.every(e => e.kind !== 'ARGENT'),
+   'items table is FLUX/DATA only -- ARGENT is guaranteed, not rolled');
+ok(B.drops.items[0].weight === 60 && B.drops.items[1].weight === 30,
+   'item weights are the ruled 60/30 (reagent 10 gated behind affixes)');
+for (let i = 0; i < 200; i++) {
+  const k = rollKill();
+  if (!(k.argent >= B.drops.argentMin && k.argent <= B.drops.argentMax)) {
+    ok(false, 'rollKill argent within min/max'); break;
+  }
+  if (k.item && k.item.kind !== 'FLUX' && k.item.kind !== 'DATA') {
+    ok(false, 'rollKill item kinds are FLUX/DATA'); break;
+  }
+  if (i === 199) ok(true, 'rollKill: 200 rolls in range, item kinds sane');
+}
 
 ok(B.drops.bankPool.length === 2 &&
    B.drops.bankPool.every(b => B.banks[b] && !Object.values(B.defaultLoadout).flat().includes(b)),
@@ -203,6 +220,19 @@ window.__DW.enterCombat([seamFoe()]);
 ok(seamCfg && seamCfg.mods && seamCfg.mods.op &&
    seamCfg.mods.op.PERCVSSIO && seamCfg.mods.op.PERCVSSIO.rng === 1,
    'seated VIVVM crosses the seam as a +1 range delta on op/PERCVSSIO');
+// Fight-end spoils seam: rollLoot crosses, credits the bag, returns a haul
+// of finished display cards the chamber renders verbatim.
+ok(typeof seamCfg.rollLoot === 'function', 'rollLoot function crosses the seam');
+{
+  const a0 = state.bag.argent, i0 = state.bag.items.length;
+  const h = seamCfg.rollLoot(3);
+  ok(state.bag.argent === a0 + h.argent, 'rollLoot(3) credits exactly the haul argent');
+  ok(h.argent >= 3 * B.drops.argentMin && h.argent <= 3 * B.drops.argentMax,
+     'haul argent totals three per-kill rolls');
+  ok(state.bag.items.length - i0 === h.items.length, 'one bag item per spoils card');
+  ok(h.items.every(t => t.name && t.kind && t.note && t.art) && /svg/.test(h.argentArt),
+     'cards carry name/kind/note/art; argent art is real sprite svg');
+}
 const seamMods = seamCfg.mods;
 state.loadout.OPERATOR[0].fluxes[0] = null;
 seamCfg = null;
