@@ -17,10 +17,39 @@ const DWC_SAY_CSS = '#dwc-root .fx-say{font-weight:bold;font-size:16px;paint-ord
   +'82%{opacity:1;}100%{opacity:0;transform:translateY(-10px);}}'
   +'#dwc-root .fx-blink{animation:dwc-blink 1.1s ease-in-out infinite;}'
   +'@keyframes dwc-blink{0%{opacity:.15;}50%{opacity:1;}100%{opacity:.15;}}';
+// Spoils screen (Transistor-style tile row + details, in house palette):
+// gold frames by default, teal-dim UNCOMMON, glowing gold RARE; the selected
+// tile wears cyan brackets via outline; details panel sits on a teal rule.
+// Spoils screen: every card visible at once as a LIST (ruling: no
+// tap-to-inspect -- the player reads the whole haul in one glance).
+// Icon plaque wears the rarity frame: dim-gold COMMON, teal UNCOMMON,
+// glowing gold RARE. Own style element: the legacy DWC_CSS string ends in
+// a mangled dangling brace and error-recovery there eats appended rules.
+const DWC_SPL_CSS = '#dwc-root #dwc-over{overflow-y:auto;padding:24px 0;}'
+  +'#dwc-root .spl{width:min(92vw,520px);margin-top:2px;}'
+  +'#dwc-root .spl-hd{color:var(--gold);letter-spacing:3px;font-size:12px;text-align:left;'
+  +'border-bottom:1px solid var(--tealdim);padding:0 0 6px 2px;margin-bottom:10px;}'
+  +'#dwc-root .spl-hd::before{content:"";display:inline-block;width:4px;height:10px;'
+  +'background:var(--gold);margin-right:8px;}'
+  +'#dwc-root .spl-list{display:flex;flex-direction:column;gap:8px;text-align:left;}'
+  +'#dwc-root .spl-it{display:flex;gap:12px;align-items:center;background:#0a1214;'
+  +'border:1px solid var(--line);border-radius:3px;padding:6px 10px;}'
+  +'#dwc-root .spl-it .ic{width:52px;height:52px;flex:0 0 auto;display:flex;'
+  +'align-items:center;justify-content:center;background:#05080a;'
+  +'border:1.5px solid #6b5322;border-radius:3px;}'
+  +'#dwc-root .spl-it.r-uncommon .ic{border-color:var(--teal);}'
+  +'#dwc-root .spl-it.r-rare .ic{border-color:var(--gold);box-shadow:0 0 8px #d9a44155;}'
+  +'#dwc-root .spl-it b{color:var(--white);letter-spacing:1px;font-size:15px;}'
+  +'#dwc-root .spl-it .k{color:var(--gold);font-size:10px;letter-spacing:2px;margin-left:8px;}'
+  +'#dwc-root .spl-it p{margin:2px 0 0;color:var(--dim);line-height:1.4;}';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
-  const st=document.createElement("style"); st.textContent=DWC_CSS+DWC_SAY_CSS; document.head.appendChild(st);
+  const st=document.createElement("style"); st.textContent=DWC_CSS+DWC_SAY_CSS;
+  // Spoils CSS gets its OWN style element: DWC_CSS ends with a mangled
+  // dangling brace, and CSS error-recovery inside that sheet can swallow
+  // rules appended after it. A separate element is a fresh parser.
+  const st2=document.createElement("style"); st2.textContent=DWC_SPL_CSS; document.head.appendChild(st2); document.head.appendChild(st);
   root=document.createElement("div"); root.id="dwc-root"; root.innerHTML=DWC_HTML;
   root.style.display="none"; document.body.appendChild(root);
   initLogic();
@@ -319,10 +348,34 @@ function setupFight(n){
 function endRun(win,msg){
   state.phase="over";
   document.getElementById("dwc-overmsg").textContent=msg;
-  document.getElementById("dwc-overinfo").innerHTML=
-    (win&&cfg&&cfg.archon)
+  let info=(win&&cfg&&cfg.archon)
       ? 'He plants himself in the breach. Your daemon reboots in your grip.<br>Behind you, the corridor \u2014 RVN.'
       : (win?"The chamber falls silent.":"You are dragged back to the corridor.");
+  // SPOILS (RULED): per-kill rolls, presented per fight, right here on the
+  // victory screen -- as a LIST: every card fully readable at once, icon
+  // plaque + name + kind + note per row, no tap-to-inspect. The crawl owns
+  // the table, the bag, AND the card text (rollLoot returns finished
+  // cards); the chamber only renders. Every severed chamber foe pays,
+  // reinforcements included. The scripted sacrifice beat is narrative, not
+  // economy -- no spoils there.
+  if(win&&!(cfg&&cfg.archon)&&cfg&&cfg.rollLoot){
+    const dead=state.units.filter(u=>u.side==="foe"&&!u.alive).length;
+    const haul=cfg.rollLoot(dead);
+    if(haul&&(haul.argent||haul.items.length)){
+      const cards=[{name:haul.argent+' ARGENT',kind:'CVRRENCY',rarity:'COMMON',
+                    art:haul.argentArt||'',
+                    note:'Coin of the deep. Spend it at THE REFVGE.'}]
+        .concat(haul.items);
+      info+='<div class="spl"><div class="spl-hd">SPOILS \u00b7 '+dead+' SEVERED</div>'
+        +'<div class="spl-list">'
+        +cards.map(t=>'<div class="spl-it r-'+String(t.rarity||'COMMON').toLowerCase()+'">'
+          +'<span class="ic">'+(t.art||'')+'</span>'
+          +'<div><b>'+t.name+'</b><span class="k">'+t.kind+'</span>'
+          +'<p>'+t.note+'</p></div></div>').join('')
+        +'</div></div>';
+    }
+  }
+  document.getElementById("dwc-overinfo").innerHTML=info;
   const b=document.getElementById("dwc-overbtn");
   b.textContent=(win&&cfg&&cfg.archon)?"FLEE":"RETVRN"; b.onclick=()=>finish(win);
   document.getElementById("dwc-over").style.display="flex";
