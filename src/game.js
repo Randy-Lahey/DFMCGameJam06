@@ -2385,7 +2385,12 @@
         if (op.minDmg) d.min = op.minDmg;
         const vit = (op.vitaeCost || 0) - (base.vitaeCost || 0);
         if (vit) d.vit = vit;
-        if (Object.keys(d).length) (mods[cid] = mods[cid] || {})[slot.bank] = d;
+        // Power ride-along: EVERY seated bank crosses with its rating and
+        // its total flux draw so the chamber can run strain (combat-only).
+        d.amps = (B.banks[slot.bank] || {}).amps;
+        d.draw = (slot.fluxes || []).reduce(
+          (t, f) => t + (f && B.fluxes[f] ? (B.fluxes[f].draw || 0) : 0), 0);
+        (mods[cid] = mods[cid] || {})[slot.bank] = d;
       }
     }
     // Floor 2+ chambers field 2-3 foes. The crawl pack is honest -- only
@@ -2858,11 +2863,18 @@
   const delta = (n) => n > 0 ? `  (+${n})` : n < 0 ? `  (${n})` : '';
   const row = (k, v, dim) => `<div><dt>${k}</dt><dd${dim ? ' class="dim"' : ''}>${v}</dd></div>`;
 
-  // Three spec-plate columns for one bank, seated or loose. LOAD and STRAIN
-  // are reserved for the socket system and read as sealed until it lands.
+  // Three spec-plate columns for one bank, seated or loose. LOAD is live:
+  // total seated draw over the bank's amp rating, blood when overdrawn.
+  // STRAIN is live in the combat chamber only; out here it always reads 0.
   function bankSpec(bank, fluxes, seated) {
     const base = B.operations[bank];
     const op = fold({ bank, fluxes: fluxes || [] });
+    const amps = B.banks[bank].amps || 0;
+    const draw = (fluxes || []).filter(Boolean)
+      .reduce((t, f) => t + ((B.fluxes[f] || {}).draw || 0), 0);
+    const load = draw > amps
+      ? `<b style="color:var(--blood)">${draw}A / ${amps}A</b>`
+      : `${draw}A / ${amps}A`;
     const dmg = op.mult
       ? `ATK \u00d7${op.mult}${op.dmgBonus ? ' +' + op.dmgBonus : ''}`
       : op.def ? `DEF +${op.def}` : '\u2014';
@@ -2876,8 +2888,8 @@
       row('WIRING', 'PARALLEL') +
       row('SEATED', seatedTxt) +
       row('COOLDOWN', op.cd ? op.cd + ' TVRNS' : '\u2014'),
-      row('LOAD', '\u2014', 1) +
-      row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('LOAD', load, draw > amps ? 0 : 1) +
+      row('STRAIN', '0 / ' + B.strain.burnAt, 1) +
       row('PLVG', seated ? 'HEX \u00b7 MATED' : 'HEX \u00b7 OPEN') +
       row('SELF COST', op.vitaeCost ? op.vitaeCost + ' VITAE' : '\u2014'),
     ];
@@ -2889,10 +2901,10 @@
                  f.vitaeCost && `+${f.vitaeCost} VITAE COST`].filter(Boolean);
     return [
       row('KIND', 'FLVX CELL') + row('EFFECT', eff[0] || '\u2014') +
-      row('RIDER', eff[1] || '\u2014') + row('DRAW WEIGHT', f.weight),
+      row('RIDER', eff[1] || '\u2014') + row('DRAW', (f.draw || 0) + 'A'),
       row('SEATS IN', 'ANY BAY') + row('WIRING', 'PARALLEL') +
       row('TYPE LOCK', 'NONE') + row('RARITY', rarityOf({ kind: 'FLUX', flux: id })),
-      row('LOAD', '\u2014', 1) + row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('LOAD', (f.draw || 0) + 'A PER CAST', 1) + row('STRAIN', 'SEE BANK', 1) +
       row('PLVG', 'CONTACT \u00b7 OPEN') + row('STACKS', 'ONE PER BAY'),
     ];
   }

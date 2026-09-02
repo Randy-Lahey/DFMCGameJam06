@@ -56,6 +56,9 @@ const inB = (x,y)=>x>=0&&x<W&&y>=0&&y<H;
 // Party ops mirror data/balance.js operations + defaultLoadout (main).
 // dmg = round(mult * caster ATK) ±1 − target DEF. Each bank casts once per
 // turn (Dofus-style cap; main's depleting-PNEUMA model doesn't need one).
+// Amperage burn threshold. Single-sourced from data/balance.js when the
+// crawl loads it; the fallback only serves headless combat tests.
+const BURN_AT=(window.BALANCE&&window.BALANCE.strain&&window.BALANCE.strain.burnAt)||10;
 const BANKS = {
   PERCVSSIO:{name:"PERCVSSIO",kind:"strike",cost:4,mult:1,flat:1,min:1,max:1,los:true,repeat:true,
     desc:"Melee. One enemy, adjacent."},
@@ -75,7 +78,7 @@ const BANKS = {
   IACVLVM:{name:"IACVLVM",kind:"strike",cost:3,mult:1,min:2,max:4,los:true,desc:"foe shot"},
 };
 
-function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,stun:0,x:-1,y:-1,cds:{},cast:{}},o); }
+function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,stun:0,x:-1,y:-1,cds:{},cast:{},strain:{},burnt:{}},o); }
 // Guest allies (FFT-style): party-side for targeting and win/loss, but
 // control:"ai" -- the player never selects them, their turn runs the same
 // brain as the foes with the target side flipped. guest:true keeps them out
@@ -214,10 +217,13 @@ function bankFor(u,id){
   if(m.pn)  o.cost=Math.max(1,o.cost+m.pn);
   if(m.vit) o.selfVitae=(o.selfVitae||0)+m.vit;
   if(m.min) o.minDmg=m.min;
+  if(m.amps!=null) o.amps=m.amps;   // amperage rating (strain gate)
+  if(m.draw!=null) o.draw=m.draw;   // total seated flux draw
   return o;
 }
 function whyNot(u,id){
   const bk=bankFor(u,id);
+  if(u.burnt&&u.burnt[id]) return bk.name+" IS BVRNT \u2014 OVERDRAWN THIS FIGHT";
   if(u.cds[id]>0) return bk.name+" RECHARGES IN "+u.cds[id]+" TVRN"+(u.cds[id]>1?"S":"");
   if(!bk.repeat&&u.cast[id]) return bk.name+" IS SPENT \u2014 ONE CAST PER TVRN";
   if(u.pneuma<bk.cost) return "NEED "+bk.cost+"\u25c6 PNEUMA \u2014 "+u.pneuma+"\u25c6 LEFT";
@@ -235,7 +241,7 @@ function canCast(u,id){
   const bk=bankFor(u,id);
   // repeat banks are pneuma-limited, not once-per-turn: PERCVSSIO costs 4 of
   // the OPERATOR's 10, so he swings twice a turn with 2 left for an ampoule.
-  return u.pneuma>=bk.cost && !(u.cds[id]>0) && (bk.repeat?true:!u.cast[id]);
+  return u.pneuma>=bk.cost && !(u.cds[id]>0) && !(u.burnt&&u.burnt[id]) && (bk.repeat?true:!u.cast[id]);
 }
 function rangeCells(u,bank){
   const out=[];
@@ -273,7 +279,7 @@ function setupFight(n){
     p.mods=(cfg&&cfg.mods&&cfg.mods[p.id])||null;   // crawl flux riders, per fight
     if(!p.alive){ p.alive=true; p.vitae=Math.round(p.maxVitae*0.5); } // dead daemons reboot at 50%
     if(n===3){ p.vitae=p.maxVitae; p.alive=true; }                    // full restore before the Archon
-    p.x=-1; p.y=-1; p.cds={}; p.cast={};
+    p.x=-1; p.y=-1; p.cds={}; p.cast={}; p.strain={}; p.burnt={};   // strain clears at fight end
   }
   // The crawl owns the satchel: whatever it sends is the fight's stock,
   // clamped to the belt. No cfg.items (debug direct start) keeps the local
@@ -492,6 +498,17 @@ function castAt(u,bank,x,y){
   u.pneuma-=bank.cost;
   if(!bank.repeat) u.cast[bank.name]=1;
   if(bank.cd) u.cds[bank.name]=bank.cd;
+  // Amperage strain (combat-only). Overdraw taxes PER CAST: strain grows by
+  // (draw - amps). The cast that reaches BURN_AT still resolves -- the
+  // punishment never eats the payoff mid-swing -- then the bank burns
+  // offline for the rest of the fight (see the burn block at the bottom).
+  let willBurn=false;
+  if(bank.amps!=null&&(bank.draw||0)>bank.amps){
+    const od=(bank.draw||0)-bank.amps;
+    u.strain[bank.name]=(u.strain[bank.name]||0)+od;
+    fxText(u.x,u.y,"STRAIN +"+od,"var(--ox)");
+    willBurn=!u.burnt[bank.name]&&u.strain[bank.name]>=BURN_AT;
+  }
   if(bank.kind==="sweep"){
     for(const [ax,ay] of cross(u.x,u.y).slice(1)){ // 4 neighbors, not self
       const t=unitAt(ax,ay);
@@ -537,6 +554,7 @@ function castAt(u,bank,x,y){
       if(u.vitae<=0){ u.alive=false; u.vitae=0; }
     }
   }
+  if(willBurn){ u.burnt[bank.name]=1; fxText(u.x,u.y,bank.name+" BVRNT","#e26a7c"); }
   checkOver();
 }
 const SATCHEL_MAX=3;
@@ -823,9 +841,11 @@ function drawHud(){
       const off=!canCast(u,id);
       b.className=(state.sel===id?"sel":"")+(off?" off":"");
       const rng=bk.kind==="sweep"?"self":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max)+" range";
-      const st=u.cds[id]>0?` · RECHARGE ${u.cds[id]}`
+      const st=u.burnt&&u.burnt[id]?" · BVRNT"
+        :u.cds[id]>0?` · RECHARGE ${u.cds[id]}`
         :(!bk.repeat&&u.cast[id]?" · SPENT THIS TVRN"
-        :(u.pneuma<bk.cost?` · NEED ${bk.cost}\u25c6`:""));
+        :(u.pneuma<bk.cost?` · NEED ${bk.cost}\u25c6`
+        :(u.strain&&u.strain[id]?` · STRAIN ${u.strain[id]}/${BURN_AT}`:"")));
       b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${rng}${st}</span>`;
       b.title=bk.desc;
       b.onclick=()=>{
@@ -953,7 +973,7 @@ apiStart=function(){
 };
 // Headless-test seam: live references into the closure so node tests can
 // drive placement/rounds. The game itself never reads this.
-window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
+window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, canCast, whyNot, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
 }
 window.DW_COMBAT={
   start(config){
