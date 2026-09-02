@@ -54,6 +54,7 @@ global.setTimeout = fn => { fn(); return 0; };   // whole script runs synchronou
 global.clearTimeout = () => {};
 global.innerWidth = 1280; global.innerHeight = 800;
 
+new Function(fs.readFileSync(path.join(__dirname, '..', 'src', 'icons.js'), 'utf8'))();
 new Function(fs.readFileSync(path.join(__dirname, '..', 'src', 'combat.js'), 'utf8'))();
 
 let pass = 0, fail = 0;

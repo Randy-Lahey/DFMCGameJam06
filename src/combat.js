@@ -7,49 +7,816 @@
      config.fight : FIGHTS spec index when no foes given (default 1)
      config.onEnd : function({won, party:[{id,frac}], foes:[{srcId,frac}]}) after RETVRN */
 (function(){
-const DWC_CSS = '#dwc-root{\n    --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;\n    --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;\n  }\n#dwc-root{position:fixed;inset:0;z-index:900;background:var(--bg);color:var(--white);\n    font:14px/1.35 "Courier New",monospace; -webkit-user-select:none;user-select:none;\n    touch-action:manipulation; overflow:hidden;}\n#dwc-root #dwc-wrap{display:flex;flex-direction:column;height:100%;}\n#dwc-root /* timeline strip */\n  #dwc-tl{display:flex;gap:6px;padding:8px 10px;align-items:center;overflow-x:auto;flex:0 0 auto;}\n#dwc-root .chip{width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;\n    border:1px solid var(--tealdim);border-radius:4px;font-weight:bold;font-size:16px;\n    background:#0a1214;position:relative;opacity:.55;}\n#dwc-root .chip.party{color:var(--gold);border-color:#6b5322;}\n#dwc-root .chip.foe{color:#e26a7c;border-color:#5c1220;}\n#dwc-root .chip.now{opacity:1;box-shadow:0 0 8px var(--teal);border-color:var(--teal);}\n#dwc-root .chip .hp{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:#222;}\n#dwc-root .chip .hp i{display:block;height:100%;background:var(--teal);}\n#dwc-root #dwc-board{flex:1 1 auto;min-height:0;}\n#dwc-root #dwc-board svg{width:100%;height:100%;display:block;}\n#dwc-root /* HUD */\n  #dwc-hud{flex:0 0 auto;padding:8px 10px;border-top:1px solid var(--line);\n    display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:56px;}\n#dwc-root #dwc-stat{flex:1 1 100%;color:var(--dim);letter-spacing:.5px;}\n#dwc-root #dwc-stat b{color:var(--white);}\n#dwc-root button{background:#0a1214;color:var(--white);border:1px solid var(--tealdim);\n    border-radius:4px;padding:8px 12px;font:inherit;letter-spacing:1px;cursor:pointer;}\n#dwc-root button:disabled{opacity:.35;cursor:default;}\n#dwc-root button.off{opacity:.35;cursor:default;}\n#dwc-root #dwc-stat .warn{color:#e26a7c;letter-spacing:.5px;}\n#dwc-root button.sel{border-color:var(--gold);color:var(--gold);box-shadow:0 0 6px #d9a44166;}\n#dwc-root button.end{border-color:var(--ox);color:#e26a7c;margin-left:auto;}\n#dwc-root button.item{border-color:#7a2a20;}\n#dwc-root button.item.sel{border-color:#D6402A;color:#e28a76;box-shadow:0 0 6px #d6402a66;}\n#dwc-root button.item svg{width:11px;height:15px;vertical-align:-3px;margin-right:1px;}\n#dwc-root #dwc-engage{position:fixed;left:50%;bottom:30%;transform:translateX(-50%);z-index:20;padding:16px 44px;font-size:20px;font-weight:bold;letter-spacing:4px;color:#3dffd0;border:2px solid #3dffd0;background:#06201cee;border-radius:4px;box-shadow:0 0 14px #3dffd0aa, inset 0 0 10px #3dffd033;text-shadow:0 0 8px #3dffd0;}\n#dwc-root #dwc-engage:disabled{color:var(--dim);border-color:var(--tealdim);background:#0a1214;box-shadow:none;text-shadow:none;opacity:.5;}\n#dwc-root .cost{color:var(--dim);font-size:11px;}\n#dwc-root /* overlay */\n  #dwc-over{position:fixed;inset:0;display:none;align-items:center;justify-content:center;\n    background:#05080ae6;flex-direction:column;gap:16px;z-index:9;}\n#dwc-root #dwc-over h1{font-size:28px;letter-spacing:6px;margin:0;color:var(--teal);}\n#dwc-root /* tiles */\n  .tile{fill:#0a1a18;fill-opacity:.42;stroke:#2f7a72;stroke-width:1;}\n#dwc-root .tile.hl-move{fill:#12503c;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-rng{fill:#4a1626;fill-opacity:.75;stroke:#d94a63;stroke-width:1.5;}\n#dwc-root .tile.hl-heal{fill:#0f3a2a;fill-opacity:.75;stroke:#3ecf95;stroke-width:1.5;}\n#dwc-root .tile.hl-place{fill:#3a3012;fill-opacity:.75;stroke:#d9a441;stroke-width:1.5;}\n#dwc-root .tile.hl-aoe{fill:#4a1a24;stroke:#9e1b2e;}\n#dwc-root .unit{transition:transform .18s ease;}\n#dwc-root .fx-dmg{font-weight:bold;font-size:19px;paint-order:stroke;stroke:#000;stroke-width:3px;\n    animation:dwc-rise .8s ease-out forwards;pointer-events:none;}\n@keyframes dwc-rise{from{opacity:1;}\n#dwc-root to{opacity:0;transform:translateY(-26px);}\n#dwc-root }{';
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo" style="color:var(--dim);text-align:center;line-height:1.7;"></div><button id="dwc-overbtn">RESTART</button></div>';
-// Script dialogue floats: fade in, HOLD readable, fade out. Duration is set
-// inline per node from fxText's life param.
-const DWC_SAY_CSS = '#dwc-root .fx-say{font-weight:bold;font-size:16px;paint-order:stroke;'
-  +'stroke:#000;stroke-width:3.5px;animation:dwc-say 3s ease-out forwards;pointer-events:none;}'
-  +'@keyframes dwc-say{0%{opacity:0;transform:translateY(6px);}8%{opacity:1;transform:translateY(0);}'
-  +'82%{opacity:1;}100%{opacity:0;transform:translateY(-10px);}}'
-  +'#dwc-root .fx-blink{animation:dwc-blink 1.1s ease-in-out infinite;}'
-  +'@keyframes dwc-blink{0%{opacity:.15;}50%{opacity:1;}100%{opacity:.15;}}';
-// Spoils screen (Transistor-style tile row + details, in house palette):
-// gold frames by default, teal-dim UNCOMMON, glowing gold RARE; the selected
-// tile wears cyan brackets via outline; details panel sits on a teal rule.
-// Spoils screen: every card visible at once as a LIST (ruling: no
-// tap-to-inspect -- the player reads the whole haul in one glance).
-// Icon plaque wears the rarity frame: dim-gold COMMON, teal UNCOMMON,
-// glowing gold RARE. Own style element: the legacy DWC_CSS string ends in
-// a mangled dangling brace and error-recovery there eats appended rules.
-const DWC_SPL_CSS = '#dwc-root #dwc-over{overflow-y:auto;padding:24px 0;}'
-  +'#dwc-root .spl{width:min(92vw,520px);margin-top:2px;}'
-  +'#dwc-root .spl-hd{color:var(--gold);letter-spacing:3px;font-size:12px;text-align:left;'
-  +'border-bottom:1px solid var(--tealdim);padding:0 0 6px 2px;margin-bottom:10px;}'
-  +'#dwc-root .spl-hd::before{content:"";display:inline-block;width:4px;height:10px;'
-  +'background:var(--gold);margin-right:8px;}'
-  +'#dwc-root .spl-list{display:flex;flex-direction:column;gap:8px;text-align:left;}'
-  +'#dwc-root .spl-it{display:flex;gap:12px;align-items:center;background:#0a1214;'
-  +'border:1px solid var(--line);border-radius:3px;padding:6px 10px;}'
-  +'#dwc-root .spl-it .ic{width:52px;height:52px;flex:0 0 auto;display:flex;'
-  +'align-items:center;justify-content:center;background:#05080a;'
-  +'border:1.5px solid #6b5322;border-radius:3px;}'
-  +'#dwc-root .spl-it.r-uncommon .ic{border-color:var(--teal);}'
-  +'#dwc-root .spl-it.r-rare .ic{border-color:var(--gold);box-shadow:0 0 8px #d9a44155;}'
-  +'#dwc-root .spl-it b{color:var(--white);letter-spacing:1px;font-size:15px;}'
-  +'#dwc-root .spl-it .k{color:var(--gold);font-size:10px;letter-spacing:2px;margin-left:8px;}'
-  +'#dwc-root .spl-it p{margin:2px 0 0;color:var(--dim);line-height:1.4;}';
+const DWC_CSS = `
+/* ============================================================================
+   DAEMONWARE  ::  COMBAT CHAMBER STYLESHEET
+   "PCB silkscreen meets occult HUD."  Void black, cyan circuitry, gold, oxblood.
+   ----------------------------------------------------------------------------
+   Everything is scoped under #dwc-root (the module mounts one div on body).
+   Only @keyframes and @media sit outside the scope -- they cannot be scoped.
+   Authored by hand: NO mechanical line-by-line prefixing (that is what broke
+   the old @keyframes dwc-rise).
+   Embedded as a JS template literal: contains no backticks and no dollar-brace.
+   Offline / file:// safe: system fonts only, no @import, no url() to the net.
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1. TOKENS
+   ========================================================================== */
+
+#dwc-root{
+  /* --- house palette (PRESERVED VERBATIM -- do not retune) -------------- */
+  --bg:#05080a; --line:#0d2b2e; --teal:#39c8c1; --tealdim:#1a5e5b;
+  --gold:#d9a441; --ox:#9e1b2e; --white:#cfe6e4; --dim:#5a7876;
+
+  /* --- palette extensions (all derived from the eight above) ------------ */
+  --teal-hi:#7ef2ea;      /* focus / live edge            */
+  --teal-ink:#0e2c2b;     /* teal wash on black           */
+  --gold-dim:#6b5322;     /* unlit gold frame (legacy)    */
+  --gold-ink:#2a2110;     /* gold wash                    */
+  --ox-hi:#e26a7c;        /* legible oxblood text         */
+  --ox-dim:#5c1220;       /* unlit oxblood frame          */
+  --ox-ink:#2a0d13;       /* oxblood wash                 */
+  --green:#3ecf95;        /* move / heal affirmative      */
+
+  /* --- surface elevations ----------------------------------------------- */
+  --surf-sunk:#020506;    /* recessed wells, scrollbar grooves              */
+  --surf-0:#05080a;       /* the void: page ground                          */
+  --surf-1:#080f11;       /* panel: hud, timeline strip                     */
+  --surf-2:#0a1214;       /* raised: buttons, chips, cards (legacy value)   */
+  --surf-3:#0e1a1d;       /* hover / active raised                          */
+  --scrim:#05080af2;      /* overlay scrim                                  */
+
+  /* --- borders ----------------------------------------------------------- */
+  --bd:#0d2b2e;           /* = --line, structural hairline                  */
+  --bd-soft:#0a1f21;      /* quieter divider                                */
+  --bd-live:#1a5e5b;      /* = --tealdim, interactive edge                  */
+  --bd-hot:#39c8c1;       /* = --teal, focused / current                    */
+  --bd-gold:#6b5322;
+  --bd-ox:#5c1220;
+  --hair:1px;
+
+  /* --- spacing scale (4px base) ------------------------------------------ */
+  --s0:2px; --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+
+  /* --- radii (PCB: tight, never pill) ------------------------------------ */
+  --r1:2px; --r2:3px; --r3:5px;
+
+  /* --- type -------------------------------------------------------------- */
+  --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+         "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
+  --fs-micro:9px;   /* badge text, silkscreen stencils */
+  --fs-xs:10px;     /* meta, hotkeys                   */
+  --fs-sm:11px;     /* stat line, chip meta            */
+  --fs-md:13px;     /* button names                    */
+  --fs-base:14px;   /* body                            */
+  --fs-lg:16px;     /* chip glyph, dialogue            */
+  --fs-xl:20px;     /* ENGAGE                          */
+  --fs-h1:28px;     /* overlay verdict                 */
+  --lh:1.35;
+  --ls-1:.5px; --ls-2:1px; --ls-3:2px; --ls-4:3px; --ls-6:6px;
+
+  /* --- controls ----------------------------------------------------------- */
+  --hit:44px;             /* minimum touch target                            */
+  --chip:44px;            /* timeline chip edge                              */
+  --op-w:196px;           /* ability button track width                      */
+
+  /* --- focus ring (keyboard only) ---------------------------------------- */
+  --focus:var(--teal-hi);
+  --focus-w:2px;
+  --focus-off:2px;
+
+  /* --- glow / shadow (used sparingly: no box-shadow soup) ----------------- */
+  --glow-teal:0 0 8px #39c8c159;
+  --glow-gold:0 0 8px #d9a44159;
+  --glow-ox:0 0 8px #9e1b2e66;
+  --sheen:inset 0 1px 0 #ffffff0a;     /* 1px top light: gives edges a bevel */
+  --lift:0 1px 0 #00000080;
+  --panel-lip:0 -1px 0 #39c8c114;      /* faint cyan lip above the hud       */
+
+  /* --- semantic ----------------------------------------------------------- */
+  --danger:var(--ox);     --danger-fg:var(--ox-hi);
+  --ok:var(--green);      --ok-fg:#7ee3b8;
+  --warn:var(--gold);     --warn-fg:#eec272;
+  --info:var(--teal);     --info-fg:var(--white);
+  --muted:var(--dim);
+
+  /* --- ability-button state colours --------------------------------------- */
+  --st-ready:var(--tealdim);   /* castable, unselected  */
+  --st-sel:var(--gold);        /* selected / armed      */
+  --st-off:#243b3a;            /* unavailable frame     */
+  --st-recharge:var(--teal);   /* cooling down          */
+  --st-spent:var(--dim);       /* used this turn        */
+  --st-burnt:var(--ox);        /* burnt out            */
+  --st-strain:var(--gold);     /* strain accumulating   */
+  --st-need:var(--warn-fg);    /* not enough pneuma     */
+  --st-item:#7a2a20;           /* satchel item frame    */
+  --st-item-sel:#d6402a;
+
+  /* --- device safe areas (fallback 0px everywhere) ------------------------ */
+  --sa-t:env(safe-area-inset-top, 0px);
+  --sa-r:env(safe-area-inset-right, 0px);
+  --sa-b:env(safe-area-inset-bottom, 0px);
+  --sa-l:env(safe-area-inset-left, 0px);
+
+  /* --- motion -------------------------------------------------------------- */
+  --t-fast:.12s; --t-med:.18s; --t-slow:.3s;
+  --ease:cubic-bezier(.2,.7,.3,1);
+}
+
+
+/* ==========================================================================
+   2. ROOT / RESET
+   ========================================================================== */
+
+#dwc-root{
+  position:fixed; inset:0; z-index:900;
+  background:var(--bg); color:var(--white);
+  font:var(--fs-base)/var(--lh) var(--mono);
+  letter-spacing:var(--ls-1);
+  -webkit-user-select:none; user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+  overscroll-behavior:contain;
+  overflow:hidden;
+}
+#dwc-root *,
+#dwc-root *::before,
+#dwc-root *::after{ box-sizing:border-box; }
+
+/* one scrollbar treatment for every scroller in the chamber */
+#dwc-root ::-webkit-scrollbar{ height:4px; width:4px; }
+#dwc-root ::-webkit-scrollbar-track{ background:var(--surf-sunk); }
+#dwc-root ::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
+#dwc-root ::-webkit-scrollbar-thumb:hover{ background:var(--teal); }
+
+
+/* ==========================================================================
+   3. LAYOUT   timeline strip / board / hud
+   Column flex. The board takes the slack; the HUD is in normal flow at the
+   bottom, so it can NEVER cover the board.
+   ========================================================================== */
+
+#dwc-root #dwc-wrap{
+  display:flex; flex-direction:column;
+  height:100%; min-height:0;
+}
+
+/* --- timeline strip (top, respects the notch) ---------------------------- */
+#dwc-root #dwc-tl{
+  flex:0 0 auto;
+  display:flex; align-items:center; gap:var(--s2);
+  padding:calc(var(--s2) + var(--sa-t)) calc(var(--s3) + var(--sa-r))
+          var(--s2) calc(var(--s3) + var(--sa-l));
+  overflow-x:auto; overflow-y:hidden;
+  scrollbar-width:thin; scrollbar-color:var(--tealdim) transparent;
+  background:var(--surf-1);
+  border-bottom:var(--hair) solid var(--bd);
+  box-shadow:0 1px 0 #39c8c112;
+  color:var(--dim); font-size:var(--fs-sm); letter-spacing:var(--ls-2);
+}
+/* placement-phase banner text lives here as a bare span */
+#dwc-root #dwc-tl b{ color:var(--gold); }
+/* right-hand run readout: FIGHT n/m - RND n */
+#dwc-root .tl-meta{
+  margin-left:auto; padding-left:var(--s3); flex:0 0 auto;
+  color:var(--dim); font-size:var(--fs-xs); letter-spacing:var(--ls-3);
+  white-space:nowrap;
+}
+#dwc-root .tl-meta b{ color:var(--white); }
+
+/* --- board --------------------------------------------------------------- */
+#dwc-root #dwc-board{
+  position:relative;
+  flex:1 1 auto; min-height:0;
+  padding-left:var(--sa-l); padding-right:var(--sa-r);
+}
+#dwc-root #dwc-board svg{ width:100%; height:100%; display:block; }
+
+/* --- hud (bottom, respects the home indicator) --------------------------- */
+#dwc-root #dwc-hud{
+  flex:0 0 auto;
+  display:grid;
+  grid-template-columns:1fr auto;
+  grid-template-areas:
+    "stat stat"
+    "ops  end";
+  gap:var(--s2);
+  align-items:stretch;
+  padding:var(--s2) calc(var(--s3) + var(--sa-r))
+          calc(var(--s2) + var(--sa-b)) calc(var(--s3) + var(--sa-l));
+  min-height:56px;
+  border-top:var(--hair) solid var(--bd);
+  background-color:var(--surf-1);
+  /* silkscreen: a 8px cyan grid at 3% -- reads as etched board, not texture */
+  background-image:
+    linear-gradient(#39c8c108 var(--hair), transparent var(--hair)),
+    linear-gradient(90deg, #39c8c108 var(--hair), transparent var(--hair));
+  background-size:8px 8px;
+  box-shadow:var(--panel-lip);
+}
+
+
+/* ==========================================================================
+   4. STAT LINE
+   ========================================================================== */
+
+/* NOTE: block, not flex -- the stat line is mixed text + <b> runs, and a flex
+   container would shatter them into anonymous items and kill the ellipsis. */
+#dwc-root #dwc-stat{
+  grid-area:stat; min-width:0;
+  color:var(--dim);
+  font-size:var(--fs-sm); letter-spacing:var(--ls-2);
+  text-transform:uppercase;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+/* silkscreen tick: the house mark that opens every label */
+#dwc-root #dwc-stat::before{
+  content:""; display:inline-block; vertical-align:-1px;
+  width:3px; height:11px; margin-right:var(--s2);
+  background:var(--teal); box-shadow:var(--glow-teal);
+}
+#dwc-root #dwc-stat b{ color:var(--white); font-weight:700; }
+#dwc-root #dwc-stat .warn{
+  color:var(--danger-fg); letter-spacing:var(--ls-2);
+  animation:dwc-flash .5s ease-out 2;
+}
+
+
+/* ==========================================================================
+   5. TIMELINE CHIPS
+   Gameplay meaning preserved: party=gold, foe=oxblood, now=lit + cyan,
+   dead-dim = the .55 opacity of everything that is not the current actor.
+   ========================================================================== */
+
+#dwc-root .dwc-chip{
+  position:relative; flex:0 0 auto;
+  width:var(--chip); height:var(--chip);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  border:var(--hair) solid var(--tealdim); border-radius:var(--r2);
+  background:var(--surf-2);
+  box-shadow:var(--sheen);
+  font-weight:700; font-size:var(--fs-lg); line-height:1;
+  opacity:.55;
+  transition:opacity var(--t-med) var(--ease),
+             border-color var(--t-med) var(--ease);
+}
+#dwc-root .dwc-chip.party{ color:var(--gold);   border-color:var(--bd-gold); }
+#dwc-root .dwc-chip.foe{   color:var(--ox-hi);  border-color:var(--bd-ox); }
+
+/* current turn: full opacity, cyan frame, and a lit bus-bar along the top
+   edge (drawn INSIDE the chip -- the strip clips overflow). */
+#dwc-root .dwc-chip.now{
+  opacity:1; border-color:var(--teal); box-shadow:var(--glow-teal), var(--sheen);
+}
+#dwc-root .dwc-chip.now::before{
+  content:""; position:absolute; left:5px; right:5px; top:0; height:2px;
+  background:var(--teal); box-shadow:var(--glow-teal);
+}
+
+/* sprite thumbnail: <img class="av"> or <svg class="av"> as the FIRST child */
+#dwc-root .dwc-chip .av{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:contain; object-position:center 60%;
+  display:block; pointer-events:none;
+}
+/* glyph-letter fallback: <span class="gl">X</span>. Hidden when art is present. */
+#dwc-root .dwc-chip .gl{
+  position:relative; z-index:1;
+  text-shadow:0 0 6px #000, 0 1px 0 #000;
+}
+#dwc-root .dwc-chip .av ~ .gl{ display:none; }
+
+/* vitae bar */
+#dwc-root .dwc-chip .hp{
+  position:absolute; left:2px; right:2px; bottom:2px; height:3px;
+  background:#020809; box-shadow:inset 0 0 0 var(--hair) #00000080;
+  z-index:2;
+}
+#dwc-root .dwc-chip .hp i{
+  display:block; height:100%; background:var(--teal);
+  transition:width var(--t-slow) var(--ease);
+}
+
+
+/* ==========================================================================
+   6. BUTTONS
+   Base -> ability anatomy -> badges -> item -> end -> engage.
+   ========================================================================== */
+
+/* --- base ---------------------------------------------------------------- */
+#dwc-root button{
+  font:inherit; letter-spacing:var(--ls-2);
+  color:var(--white); background:var(--surf-2);
+  border:var(--hair) solid var(--tealdim); border-radius:var(--r2);
+  padding:var(--s2) var(--s3);
+  min-height:var(--hit);
+  cursor:pointer;
+  box-shadow:var(--sheen);
+  transition:border-color var(--t-fast) var(--ease),
+             background-color var(--t-fast) var(--ease),
+             color var(--t-fast) var(--ease),
+             box-shadow var(--t-fast) var(--ease),
+             transform var(--t-fast) var(--ease);
+}
+#dwc-root button:hover{ background:var(--surf-3); border-color:var(--teal); }
+#dwc-root button:active{ transform:translateY(1px); background:var(--teal-ink); }
+#dwc-root button:focus{ outline:none; }
+#dwc-root button:focus-visible{
+  outline:var(--focus-w) solid var(--focus);
+  outline-offset:var(--focus-off);
+}
+/* hard-disabled: not interactive at all */
+#dwc-root button:disabled{
+  opacity:.35; cursor:not-allowed; box-shadow:none;
+  border-color:var(--bd); background:var(--surf-1);
+}
+#dwc-root button:disabled:hover{ background:var(--surf-1); border-color:var(--bd); }
+
+/* --- ability button ------------------------------------------------------
+   ANATOMY (two grid rows, four columns):
+     .op-key | .op-ic | .op-nm    | .op-badge
+     .op-key | .op-ic | .op-meta  | .op-badge
+   Key + icon + badge span both rows.
+   -------------------------------------------------------------------------- */
+#dwc-root .op{
+  flex:0 0 auto;
+  display:grid;
+  grid-template-columns:auto auto minmax(0,1fr) auto;
+  grid-template-areas:
+    "key ic nm   badge"
+    "key ic meta badge";
+  align-items:center;
+  column-gap:var(--s2); row-gap:0;
+  width:var(--op-w); max-width:70vw;
+  padding:var(--s1) var(--s2);
+  text-align:left;
+  scroll-snap-align:start;
+}
+
+/* hotkey plaque: 1-4, stencilled */
+#dwc-root .op-key{
+  grid-area:key;
+  display:flex; align-items:center; justify-content:center;
+  width:16px; height:16px;
+  border:var(--hair) solid var(--bd-live); border-radius:var(--r1);
+  color:var(--dim); background:#020809;
+  font-size:var(--fs-micro); line-height:1; letter-spacing:0;
+}
+/* icon slot: holds an inline svg, an img, or a single glyph */
+#dwc-root .op-ic{
+  grid-area:ic;
+  display:flex; align-items:center; justify-content:center;
+  width:20px; height:20px; flex:0 0 auto;
+  color:currentColor; opacity:.9;
+}
+#dwc-root .op-ic svg,
+#dwc-root .op-ic img{ width:100%; height:100%; display:block; }
+/* name */
+#dwc-root .op-nm{
+  grid-area:nm; min-width:0;
+  font-size:var(--fs-md); font-weight:700;
+  text-transform:uppercase; letter-spacing:var(--ls-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+/* cost + range meta */
+#dwc-root .op-meta{
+  grid-area:meta; min-width:0;
+  font-size:var(--fs-xs); letter-spacing:var(--ls-1);
+  color:var(--dim); text-transform:uppercase;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#dwc-root .op-meta b{ color:var(--white); font-weight:700; }
+
+/* --- icon slot contents (registry output: svg | img | glyph span) ----- */
+#dwc-root .dwi{ display:inline-block; vertical-align:middle;
+  pointer-events:none; flex:0 0 auto; }
+#dwc-root .dwi-glyph{ opacity:.7; }
+
+/* --- ability button states ----------------------------------------------- */
+#dwc-root .op{ border-color:var(--st-ready); }
+#dwc-root .op:hover{ border-color:var(--teal); }
+
+/* selected / armed: gold frame + a solid gold rail down the left edge.
+   The rail is what separates SELECTED from merely UNAVAILABLE at a glance. */
+#dwc-root .op.sel{
+  border-color:var(--st-sel); color:var(--gold);
+  background:linear-gradient(90deg, var(--gold-ink), var(--surf-2) 60%);
+  box-shadow:inset 3px 0 0 var(--gold), var(--glow-gold);
+}
+#dwc-root .op.sel .op-key{ border-color:var(--gold-dim); color:var(--gold); }
+#dwc-root .op.sel .op-meta{ color:var(--warn-fg); }
+#dwc-root .op.sel:hover{ border-color:var(--gold); }
+
+/* unavailable but still tappable (tapping answers WHY -- keep the pointer) */
+#dwc-root .op.off{
+  color:var(--dim); border-color:var(--st-off);
+  background:var(--surf-1); box-shadow:none;
+  opacity:.55; cursor:pointer;
+}
+#dwc-root .op.off:hover{ background:var(--surf-2); border-color:var(--bd-live); opacity:.75; }
+#dwc-root .op.off .op-nm{ font-weight:400; }
+/* selected wins over off (an armed-but-blocked spell still reads as armed) */
+#dwc-root .op.off.sel{ opacity:.8; color:var(--gold); border-color:var(--st-sel); }
+
+/* --- state badge --------------------------------------------------------- */
+#dwc-root .op-badge{
+  grid-area:badge; justify-self:end; align-self:center;
+  display:inline-flex; align-items:center; gap:3px;
+  padding:1px 4px;
+  max-width:76px; overflow:hidden;
+  border:var(--hair) solid currentColor; border-radius:var(--r1);
+  font-size:var(--fs-micro); line-height:1.5;
+  letter-spacing:var(--ls-2); text-transform:uppercase; white-space:nowrap;
+  color:var(--dim); background:#02080999;
+}
+#dwc-root .op-badge:empty{ display:none; }
+/* variants */
+#dwc-root .b-recharge{ color:var(--st-recharge); background:#062023cc; }
+#dwc-root .b-spent{    color:var(--st-spent);    border-style:dotted; }
+#dwc-root .b-burnt{    color:#ffd3d9; background:var(--ox); border-color:var(--ox); }
+#dwc-root .b-strain{   color:var(--st-strain);   border-style:dashed; background:#1c160899; }
+#dwc-root .b-need{     color:var(--st-need);     background:var(--gold-ink); }
+
+/* --- satchel item variant ------------------------------------------------- */
+#dwc-root .op.item{ border-color:var(--st-item); }
+#dwc-root .op.item .op-ic{ color:var(--st-item-sel); }
+#dwc-root .op.item:hover{ border-color:#a03a2c; }
+#dwc-root .op.item.sel{
+  border-color:var(--st-item-sel); color:#e28a76;
+  background:linear-gradient(90deg,#2a0f0a,var(--surf-2) 60%);
+  box-shadow:inset 3px 0 0 var(--st-item-sel), 0 0 8px #d6402a55;
+}
+#dwc-root .op.item.sel .op-meta{ color:#c0806f; }
+
+/* --- action row: ONE horizontally scrolling track, never a 3-row mess ----- */
+#dwc-root #dwc-banks{
+  grid-area:ops; min-width:0;
+  display:flex; align-items:stretch; gap:var(--s2);
+  overflow-x:auto; overflow-y:hidden;
+  padding-bottom:var(--s1);           /* room for the scrollbar */
+  scroll-snap-type:x proximity;
+  scrollbar-width:thin; scrollbar-color:var(--tealdim) var(--surf-sunk);
+}
+/* Visible affordance #1: the track fades out at both edges, so a clipped
+   button always reads as "there is more this way".
+   Guarded by :has() -- during PLACEMENT this same element hosts the fixed
+   ENGAGE button, and a mask would fade (and stacking-trap) it. Browsers
+   without :has() simply drop the mask and keep affordance #2. */
+#dwc-root #dwc-banks:not(:has(#dwc-engage)){
+  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 10px,
+                     #000 calc(100% - 20px), transparent 100%);
+          mask-image:linear-gradient(90deg, transparent 0, #000 10px,
+                     #000 calc(100% - 20px), transparent 100%);
+}
+/* visible affordance #2: a thin in-palette rail under the track */
+#dwc-root #dwc-banks::-webkit-scrollbar{ height:4px; }
+#dwc-root #dwc-banks::-webkit-scrollbar-track{ background:var(--surf-sunk); border-radius:2px; }
+#dwc-root #dwc-banks::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
+#dwc-root #dwc-banks::-webkit-scrollbar-thumb:hover{ background:var(--teal); }
+
+/* --- end turn ------------------------------------------------------------- */
+#dwc-root #dwc-endbtn,
+#dwc-root button.end{
+  grid-area:end; align-self:stretch;
+  display:flex; align-items:center; justify-content:center;
+  flex:0 0 auto;
+  padding:var(--s2) var(--s3);
+  border-color:var(--ox); color:var(--danger-fg);
+  background:linear-gradient(180deg,#160a0e,#0a1214);
+  font-size:var(--fs-sm); font-weight:700;
+  letter-spacing:var(--ls-3); text-transform:uppercase;
+  white-space:nowrap;
+}
+#dwc-root button.end:hover{ border-color:#c8203a; color:#ff90a0; background:#1c0b10; }
+#dwc-root button.end:active{ background:var(--ox-ink); }
+#dwc-root button.end:disabled{ color:var(--dim); border-color:var(--bd-ox); background:var(--surf-1); }
+
+/* --- ENGAGE (placement) ---------------------------------------------------
+   Floats over the board, well clear of the HUD, and never over the notch. */
+#dwc-root #dwc-engage{
+  position:fixed; left:50%; bottom:calc(28% + var(--sa-b));
+  transform:translateX(-50%);
+  z-index:20;
+  padding:var(--s4) var(--s6);
+  min-height:56px;
+  font-size:var(--fs-xl); font-weight:700; letter-spacing:var(--ls-4);
+  color:#3dffd0; border:2px solid #3dffd0; border-radius:var(--r2);
+  background:#06201cee;
+  box-shadow:0 0 14px #3dffd0aa, inset 0 0 10px #3dffd033;
+  text-shadow:0 0 8px #3dffd0;
+}
+#dwc-root #dwc-engage:hover{ background:#083029ee; border-color:#8dffe6; }
+#dwc-root #dwc-engage:active{ transform:translateX(-50%) translateY(1px); }
+#dwc-root #dwc-engage:disabled{
+  color:var(--dim); border-color:var(--tealdim); background:var(--surf-2);
+  box-shadow:none; text-shadow:none; opacity:.5; transform:translateX(-50%);
+}
+
+
+/* ==========================================================================
+   7. OVERLAY  (verdict + spoils)
+   ========================================================================== */
+
+#dwc-root #dwc-over{
+  position:fixed; inset:0; z-index:9;
+  display:none;                     /* JS flips this to flex */
+  flex-direction:column; align-items:center; justify-content:flex-start;
+  gap:var(--s4);
+  padding:calc(var(--s5) + var(--sa-t)) calc(var(--s4) + var(--sa-r))
+          calc(var(--s5) + var(--sa-b)) calc(var(--s4) + var(--sa-l));
+  overflow-y:auto;
+  scrollbar-width:thin; scrollbar-color:var(--tealdim) var(--surf-sunk);
+  background:
+    radial-gradient(120% 70% at 50% 0%, #0a1a1c 0%, transparent 70%),
+    var(--scrim);
+  text-align:center;
+}
+#dwc-root #dwc-over h1{
+  margin:auto 0 0;
+  font-size:var(--fs-h1); font-weight:700;
+  letter-spacing:var(--ls-6); text-transform:uppercase;
+  color:var(--teal); text-shadow:0 0 18px #39c8c14d;
+}
+/* replaces the inline style="" on #dwc-overinfo */
+#dwc-root #dwc-overinfo{
+  width:min(92vw,520px);
+  color:var(--dim); line-height:1.7; text-align:center;
+}
+#dwc-root #dwc-overinfo b{ color:var(--white); }
+#dwc-root #dwc-overbtn{
+  margin:0 0 auto;
+  padding:var(--s3) var(--s5); min-height:48px;
+  border-color:var(--teal); color:var(--teal);
+  letter-spacing:var(--ls-4); font-weight:700; text-transform:uppercase;
+  background:linear-gradient(180deg,#07191a,#0a1214);
+}
+#dwc-root #dwc-overbtn:hover{ color:var(--teal-hi); border-color:var(--teal-hi); box-shadow:var(--glow-teal); }
+
+/* --- spoils list ---------------------------------------------------------
+   RULING (carried over from the old DWC_SPL_CSS): every card is visible at
+   once as a LIST -- no tap-to-inspect, the player reads the whole haul in
+   one glance. The icon plaque wears the rarity frame: dim-gold COMMON,
+   teal UNCOMMON, glowing gold RARE.
+   ------------------------------------------------------------------------ */
+#dwc-root .spl{ width:min(92vw,520px); margin-top:var(--s0); }
+#dwc-root .spl-hd{
+  display:flex; align-items:center; gap:var(--s2);
+  color:var(--gold); letter-spacing:var(--ls-4); font-size:var(--fs-sm);
+  text-align:left; text-transform:uppercase;
+  border-bottom:var(--hair) solid var(--tealdim);
+  padding:0 0 var(--s1) var(--s0); margin-bottom:var(--s3);
+}
+#dwc-root .spl-hd::before{
+  content:""; flex:0 0 auto;
+  display:inline-block; width:4px; height:10px; background:var(--gold);
+}
+#dwc-root .spl-list{ display:flex; flex-direction:column; gap:var(--s2); text-align:left; }
+#dwc-root .spl-it{
+  display:flex; gap:var(--s3); align-items:center;
+  background:var(--surf-2);
+  border:var(--hair) solid var(--line); border-radius:var(--r2);
+  padding:var(--s2) var(--s3);
+  box-shadow:var(--sheen);
+}
+#dwc-root .spl-it .ic{
+  width:52px; height:52px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg);
+  border:1.5px solid var(--gold-dim); border-radius:var(--r2);
+}
+#dwc-root .spl-it .ic svg,
+#dwc-root .spl-it .ic img{ max-width:100%; max-height:100%; display:block; }
+#dwc-root .spl-it.r-uncommon .ic{ border-color:var(--teal); }
+#dwc-root .spl-it.r-rare .ic{ border-color:var(--gold); box-shadow:0 0 8px #d9a44155; }
+#dwc-root .spl-it b{
+  color:var(--white); letter-spacing:var(--ls-2); font-size:15px;
+  text-transform:uppercase;
+}
+#dwc-root .spl-it .k{
+  color:var(--gold); font-size:var(--fs-xs);
+  letter-spacing:var(--ls-3); margin-left:var(--s2);
+}
+#dwc-root .spl-it p{ margin:var(--s0) 0 0; color:var(--dim); line-height:1.4; }
+
+
+/* ==========================================================================
+   8. BOARD SVG  (gameplay-meaningful -- hues unchanged)
+   ========================================================================== */
+
+#dwc-root .tile{
+  fill:#0a1a18; fill-opacity:.42; stroke:#2f7a72; stroke-width:1;
+  stroke-linejoin:round;
+  transition:fill-opacity var(--t-fast) linear;
+}
+#dwc-root .tile.hl-move { fill:#12503c; fill-opacity:.75; stroke:#3ecf95; stroke-width:1.5; }
+#dwc-root .tile.hl-rng  { fill:#4a1626; fill-opacity:.75; stroke:#d94a63; stroke-width:1.5; }
+#dwc-root .tile.hl-heal { fill:#0f3a2a; fill-opacity:.75; stroke:#3ecf95; stroke-width:1.5; }
+#dwc-root .tile.hl-place{ fill:#3a3012; fill-opacity:.75; stroke:#d9a441; stroke-width:1.5; }
+#dwc-root .tile.hl-aoe  { fill:#4a1a24; stroke:#9e1b2e; }
+/* an actionable cell says so with the cursor -- no colour meaning changed */
+#dwc-root .tile.hl-move,
+#dwc-root .tile.hl-rng,
+#dwc-root .tile.hl-heal,
+#dwc-root .tile.hl-place{ cursor:pointer; }
+#dwc-root .tile.hl-move:hover,
+#dwc-root .tile.hl-rng:hover,
+#dwc-root .tile.hl-heal:hover,
+#dwc-root .tile.hl-place:hover{ fill-opacity:.92; }
+
+#dwc-root .dwc-unit{ transition:transform var(--t-med) ease; }
+
+/* floating damage numbers */
+#dwc-root .fx-dmg{
+  font-weight:bold; font-size:19px;
+  paint-order:stroke; stroke:#000; stroke-width:3px;
+  animation:dwc-rise .8s ease-out forwards;
+  pointer-events:none;
+}
+/* script dialogue: fade in, HOLD readable, fade out.
+   Duration is overridden inline per node from fxText's life param. */
+#dwc-root .fx-say{
+  font-weight:bold; font-size:var(--fs-lg);
+  paint-order:stroke; stroke:#000; stroke-width:3.5px;
+  animation:dwc-say 3s ease-out forwards;
+  pointer-events:none;
+}
+#dwc-root .fx-blink{ animation:dwc-blink 1.1s ease-in-out infinite; }
+
+
+/* ==========================================================================
+   9. KEYFRAMES  (cannot be scoped -- namespaced with dwc-)
+   ========================================================================== */
+
+@keyframes dwc-rise{
+  from{ opacity:1; transform:translateY(0); }
+  to  { opacity:0; transform:translateY(-26px); }
+}
+@keyframes dwc-say{
+  0%  { opacity:0; transform:translateY(6px); }
+  8%  { opacity:1; transform:translateY(0); }
+  82% { opacity:1; }
+  100%{ opacity:0; transform:translateY(-10px); }
+}
+@keyframes dwc-blink{
+  0%  { opacity:.15; }
+  50% { opacity:1; }
+  100%{ opacity:.15; }
+}
+@keyframes dwc-flash{
+  0%  { opacity:.25; }
+  40% { opacity:1; }
+  100%{ opacity:1; }
+}
+
+
+/* ==========================================================================
+   10. RESPONSIVE
+   ========================================================================== */
+
+/* --- wide / desktop: one HUD row, stat line inline --------------------- */
+@media (min-width:760px){
+  #dwc-root #dwc-hud{
+    grid-template-columns:minmax(190px,24%) minmax(0,1fr) auto;
+    grid-template-areas:"stat ops end";
+    align-items:center;
+    padding-left:calc(var(--s4) + var(--sa-l));
+    padding-right:calc(var(--s4) + var(--sa-r));
+  }
+  #dwc-root #dwc-stat{ white-space:normal; font-size:var(--fs-sm); }
+  #dwc-root .op{ width:210px; max-width:none; }
+  #dwc-root #dwc-tl{ padding-left:calc(var(--s4) + var(--sa-l));
+                     padding-right:calc(var(--s4) + var(--sa-r)); }
+}
+
+/* --- very narrow phones (<=360px): tighten, never wrap the track ------- */
+@media (max-width:360px){
+  #dwc-root{ --op-w:172px; --chip:40px; }
+  #dwc-root #dwc-hud{ padding-left:calc(var(--s2) + var(--sa-l));
+                      padding-right:calc(var(--s2) + var(--sa-r)); }
+  #dwc-root #dwc-endbtn{ padding:var(--s2); letter-spacing:var(--ls-2); }
+}
+
+/* --- short viewport / landscape phone (844x390): protect the board ------
+   The HUD and the timeline both shrink; the board keeps the slack. */
+@media (max-height:460px){
+  #dwc-root{ --chip:34px; --hit:40px; }
+  #dwc-root #dwc-tl{
+    gap:var(--s1);
+    padding-top:calc(var(--s1) + var(--sa-t)); padding-bottom:var(--s1);
+    font-size:var(--fs-xs);
+  }
+  #dwc-root .dwc-chip{ font-size:var(--fs-md); }
+  #dwc-root #dwc-hud{
+    grid-template-columns:minmax(150px,22%) minmax(0,1fr) auto;
+    grid-template-areas:"stat ops end";
+    align-items:center;
+    gap:var(--s1) var(--s2);
+    padding-top:var(--s1);
+    padding-bottom:calc(var(--s1) + var(--sa-b));
+    min-height:0;
+    max-height:38vh;
+  }
+  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1); }
+  #dwc-root #dwc-stat::before{ height:9px; }
+  #dwc-root .op{
+    width:180px; min-height:40px; padding:2px var(--s2);
+    column-gap:var(--s1);
+  }
+  #dwc-root .op-nm{ font-size:var(--fs-sm); }
+  #dwc-root .op-meta{ font-size:var(--fs-micro); }
+  #dwc-root #dwc-banks{ padding-bottom:2px; }
+  #dwc-root #dwc-endbtn{ min-height:40px; font-size:var(--fs-xs); }
+  #dwc-root #dwc-engage{
+    bottom:calc(22% + var(--sa-b)); padding:var(--s2) var(--s5);
+    font-size:var(--fs-lg); min-height:44px;
+  }
+  #dwc-root #dwc-over{ padding-top:calc(var(--s3) + var(--sa-t)); gap:var(--s2); }
+  #dwc-root #dwc-over h1{ font-size:var(--fs-xl); letter-spacing:var(--ls-4); }
+}
+
+/* --- pointer:coarse: no hover repaint on touch ------------------------- */
+@media (hover:none){
+  #dwc-root button:hover{ background:var(--surf-2); border-color:var(--tealdim); }
+  #dwc-root .op:hover{ border-color:var(--st-ready); }
+  #dwc-root .op.sel:hover{ border-color:var(--st-sel); }
+  #dwc-root .tile.hl-move:hover,
+  #dwc-root .tile.hl-rng:hover,
+  #dwc-root .tile.hl-heal:hover,
+  #dwc-root .tile.hl-place:hover{ fill-opacity:.75; }
+}
+
+/* --- reduced motion -----------------------------------------------------
+   Targeted, not a blanket wildcard: the fx text animations END at opacity 0,
+   so snapping them to their final frame would make damage numbers and
+   dialogue invisible. They are turned OFF and pinned visible instead; the
+   JS timeout still removes the nodes. */
+@media (prefers-reduced-motion:reduce){
+  #dwc-root button,
+  #dwc-root .dwc-chip,
+  #dwc-root .dwc-chip .hp i,
+  #dwc-root .tile{ transition-duration:.001ms !important; }
+  #dwc-root button:active{ transform:none; }
+  #dwc-root #dwc-engage:active{ transform:translateX(-50%); }
+  #dwc-root .dwc-unit{ transition:none; }
+  #dwc-root .fx-dmg,
+  #dwc-root .fx-say{ animation:none !important; opacity:1; }
+  #dwc-root .fx-blink{ animation:none !important; opacity:1; }
+  #dwc-root #dwc-stat .warn{ animation:none; }
+  #dwc-root #dwc-banks{ scroll-behavior:auto; }
+}
+
+/* --- more contrast (bonus) ---------------------------------------------- */
+@media (prefers-contrast:more){
+  #dwc-root{
+    --dim:#8fb3b0; --line:#1b4c50; --bd:#1b4c50; --st-off:#3a5c5a;
+    --surf-1:#04090b; --surf-2:#0b1518;
+  }
+  #dwc-root .dwc-chip{ opacity:.8; border-width:2px; }
+  #dwc-root .op{ border-width:2px; }
+  #dwc-root .op.off{ opacity:.8; }
+  #dwc-root .op-badge{ border-width:2px; }
+  #dwc-root button:focus-visible{ outline-width:3px; }
+  #dwc-root .tile{ stroke-width:1.25; }
+}
+
+
+/* ==========================================================================
+   11. LEGACY COMPAT
+   Kept so the sheet degrades gracefully if the action bar still emits the
+   old markup (bare .sel / .off / .item / .cost on a plain button). Delete
+   this block once the actionbar agent has landed the .op anatomy.
+   ========================================================================== */
+
+#dwc-root #dwc-banks > button:not(.op){
+  flex:0 0 auto; width:var(--op-w); max-width:70vw;
+  text-align:left; font-size:var(--fs-sm);
+}
+#dwc-root button.sel:not(.op){
+  border-color:var(--gold); color:var(--gold); box-shadow:inset 3px 0 0 var(--gold), var(--glow-gold);
+}
+#dwc-root button.off:not(.op){ opacity:.55; border-color:var(--st-off); color:var(--dim); }
+#dwc-root button.item:not(.op){ border-color:var(--st-item); }
+#dwc-root button.item.sel:not(.op){
+  border-color:var(--st-item-sel); color:#e28a76; box-shadow:inset 3px 0 0 var(--st-item-sel), 0 0 6px #d6402a66;
+}
+#dwc-root button.item:not(.op) svg{ width:11px; height:15px; vertical-align:-3px; margin-right:1px; }
+#dwc-root .cost{ color:var(--dim); font-size:var(--fs-xs); letter-spacing:var(--ls-1); }
+`;
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
-  const st=document.createElement("style"); st.textContent=DWC_CSS+DWC_SAY_CSS;
-  // Spoils CSS gets its OWN style element: DWC_CSS ends with a mangled
-  // dangling brace, and CSS error-recovery inside that sheet can swallow
-  // rules appended after it. A separate element is a fresh parser.
-  const st2=document.createElement("style"); st2.textContent=DWC_SPL_CSS; document.head.appendChild(st2); document.head.appendChild(st);
+  // ONE style element. The old three-string split existed only because the
+  // legacy DWC_CSS ended in a mangled dangling brace whose error-recovery
+  // swallowed everything concatenated after it -- which is why the spoils
+  // rules needed a fresh parser of their own. The sheet is hand-authored and
+  // brace-balanced now (tools/test-ui.js enforces it), so one element is
+  // correct and the append-order subtleties go away.
+  const st=document.createElement("style"); st.textContent=DWC_CSS;
+  document.head.appendChild(st);
   root=document.createElement("div"); root.id="dwc-root"; root.innerHTML=DWC_HTML;
   root.style.display="none"; document.body.appendChild(root);
   initLogic();
@@ -88,23 +855,26 @@ const inB = (x,y)=>x>=0&&x<W&&y>=0&&y<H;
 // Amperage burn threshold. Single-sourced from data/balance.js when the
 // crawl loads it; the fallback only serves headless combat tests.
 const BURN_AT=(window.BALANCE&&window.BALANCE.strain&&window.BALANCE.strain.burnAt)||10;
+// icon: id into window.DW_ICONS (src/icons.js). The registry takes an inline
+// SVG string or a {png,w,h} raster, so finished art drops in without
+// touching layout code; a missing id falls back to the first letter.
 const BANKS = {
-  PERCVSSIO:{name:"PERCVSSIO",kind:"strike",cost:4,mult:1,flat:1,min:1,max:1,los:true,repeat:true,
+  PERCVSSIO:{name:"PERCVSSIO",icon:"percvssio",kind:"strike",cost:4,mult:1,flat:1,min:1,max:1,los:true,repeat:true,
     desc:"Melee. One enemy, adjacent."},
-  ABRASIO:{name:"ABRASIO",kind:"sweep",cost:3,mult:1.3,min:0,max:0,los:false,
+  ABRASIO:{name:"ABRASIO",icon:"abrasio",kind:"sweep",cost:3,mult:1.3,min:0,max:0,los:false,
     desc:"Melee sweep. Every enemy touching you."},
-  CONCRETIO:{name:"CONCRETIO",kind:"hex",cost:4,mult:0,debuffAtk:2,cd:4,min:1,max:5,los:false,
+  CONCRETIO:{name:"CONCRETIO",icon:"concretio",kind:"hex",cost:4,mult:0,debuffAtk:2,cd:4,min:1,max:5,los:false,
     desc:"Weakens one enemy ATK-2, through walls. Permanent."},
-  FVLGVR:{name:"FVLGVR",kind:"strike",cost:3,mult:0.8,min:4,max:6,los:true,
+  FVLGVR:{name:"FVLGVR",icon:"fvlgvr",kind:"strike",cost:3,mult:0.8,min:4,max:6,los:true,
     desc:"Sniper bolt. Long range, low damage."},
-  IMMOLATIO:{name:"IMMOLATIO",kind:"strike",cost:5,mult:2.2,selfVitae:4,aoe:true,min:1,max:3,los:true,
+  IMMOLATIO:{name:"IMMOLATIO",icon:"immolatio",kind:"strike",cost:5,mult:2.2,selfVitae:4,aoe:true,min:1,max:3,los:true,
     desc:"Cross blast. Heavy. Hits allies. Burns the caster."},
-  PERMVTO:{name:"PERMVTO",kind:"swap",cost:4,cd:3,min:1,max:5,los:false,
+  PERMVTO:{name:"PERMVTO",icon:"permvto",kind:"swap",cost:4,cd:3,min:1,max:5,los:false,
     desc:"Trade places with an ally. Range 1-5, through walls."},
-  IMPVLSVS:{name:"IMPVLSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,push:1,cd:2,
+  IMPVLSVS:{name:"IMPVLSVS",icon:"impvlsvs",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,push:1,cd:2,
     desc:"Melee shove. Knocks the target back one tile; a blocked shove stuns."},
-  MORSVS:{name:"MORSVS",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,desc:"foe melee"},
-  IACVLVM:{name:"IACVLVM",kind:"strike",cost:3,mult:1,min:2,max:4,los:true,desc:"foe shot"},
+  MORSVS:{name:"MORSVS",icon:"morsvs",kind:"strike",cost:3,mult:1,min:1,max:1,los:true,desc:"foe melee"},
+  IACVLVM:{name:"IACVLVM",icon:"iacvlvm",kind:"strike",cost:3,mult:1,min:2,max:4,los:true,desc:"foe shot"},
 };
 
 function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,stun:0,x:-1,y:-1,cds:{},cast:{},strain:{},burnt:{}},o); }
@@ -612,7 +1382,7 @@ function castAt(u,bank,x,y){
 }
 const SATCHEL_MAX=3;
 const satchelCount=()=>Object.values(state.items).reduce((a,b)=>a+b,0);
-const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",cost:2,heal:8,min:0,max:5,
+const ITEMS={AMPVLLA:{name:"AMPVLLA VITAE",icon:"ampvlla",cost:2,heal:8,min:0,max:5,
   desc:"Drink or hurl: heal a party unit +8. Range 0-5. Once per turn. OPERATOR only."}};
 const VIAL_SVG=`<svg viewBox="0 0 12 16" width="11" height="15" aria-hidden="true">
   <path d="M4 1h4v1.6H4z" fill="#D6402A"/>
@@ -821,7 +1591,11 @@ function draw(){
         opacity:faded?0.6:1},objs);
     } else {
       const v=d.u, col=v.side==="party"?"var(--gold)":"var(--ox)";
-      const g=el("g",{class:"unit",transform:`translate(${cx},${cy})`},objs);
+      // dwc-unit, not unit: index.html's crawl sheet styles a bare .unit
+      // (border, padding, background AND a clip-path) that lands on this SVG
+      // group, plus a prefers-reduced-motion !important that beats our own
+      // transition. Namespacing is the fix; nothing reads the class from JS.
+      const g=el("g",{class:"dwc-unit",transform:`translate(${cx},${cy})`},objs);
       el("ellipse",{cx:0,cy:TH/2,rx:16,ry:8,fill:"#000",opacity:.45},g);
       if(v===u&&state.phase==="battle")
         el("polygon",{points:`0,0 ${TW/2},${TH/2} 0,${TH} ${-TW/2},${TH/2}`,
@@ -863,7 +1637,10 @@ function drawTimeline(){
   state.order.forEach((v,i)=>{
     if(!v.alive) return;
     const c=document.createElement("div");
-    c.className="chip "+v.side+(i===state.turn?" now":"");
+    // dwc-chip: index.html's crawl sheet has 21 bare .chip rules that leak in
+    // on every property we do not declare -- min-height:44px, 9px/10px padding
+    // and a 6px gap were silently inflating these 40x40 chips.
+    c.className="dwc-chip "+v.side+(i===state.turn?" now":"");
     c.innerHTML=`${v.glyph}<span class="hp"><i style="width:${100*v.vitae/v.maxVitae}%"></i></span>`;
     tl.appendChild(c);
   });

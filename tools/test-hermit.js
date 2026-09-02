@@ -66,7 +66,7 @@ global.clearTimeout = () => {};
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/balance.js', 'src/combat.js']) {
+for (const f of ['data/balance.js', 'src/icons.js', 'src/combat.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 

@@ -137,6 +137,7 @@ console.log('-- combat hook wiring');
   const calls = [];
   window.DW_SFX = { muted: false, play: n => calls.push(n), toggle() { return false; } };
   load('data/balance.js');
+  load('src/icons.js');
   load('src/combat.js');
   window.DW_COMBAT.start({ fight: 1, guests: ['hermit'] });
   const T = window.__DWC_TEST;
@@ -209,9 +210,13 @@ console.log('-- crawl hooks & build inclusion (source checks)');
   ok(g.includes("k === 'm' && window.DW_SFX"), 'M key toggles mute in the crawl keydown handler');
   const b = src('tools/build-standalone.py');
   ok(b.includes("'src/audio.js'"), 'build-standalone.py inlines src/audio.js');
+  ok(b.includes("'src/icons.js'"), 'build-standalone.py inlines src/icons.js');
   const h = src('index.html');
   const iAudio = h.indexOf('src/audio.js'), iCombat = h.indexOf('src/combat.js');
   ok(iAudio > -1 && iCombat > -1 && iAudio < iCombat, 'index.html loads audio.js before combat.js');
+  // The icon registry must be defined before the chamber builds any button.
+  const iIcons = h.indexOf('src/icons.js');
+  ok(iIcons > -1 && iIcons < iCombat, 'index.html loads icons.js before combat.js');
 }
 
 console.log(failed ? '\n' + failed + ' FAILED' : '\nall checks passed');

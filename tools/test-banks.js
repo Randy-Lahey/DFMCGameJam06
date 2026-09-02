@@ -246,6 +246,7 @@ ok(bare && bare.amps === B.banks.PERCVSSIO.amps && bare.draw === 0 &&
 
 // Chamber side: load the real module, start a real fight with those mods,
 // and read the merged bank off the live OPERATOR unit.
+new Function(fs.readFileSync(path.join(root, 'src/icons.js'), 'utf8'))();
 new Function(fs.readFileSync(path.join(root, 'src/combat.js'), 'utf8'))();
 window.DW_COMBAT.start({ fight: 1, party: [{ id: 'op', frac: 1 }], mods: seamMods });
 const DWC = window.__DWC_TEST;
