@@ -723,7 +723,10 @@ const DWC_CSS = `
 /* --- short viewport / landscape phone (844x390): protect the board ------
    The HUD and the timeline both shrink; the board keeps the slack. */
 @media (max-height:460px){
-  #dwc-root{ --chip:34px; --hit:40px; }
+  /* Chips shrink: they are display-only (no handler), so the 44px rule does
+     not bind them. Buttons keep the full 44px -- measured, that costs the
+     board 10px of height here (294 -> 284), which is cheap for a real tap. */
+  #dwc-root{ --chip:34px; --hit:44px; }
   #dwc-root #dwc-tl{
     gap:var(--s1);
     padding-top:calc(var(--s1) + var(--sa-t)); padding-bottom:var(--s1);
@@ -744,13 +747,13 @@ const DWC_CSS = `
     white-space:nowrap; text-overflow:ellipsis; }
   #dwc-root #dwc-stat::before{ height:9px; }
   #dwc-root .op{
-    width:180px; min-height:40px; padding:2px var(--s2);
+    width:180px; padding:2px var(--s2);
     column-gap:var(--s1);
   }
   #dwc-root .op-nm{ font-size:var(--fs-sm); }
   #dwc-root .op-meta{ font-size:var(--fs-micro); }
   #dwc-root #dwc-banks{ padding-bottom:2px; }
-  #dwc-root #dwc-endbtn{ min-height:40px; font-size:var(--fs-xs); }
+  #dwc-root #dwc-endbtn{ font-size:var(--fs-xs); }
   #dwc-root #dwc-engage{
     bottom:calc(22% + var(--sa-b)); padding:var(--s2) var(--s5);
     font-size:var(--fs-lg); min-height:44px;

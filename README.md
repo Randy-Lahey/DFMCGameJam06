@@ -43,6 +43,8 @@ daemonware-standalone.html  same game, all scripts inlined, single file. Generat
 data/balance.js             THE NUMBERS BIBLE — single source of truth
 data/floor01.js             hand-authored 21-tile floor, props, enemy spawns
 src/game.js                 state, turn resolution, AI, render, input
+src/combat.js               the tactical chamber: board, HUD, its own stylesheet
+src/icons.js                ability/item icon registry — drop finished art in here
 src/sprites.js              every SVG sprite
 tools/build-standalone.py   regenerates daemonware-standalone.html
 ```
