@@ -169,16 +169,35 @@ const DWC_CSS = `
   display:flex; align-items:center; gap:var(--s2);
   padding:calc(var(--s2) + var(--sa-t)) calc(var(--s3) + var(--sa-r))
           var(--s2) calc(var(--s3) + var(--sa-l));
-  overflow-x:auto; overflow-y:hidden;
-  scrollbar-width:thin; scrollbar-color:var(--tealdim) transparent;
+  overflow:hidden;                    /* the TRACK scrolls, not the strip */
   background:var(--surf-1);
   border-bottom:var(--hair) solid var(--bd);
   box-shadow:0 1px 0 #39c8c112;
   color:var(--dim); font-size:var(--fs-sm); letter-spacing:var(--ls-2);
 }
-/* placement-phase banner text lives here as a bare span */
+/* the scrolling half: chips only */
+#dwc-root .tl-track{
+  flex:1 1 auto; min-width:0;
+  display:flex; align-items:center; gap:var(--s2);
+  overflow-x:auto; overflow-y:hidden;
+  padding-bottom:2px;
+  scrollbar-width:thin; scrollbar-color:var(--tealdim) transparent;
+  -webkit-mask-image:linear-gradient(90deg, #000 calc(100% - 16px), transparent 100%);
+          mask-image:linear-gradient(90deg, #000 calc(100% - 16px), transparent 100%);
+}
+#dwc-root .tl-track::-webkit-scrollbar{ height:3px; }
+#dwc-root .tl-track::-webkit-scrollbar-track{ background:transparent; }
+#dwc-root .tl-track::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
+
+/* Placement banner: one line, never wrapped mid-strip.
+   :not(.tl-meta) matters -- the readout is also a direct span child, and this
+   selector carries two ids to its one, so without the exclusion it wins and
+   ellipsises FIGHT n/m into "FIGHT 2/3 ...". */
+#dwc-root #dwc-tl > span:not(.tl-meta){ flex:1 1 auto; min-width:0;
+  white-space:normal; overflow:hidden; }
 #dwc-root #dwc-tl b{ color:var(--gold); }
-/* right-hand run readout: FIGHT n/m - RND n */
+
+/* right-hand run readout: FIGHT n/m - RND n. Pinned, never scrolls away. */
 #dwc-root .tl-meta{
   margin-left:auto; padding-left:var(--s3); flex:0 0 auto;
   color:var(--dim); font-size:var(--fs-xs); letter-spacing:var(--ls-3);
@@ -229,7 +248,7 @@ const DWC_CSS = `
   color:var(--dim);
   font-size:var(--fs-sm); letter-spacing:var(--ls-2);
   text-transform:uppercase;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  white-space:normal; overflow:hidden;
 }
 /* silkscreen tick: the house mark that opens every label */
 #dwc-root #dwc-stat::before{
@@ -687,7 +706,7 @@ const DWC_CSS = `
     padding-left:calc(var(--s4) + var(--sa-l));
     padding-right:calc(var(--s4) + var(--sa-r));
   }
-  #dwc-root #dwc-stat{ white-space:normal; font-size:var(--fs-sm); }
+  #dwc-root #dwc-stat{ font-size:var(--fs-sm); }
   #dwc-root .op{ width:220px; max-width:none; }
   #dwc-root #dwc-tl{ padding-left:calc(var(--s4) + var(--sa-l));
                      padding-right:calc(var(--s4) + var(--sa-r)); }
@@ -721,7 +740,8 @@ const DWC_CSS = `
     min-height:0;
     max-height:38vh;
   }
-  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1); }
+  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1);
+    white-space:nowrap; text-overflow:ellipsis; }
   #dwc-root #dwc-stat::before{ height:9px; }
   #dwc-root .op{
     width:180px; min-height:40px; padding:2px var(--s2);
@@ -1607,21 +1627,40 @@ function draw(){
 }
 
 function drawTimeline(){
+  // innerHTML="" is the wipe on purpose: the test harness's DOM stub loops
+  // forever on `while(el.firstChild)`.
   const tl=document.getElementById("dwc-tl"); tl.innerHTML="";
-  if(state.phase==="place"){ tl.innerHTML=`<span style="color:var(--dim)">PLACEMENT — tap gold cells to seat: <b style="color:var(--gold)">${state.toPlace.map(id=>state.units.find(u=>u.id===id).name).join(", ")||"—"}</b></span>`; return; }
+  if(state.phase==="place"){
+    // no inline style: the sheet already paints #dwc-tl dim and #dwc-tl b gold
+    tl.innerHTML=`<span>TAP GOLD CELLS TO SEAT: <b>${state.toPlace.map(id=>state.units.find(u=>u.id===id).name).join(", ")||"—"}</b></span>`;
+    return;
+  }
+  // chips scroll inside their own track so the readout below can stay pinned
+  const track=document.createElement("div"); track.className="tl-track";
   state.order.forEach((v,i)=>{
-    if(!v.alive) return;
+    if(!v.alive) return;                       // dead units drop out of the strip
     const c=document.createElement("div");
     // dwc-chip: index.html's crawl sheet has 21 bare .chip rules that leak in
     // on every property we do not declare -- min-height:44px, 9px/10px padding
-    // and a 6px gap were silently inflating these 40x40 chips.
+    // and a 6px gap were silently inflating these chips.
+    // `now` is the only turn marker we emit; the bus-bar is .dwc-chip.now::before.
     c.className="dwc-chip "+v.side+(i===state.turn?" now":"");
-    c.innerHTML=`${v.glyph}<span class="hp"><i style="width:${100*v.vitae/v.maxVitae}%"></i></span>`;
-    tl.appendChild(c);
+    // guests and any unit without art have no SPR entry; maxVitae 0 (or a
+    // scripted unit mid-teardown) would otherwise write width:NaN%.
+    const sp=SPR[v.id];
+    const pct=v.maxVitae>0?Math.max(0,Math.min(100,100*v.vitae/v.maxVitae)):0;
+    // .av MUST be the first child -- the sheet hides the glyph via `.av ~ .gl`.
+    // href referenced once, not rebuilt: it is a ~40KB base64 data URI.
+    const av=sp?`<img class="av" src="${sp.href}" alt="">`:"";
+    c.innerHTML=`${av}<span class="gl">${v.glyph}</span><span class="hp"><i style="width:${pct}%"></i></span>`;
+    // hover bonus only -- name is on the board, VITAE is on the .hp bar
+    c.title=`${v.name} · ${v.vitae}/${v.maxVitae}`;
+    track.appendChild(c);
   });
+  tl.appendChild(track);
   const r=document.createElement("span");
-  r.style.cssText="color:var(--dim);margin-left:auto;padding-left:8px;";
-  r.textContent="FIGHT "+state.fight+"/"+FIGHTS.length+" · RND "+state.round;
+  r.className="tl-meta";                       // margin-left:auto + tracking now live in the sheet
+  r.innerHTML=`FIGHT ${state.fight}/${FIGHTS.length} · RND <b>${state.round}</b>`;
   tl.appendChild(r);
 }
 
