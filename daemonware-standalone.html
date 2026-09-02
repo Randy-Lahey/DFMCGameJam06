@@ -1472,6 +1472,23 @@
       },
     },
 
+    // ------------------------------------------------------------- power
+    // Amperage. Every bank has a rating (`amps` below); seated fluxes pull
+    // their `draw` per cast. Casting while total draw exceeds amps accrues
+    // STRAIN equal to the overdraw, PER CAST -- an overdrawn bank left
+    // untouched never strains; greed is only taxed when used. At burnAt the
+    // cast still resolves, THEN the bank burns offline for the rest of the
+    // fight. Strain clears at fight end. Combat-chamber only: crawl casts
+    // never strain. Loadout banks all sit in the COMMON band on purpose --
+    // every 2-bay bank carries two 2A workhorse fluxes exactly, and
+    // FVLMINANS (4A) overdraws almost anything COMMON. That is the envelope
+    // to push. ampBands are the DATA BANK drop bands, rolled 60/30/10
+    // COMMON/MAGIC/RARE (guaranteed RARE off the THRONVS Archon): RULED but
+    // not wired -- waits on the loot-table task, where a dropped bank rolls
+    // a band, then amps within it, stored on the item instance.
+    ampBands: { COMMON: [3, 4], MAGIC: [5, 6], RARE: [7, 8] },
+    strain: { burnAt: 10 },
+
     // ------------------------------------------------------------- banks
     // A DATA BANK *is* an operation: the archive that carries it. Daemons run
     // whatever banks are seated in their two slots; the OPERATOR's PERCVSSIO
@@ -1482,15 +1499,15 @@
     // `type` locks a bank to daemons of that alchemical type. `bays` is how
     // many FLUX cartridges it seats: workhorse ops get 2, spike ops get 1.
     banks: {
-      PERCVSSIO: { type: '\u2014',  bays: 1, intrinsic: true },
-      ABRASIO:   { type: 'SAL',     bays: 2 },
-      CONCRETIO: { type: 'SAL',     bays: 1 },
-      FVLGVR:    { type: 'SVLPHVR', bays: 2 },
-      IMMOLATIO: { type: 'SVLPHVR', bays: 1 },
-      LORICA:    { type: 'SAL',     bays: 1 },
-      PERMVTO:   { type: 'MERCVRIVS', bays: 1 },
-      IMPVLSVS:  { type: 'MERCVRIVS', bays: 2 },
-      VAPOR:     { type: 'SVLPHVR', bays: 2 },
+      PERCVSSIO: { type: '\u2014',  bays: 1, amps: 3, intrinsic: true },
+      ABRASIO:   { type: 'SAL',     bays: 2, amps: 4 },
+      CONCRETIO: { type: 'SAL',     bays: 1, amps: 3 },
+      FVLGVR:    { type: 'SVLPHVR', bays: 2, amps: 4 },
+      IMMOLATIO: { type: 'SVLPHVR', bays: 1, amps: 3 },
+      LORICA:    { type: 'SAL',     bays: 1, amps: 3 },
+      PERMVTO:   { type: 'MERCVRIVS', bays: 1, amps: 3 },
+      IMPVLSVS:  { type: 'MERCVRIVS', bays: 2, amps: 4 },
+      VAPOR:     { type: 'SVLPHVR', bays: 2, amps: 4 },
     },
     defaultLoadout: {
       OPERATOR: ['PERCVSSIO'],
@@ -1502,14 +1519,16 @@
     // ------------------------------------------------------------- fluxes
     // A FLUX seats into a bank bay and modifies that operation only.
     // Effects are resolved by fold() in src/game.js. `weight` drives the
-    // FLUX CELL drop sub-roll. FVLMINANS is deliberately greedy: power the
-    // body pays for. Strain will formalise this post-jam.
+    // FLUX CELL drop sub-roll. `draw` is the amps a cell pulls per cast
+    // (see the power note above banks). FVLMINANS is deliberately greedy:
+    // power the body pays for -- and the coil pays for: 4A overdraws any
+    // stock 3A bank, strain burns it out after ~10 forced casts.
     fluxes: {
-      VITRIOL:   { weight: 30, dmgBonus: 2,               note: '+2 damage.' },
-      NITRVM:    { weight: 22, pnDelta: -1,               note: '\u22121 PNEUMA cost. Floor 1.' },
-      VIVVM:     { weight: 20, rangeDelta: 1,             note: '+1 range.' },
-      ADAMANS:   { weight: 18, minDmg: 3,                 note: 'Minimum damage 3.' },
-      FVLMINANS: { weight: 10, dmgBonus: 5, vitaeCost: 2, note: '+5 damage. \u22122 VITAE per cast.' },
+      VITRIOL:   { weight: 30, draw: 2, dmgBonus: 2,               note: '+2 damage.' },
+      NITRVM:    { weight: 22, draw: 1, pnDelta: -1,               note: '\u22121 PNEUMA cost. Floor 1.' },
+      VIVVM:     { weight: 20, draw: 2, rangeDelta: 1,             note: '+1 range.' },
+      ADAMANS:   { weight: 18, draw: 2, minDmg: 3,                 note: 'Minimum damage 3.' },
+      FVLMINANS: { weight: 10, draw: 4, dmgBonus: 5, vitaeCost: 2, note: '+5 damage. \u22122 VITAE per cast.' },
     },
   };
 })();
@@ -1845,6 +1864,9 @@ const inB = (x,y)=>x>=0&&x<W&&y>=0&&y<H;
 // Party ops mirror data/balance.js operations + defaultLoadout (main).
 // dmg = round(mult * caster ATK) ±1 − target DEF. Each bank casts once per
 // turn (Dofus-style cap; main's depleting-PNEUMA model doesn't need one).
+// Amperage burn threshold. Single-sourced from data/balance.js when the
+// crawl loads it; the fallback only serves headless combat tests.
+const BURN_AT=(window.BALANCE&&window.BALANCE.strain&&window.BALANCE.strain.burnAt)||10;
 const BANKS = {
   PERCVSSIO:{name:"PERCVSSIO",kind:"strike",cost:4,mult:1,flat:1,min:1,max:1,los:true,repeat:true,
     desc:"Melee. One enemy, adjacent."},
@@ -1864,7 +1886,7 @@ const BANKS = {
   IACVLVM:{name:"IACVLVM",kind:"strike",cost:3,mult:1,min:2,max:4,los:true,desc:"foe shot"},
 };
 
-function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,stun:0,x:-1,y:-1,cds:{},cast:{}},o); }
+function mkUnit(o){ return Object.assign({vitae:o.maxVitae,pneuma:o.maxPneuma,cycles:0,alive:true,stun:0,x:-1,y:-1,cds:{},cast:{},strain:{},burnt:{}},o); }
 // Guest allies (FFT-style): party-side for targeting and win/loss, but
 // control:"ai" -- the player never selects them, their turn runs the same
 // brain as the foes with the target side flipped. guest:true keeps them out
@@ -2003,10 +2025,13 @@ function bankFor(u,id){
   if(m.pn)  o.cost=Math.max(1,o.cost+m.pn);
   if(m.vit) o.selfVitae=(o.selfVitae||0)+m.vit;
   if(m.min) o.minDmg=m.min;
+  if(m.amps!=null) o.amps=m.amps;   // amperage rating (strain gate)
+  if(m.draw!=null) o.draw=m.draw;   // total seated flux draw
   return o;
 }
 function whyNot(u,id){
   const bk=bankFor(u,id);
+  if(u.burnt&&u.burnt[id]) return bk.name+" IS BVRNT \u2014 OVERDRAWN THIS FIGHT";
   if(u.cds[id]>0) return bk.name+" RECHARGES IN "+u.cds[id]+" TVRN"+(u.cds[id]>1?"S":"");
   if(!bk.repeat&&u.cast[id]) return bk.name+" IS SPENT \u2014 ONE CAST PER TVRN";
   if(u.pneuma<bk.cost) return "NEED "+bk.cost+"\u25c6 PNEUMA \u2014 "+u.pneuma+"\u25c6 LEFT";
@@ -2024,7 +2049,7 @@ function canCast(u,id){
   const bk=bankFor(u,id);
   // repeat banks are pneuma-limited, not once-per-turn: PERCVSSIO costs 4 of
   // the OPERATOR's 10, so he swings twice a turn with 2 left for an ampoule.
-  return u.pneuma>=bk.cost && !(u.cds[id]>0) && (bk.repeat?true:!u.cast[id]);
+  return u.pneuma>=bk.cost && !(u.cds[id]>0) && !(u.burnt&&u.burnt[id]) && (bk.repeat?true:!u.cast[id]);
 }
 function rangeCells(u,bank){
   const out=[];
@@ -2062,7 +2087,7 @@ function setupFight(n){
     p.mods=(cfg&&cfg.mods&&cfg.mods[p.id])||null;   // crawl flux riders, per fight
     if(!p.alive){ p.alive=true; p.vitae=Math.round(p.maxVitae*0.5); } // dead daemons reboot at 50%
     if(n===3){ p.vitae=p.maxVitae; p.alive=true; }                    // full restore before the Archon
-    p.x=-1; p.y=-1; p.cds={}; p.cast={};
+    p.x=-1; p.y=-1; p.cds={}; p.cast={}; p.strain={}; p.burnt={};   // strain clears at fight end
   }
   // The crawl owns the satchel: whatever it sends is the fight's stock,
   // clamped to the belt. No cfg.items (debug direct start) keeps the local
@@ -2281,6 +2306,17 @@ function castAt(u,bank,x,y){
   u.pneuma-=bank.cost;
   if(!bank.repeat) u.cast[bank.name]=1;
   if(bank.cd) u.cds[bank.name]=bank.cd;
+  // Amperage strain (combat-only). Overdraw taxes PER CAST: strain grows by
+  // (draw - amps). The cast that reaches BURN_AT still resolves -- the
+  // punishment never eats the payoff mid-swing -- then the bank burns
+  // offline for the rest of the fight (see the burn block at the bottom).
+  let willBurn=false;
+  if(bank.amps!=null&&(bank.draw||0)>bank.amps){
+    const od=(bank.draw||0)-bank.amps;
+    u.strain[bank.name]=(u.strain[bank.name]||0)+od;
+    fxText(u.x,u.y,"STRAIN +"+od,"var(--ox)");
+    willBurn=!u.burnt[bank.name]&&u.strain[bank.name]>=BURN_AT;
+  }
   if(bank.kind==="sweep"){
     for(const [ax,ay] of cross(u.x,u.y).slice(1)){ // 4 neighbors, not self
       const t=unitAt(ax,ay);
@@ -2326,6 +2362,7 @@ function castAt(u,bank,x,y){
       if(u.vitae<=0){ u.alive=false; u.vitae=0; }
     }
   }
+  if(willBurn){ u.burnt[bank.name]=1; fxText(u.x,u.y,bank.name+" BVRNT","#e26a7c"); }
   checkOver();
 }
 const SATCHEL_MAX=3;
@@ -2612,9 +2649,11 @@ function drawHud(){
       const off=!canCast(u,id);
       b.className=(state.sel===id?"sel":"")+(off?" off":"");
       const rng=bk.kind==="sweep"?"self":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max)+" range";
-      const st=u.cds[id]>0?` · RECHARGE ${u.cds[id]}`
+      const st=u.burnt&&u.burnt[id]?" · BVRNT"
+        :u.cds[id]>0?` · RECHARGE ${u.cds[id]}`
         :(!bk.repeat&&u.cast[id]?" · SPENT THIS TVRN"
-        :(u.pneuma<bk.cost?` · NEED ${bk.cost}\u25c6`:""));
+        :(u.pneuma<bk.cost?` · NEED ${bk.cost}\u25c6`
+        :(u.strain&&u.strain[id]?` · STRAIN ${u.strain[id]}/${BURN_AT}`:"")));
       b.innerHTML=`<span class="cost">${u.banks.indexOf(id)+1}</span> ${bk.name} <span class="cost">${bk.cost}◆ ${rng}${st}</span>`;
       b.title=bk.desc;
       b.onclick=()=>{
@@ -2742,7 +2781,7 @@ apiStart=function(){
 };
 // Headless-test seam: live references into the closure so node tests can
 // drive placement/rounds. The game itself never reads this.
-window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
+window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, canCast, whyNot, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
 }
 window.DW_COMBAT={
   start(config){
@@ -5145,7 +5184,12 @@ window.DW_COMBAT={
         if (op.minDmg) d.min = op.minDmg;
         const vit = (op.vitaeCost || 0) - (base.vitaeCost || 0);
         if (vit) d.vit = vit;
-        if (Object.keys(d).length) (mods[cid] = mods[cid] || {})[slot.bank] = d;
+        // Power ride-along: EVERY seated bank crosses with its rating and
+        // its total flux draw so the chamber can run strain (combat-only).
+        d.amps = (B.banks[slot.bank] || {}).amps;
+        d.draw = (slot.fluxes || []).reduce(
+          (t, f) => t + (f && B.fluxes[f] ? (B.fluxes[f].draw || 0) : 0), 0);
+        (mods[cid] = mods[cid] || {})[slot.bank] = d;
       }
     }
     // Floor 2+ chambers field 2-3 foes. The crawl pack is honest -- only
@@ -5618,11 +5662,18 @@ window.DW_COMBAT={
   const delta = (n) => n > 0 ? `  (+${n})` : n < 0 ? `  (${n})` : '';
   const row = (k, v, dim) => `<div><dt>${k}</dt><dd${dim ? ' class="dim"' : ''}>${v}</dd></div>`;
 
-  // Three spec-plate columns for one bank, seated or loose. LOAD and STRAIN
-  // are reserved for the socket system and read as sealed until it lands.
+  // Three spec-plate columns for one bank, seated or loose. LOAD is live:
+  // total seated draw over the bank's amp rating, blood when overdrawn.
+  // STRAIN is live in the combat chamber only; out here it always reads 0.
   function bankSpec(bank, fluxes, seated) {
     const base = B.operations[bank];
     const op = fold({ bank, fluxes: fluxes || [] });
+    const amps = B.banks[bank].amps || 0;
+    const draw = (fluxes || []).filter(Boolean)
+      .reduce((t, f) => t + ((B.fluxes[f] || {}).draw || 0), 0);
+    const load = draw > amps
+      ? `<b style="color:var(--blood)">${draw}A / ${amps}A</b>`
+      : `${draw}A / ${amps}A`;
     const dmg = op.mult
       ? `ATK \u00d7${op.mult}${op.dmgBonus ? ' +' + op.dmgBonus : ''}`
       : op.def ? `DEF +${op.def}` : '\u2014';
@@ -5636,8 +5687,8 @@ window.DW_COMBAT={
       row('WIRING', 'PARALLEL') +
       row('SEATED', seatedTxt) +
       row('COOLDOWN', op.cd ? op.cd + ' TVRNS' : '\u2014'),
-      row('LOAD', '\u2014', 1) +
-      row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('LOAD', load, draw > amps ? 0 : 1) +
+      row('STRAIN', '0 / ' + B.strain.burnAt, 1) +
       row('PLVG', seated ? 'HEX \u00b7 MATED' : 'HEX \u00b7 OPEN') +
       row('SELF COST', op.vitaeCost ? op.vitaeCost + ' VITAE' : '\u2014'),
     ];
@@ -5649,10 +5700,10 @@ window.DW_COMBAT={
                  f.vitaeCost && `+${f.vitaeCost} VITAE COST`].filter(Boolean);
     return [
       row('KIND', 'FLVX CELL') + row('EFFECT', eff[0] || '\u2014') +
-      row('RIDER', eff[1] || '\u2014') + row('DRAW WEIGHT', f.weight),
+      row('RIDER', eff[1] || '\u2014') + row('DRAW', (f.draw || 0) + 'A'),
       row('SEATS IN', 'ANY BAY') + row('WIRING', 'PARALLEL') +
       row('TYPE LOCK', 'NONE') + row('RARITY', rarityOf({ kind: 'FLUX', flux: id })),
-      row('LOAD', '\u2014', 1) + row('STRAIN', '\u2014  (SEALED)', 1) +
+      row('LOAD', (f.draw || 0) + 'A PER CAST', 1) + row('STRAIN', 'SEE BANK', 1) +
       row('PLVG', 'CONTACT \u00b7 OPEN') + row('STACKS', 'ONE PER BAY'),
     ];
   }
