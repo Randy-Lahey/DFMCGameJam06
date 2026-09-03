@@ -2408,6 +2408,16 @@ const DWC_CSS = `
   color:var(--dim); text-shadow:0 1px 0 #000, 0 0 3px #000;
 }
 #dwc-root .op.sel .op-cap{ color:var(--gold); }
+/* empty socket: a dashed well, inert, never lit */
+#dwc-root .op.sock{
+  border:var(--hair) dashed var(--bd-soft); background:var(--surf-sunk);
+  box-shadow:none; pointer-events:none; opacity:.8;
+}
+#dwc-root .op.sock::after{
+  content:""; position:absolute; left:50%; top:50%; width:6px; height:6px;
+  transform:translate(-50%,-50%) rotate(45deg);
+  border:var(--hair) solid var(--bd-soft);
+}
 /* state number: positioned by the st-* rules below; empty = gone */
 #dwc-root .op-badge{
   position:absolute; z-index:4; pointer-events:none;
@@ -3935,6 +3945,8 @@ function drawGauges(u){
   // -- right: MANA orb
   orb(R,u.pneuma,u.maxPneuma,GAUGE_LABEL_R,"dwc-clip-r");
 }
+const BANK_SOCKETS=4;   // fixed bar width; no jam unit exceeds 4 banks
+function sockEl(){ const d=document.createElement("div"); d.className="op sock"; d.setAttribute("aria-hidden","true"); return d; }
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
         satchel=document.getElementById("dwc-satchel"), dock=document.getElementById("dwc-dock"),
@@ -3995,6 +4007,10 @@ function drawHud(){
       banks.appendChild(b);
       if(state.sel===id){ selBtn=b; stat.innerHTML=`<b>${bk.name}</b> · <b>${bk.cost}◆</b> · <b>${r}</b>`; }
     }
+    // Fixed track (RULED A): the bar is always BANK_SOCKETS wide + one
+    // satchel socket, so the orbs sit the same distance apart whatever the
+    // unit knows (D2 belt / Dofus bar). Unfilled sockets are inert divs.
+    for(let k=u.banks.length;k<BANK_SOCKETS;k++) banks.appendChild(sockEl());
     if(u.id==="op") for(const id in ITEMS){ // items are OPERATOR-only
       if(!state.items[id]) continue;        // empty satchel: no button, no noise
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
@@ -4021,6 +4037,7 @@ function drawHud(){
       dock.classList.remove("dwc-nosat");
       if(state.sel===sid) stat.innerHTML=`<b>${it.name}</b> · <b>${it.cost}◆</b> · <b>${r}</b> · <b>${n}</b> LEFT`;
     }
+    if(dock.classList.contains("dwc-nosat")){ satchel.appendChild(sockEl()); dock.classList.remove("dwc-nosat"); }
     // Nothing armed yet this fight: name the slots, since the slots do not.
     endb.disabled=false;
     // Bring a NEWLY selected bank into the track; leave the thumb alone
