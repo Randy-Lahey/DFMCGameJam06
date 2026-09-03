@@ -2732,6 +2732,10 @@
     if (k === 'm' && window.DW_SFX) { e.preventDefault(); log(DW_SFX.toggle() ? 'AVDIO MVTED.' : 'AVDIO LIVE.', 'good'); draw(); return; }
     // The sever screen's RETVRN answers to ENTER / SPACE as well as a tap.
     if (canWipe() && (k === 'enter' || k === ' ')) { e.preventDefault(); wipe(); draw(); return; }
+    // So does the sealed win's RETVRN (the tutorial win keeps RECOMPILE only).
+    if (state.over === 'WIN' && state.face.sealed && (k === 'enter' || k === ' ')) {
+      e.preventDefault(); loadTown(); draw(); return;
+    }
     if (finished()) return;
 
     // ? is a reference lookup, so it stays available mid-round.

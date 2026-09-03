@@ -229,7 +229,14 @@
      SEALED rows are real disabled buttons, so they are inert to tap, key
      and focus alike rather than merely dimmed. */
   .facerows{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
-  @media (max-width:520px){ .facerows{grid-template-columns:1fr} }
+  /* Four rows stack on a phone and run past the fold, so the card scrolls
+     inside the viewport instead of clipping THRONVS off the bottom. */
+  .facebox{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+  @media (max-width:520px){
+    .facerows{grid-template-columns:1fr;gap:8px;margin-top:14px}
+    .facerows .starter{padding:10px 14px;gap:3px}
+    .facebox{padding:18px 16px}
+  }
   .starter:disabled{opacity:.38;cursor:default}
   .starter:disabled:hover{background:transparent}
   .starter .st-state{font-size:9px;letter-spacing:.24em;margin-top:2px;color:var(--cyan)}
@@ -1104,7 +1111,7 @@
 
 <!-- THE CVBE: the NIGREDO face. Four tiles, 1-4 or tap; ESC closes. -->
 <div id="face" class="overlay">
-  <div class="dialog hermitbox">
+  <div class="dialog hermitbox facebox">
     <div class="dlg-eyebrow">THE CVBE &middot; NIGREDO</div>
     <div class="dlg-title">Four seals. Three are open to you.</div>
     <div id="face-rows" class="facerows"></div>
