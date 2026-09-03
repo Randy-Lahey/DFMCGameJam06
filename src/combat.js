@@ -217,29 +217,40 @@ const DWC_CSS = `
 #dwc-root #dwc-board svg{ width:100%; height:100%; display:block; }
 
 /* --- hud (overlay on the bottom of the board, respects the home indicator)
-   Two centred rows, Dofus-style: the ability row (dock: banks | satchel)
-   above, the resource row (.dwc-res: MOVEMENT gauge . stat line . MANA
-   gauge) below. Each row is only as wide as its content and centred, so the
-   stat line sits BETWEEN the gauges, not at the viewport edges. -------------- */
+   ARPG bar (PoE / Diablo 2): the orbs flank the skill row. Four children in
+   one wrapping flex row -- .dwc-res-l (VITAE coil over a MOVEMENT pip
+   strip), #dwc-dock (banks | satchel), #dwc-gauge-r (MANA coil), #dwc-stat --
+   and the media blocks reorder them:
+     wide (>=600px)   stat line on its own line, then  [VITAE+MOVE] dock [MANA]
+     portrait phone   dock on its own line, then       [VITAE+MOVE] stat [MANA]
+   The band is only as wide as its content and centred; the stat line
+   shrinks (and ellipsises) before anything else does. Four banks plus the
+   ampoule need 465px beside two 68px orbs, so under 600 the dock wraps. -- */
 #dwc-root #dwc-hud{
   position:absolute; left:0; right:0; bottom:0; z-index:12;
   pointer-events:none;
-  display:flex; flex-direction:column; align-items:center; gap:var(--s1);
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start;
+  row-gap:var(--s1); column-gap:var(--s2);
   padding:var(--s3) calc(var(--s3) + var(--sa-r))
           calc(var(--s2) + var(--sa-b)) calc(var(--s3) + var(--sa-l));
   background:linear-gradient(180deg, transparent 0, #04090bd9 30%, #04090bf5 100%);
 }
 #dwc-root #dwc-dock,
-#dwc-root .dwc-res{ pointer-events:auto; }
-/* resource row: the stat line shrinks (and ellipsises) before the gauges do.
-   Left of it a column: VITAE coil over MOVEMENT pips. Top-aligned so the
-   VITAE and MANA coils share a y; the stat line's line-height is one gauge
-   so it centres on that coil row. */
-#dwc-root .dwc-res{
-  display:flex; align-items:flex-start; gap:var(--s2);
-  max-width:100%; min-width:0;
+#dwc-root #dwc-stat,
+#dwc-root .dwc-res-l,
+#dwc-root #dwc-gauge-r{ pointer-events:auto; }
+#dwc-root .dwc-res-l{ display:flex; flex-direction:column; gap:var(--s1); flex:0 0 auto; order:2; }
+#dwc-root #dwc-dock{ order:3; }
+#dwc-root #dwc-gauge-r{ order:4; }
+#dwc-root #dwc-stat{ order:1; flex:0 1 100%; }
+/* portrait phone: the dock takes the first line, the stat sits between the
+   orbs on the second with a one-gauge line-height so it centres on them
+   (placement has no gauges: back to a normal line) */
+@media (max-width:599px){
+  #dwc-root #dwc-dock{ order:1; flex:0 0 100%; }
+  #dwc-root #dwc-stat{ order:3; flex:0 1 auto; line-height:var(--gauge); }
+  #dwc-root #dwc-dock.dwc-empty ~ #dwc-stat{ line-height:var(--lh); }
 }
-#dwc-root .dwc-res-l{ display:flex; flex-direction:column; gap:var(--s1); flex:0 0 auto; }
 
 
 /* ==========================================================================
@@ -249,7 +260,7 @@ const DWC_CSS = `
 /* NOTE: block, not flex -- the stat line is mixed text + <b> runs, and a flex
    container would shatter them into anonymous items and kill the ellipsis. */
 #dwc-root #dwc-stat{
-  flex:0 1 auto; min-width:0; line-height:var(--gauge);
+  min-width:0;
   color:var(--dim);
   font-size:var(--fs-sm); letter-spacing:var(--ls-2);
   text-transform:uppercase; text-align:center;
@@ -525,7 +536,7 @@ const DWC_CSS = `
    letting the tracks shrink and then scroll when the banks overflow. */
 #dwc-root #dwc-dock{
   display:flex; align-items:center; justify-content:center; gap:var(--s2);
-  width:max-content; max-width:100%; min-width:0; margin:0 auto;
+  width:max-content; max-width:100%; min-width:0;   /* no auto margins: they would push the orbs to the edges */
   min-height:var(--dock-h);
 }
 /* gauges: MOVEMENT pips left, MANA coil right, for the CURRENT unit
@@ -540,9 +551,13 @@ const DWC_CSS = `
   color:var(--teal);
 }
 #dwc-root .dwc-gauge[hidden]{ display:none; }
+/* MOVEMENT: a gauge-wide strip (56x20 viewBox) hung under the VITAE coil */
+#dwc-root #dwc-gauge-l{ height:auto; aspect-ratio:56/20; }
+#dwc-root #dwc-gauge-l .dwc-g-lbl{ font-size:6px; }
 #dwc-root .dwc-gauge svg{ width:100%; height:100%; display:block; overflow:visible; }
 /* svg text: sizes are viewBox units (label 7 -> 8.5px at the 68px gauge,
-   11.25px at 90; numeral 12 -> 14.6px at 68, 19.3px at 90) */
+   11.25px at 90; numeral 12 -> 14.6px at 68, 19.3px at 90; the MOVEMENT
+   strip label 6 -> 7.3px at 68, 9.6px at 90) */
 #dwc-root .dwc-g-lbl{
   font-size:7px; font-weight:700; letter-spacing:var(--ls-2);
   fill:var(--dim); text-anchor:middle;
@@ -947,7 +962,7 @@ const DWC_CSS = `
   #dwc-root .tile{ stroke-width:1.25; }
 }
 `;
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-dock">\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n    </div>\n    <div class="dwc-res">\n      <div class="dwc-res-l">\n        <div id="dwc-gauge-h" class="dwc-gauge" hidden></div>\n        <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      </div>\n      <div id="dwc-stat">—</div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-dock">\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n    </div>\n    <div class="dwc-res-l">\n      <div id="dwc-gauge-h" class="dwc-gauge" hidden></div>\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n    </div>\n    <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    <div id="dwc-stat">—</div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -1894,23 +1909,19 @@ function drawGauges(u){
     el.hidden=false;
   };
   coil(H,u.vitae,u.maxVitae,GAUGE_LABEL_H);
-  // -- left: CYCLES as pips in a circuit-trace frame. Notched (PCB-edge)
-  //    corners on the OUTER side, traces running in from the frame to the
-  //    pip group. Spent pips are the ones from the RIGHT.
+  // -- left: CYCLES as pips in a 56x20 strip under the VITAE coil, notched
+  //    (PCB-edge) corners on the outer side. The pips share 48 units of
+  //    width whatever the max (the old 8x4 layout escaped the frame past
+  //    max 4). Spent pips are the ones from the RIGHT.
   {
     const max=clamp(u.maxCycles,8), n=clamp(u.cycles,max);
-    const pw=8, pg=4, ph=22, py=8, tot=max*pw+(max-1)*pg, x0=28-tot/2;
-    let s=open;
-    s+='<path class="dwc-g-frame" d="M8,2 H51 Q54,2 54,5 V51 Q54,54 51,54 H8 L2,48 V8 Z"/>';
-    // traces: mid-height from each frame edge to the group, pads at the ends
-    const ty=py+ph/2;
-    s+='<path class="dwc-g-trace" d="M2,'+ty+' H'+(x0-3)+' M'+(x0+tot+3)+','+ty+' H54 M'+(x0+pw/2)+',2 V'+(py-2)+' M'+(x0+tot-pw/2)+',54 V'+(py+ph+2)+'"/>';
-    s+='<rect x="'+(x0-4.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
-    s+='<rect x="'+(x0+tot+1.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
+    const pg=3, pw=Math.min(10,(48-(max-1)*pg)/max), ph=8, py=3, tot=max*pw+(max-1)*pg, x0=28-tot/2;
+    let s='<svg viewBox="0 0 56 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
+    s+='<path class="dwc-g-frame" d="M4,.5 H53.5 Q55.5,.5 55.5,2.5 V17.5 Q55.5,19.5 53.5,19.5 H4 L.5,16 V4 Z"/>';
     for(let i=0;i<max;i++){
-      s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg))+'" y="'+py+'" width="'+pw+'" height="'+ph+'" rx="1.5"/>';
+      s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg)).toFixed(2)+'" y="'+py+'" width="'+pw.toFixed(2)+'" height="'+ph+'" rx="1"/>';
     }
-    s+='<text class="dwc-g-lbl" x="28" y="45">'+GAUGE_LABEL_L+'</text></svg>';
+    s+='<text class="dwc-g-lbl" x="28" y="18">'+GAUGE_LABEL_L+'</text></svg>';
     L.innerHTML=s; L.setAttribute("role","img");
     L.setAttribute("aria-label",GAUGE_LABEL_L+" "+n+" of "+max);
     L.hidden=false;
@@ -1948,8 +1959,8 @@ function drawHud(){
   endb.style.display="";
   placeEndBtn();
   const u=cur(); if(!u){ drawGauges(null); return; }
-  // name · VITAE only: CYCLES and PNEUMA are the two gauges flanking this line
-  stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b>`;
+  // the name only: VITAE, CYCLES and PNEUMA are the gauges
+  stat.innerHTML=`<b>${u.name}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
     for(const id of u.banks){
       const bk=bankFor(u,id), b=document.createElement("button");

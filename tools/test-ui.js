@@ -224,9 +224,10 @@ console.log('-- dock');
   // Round-2 addendum: no bands above or below the arena, two centred rows, bigger gauges.
   ok(!bare.includes('#dwc-hud::before') && !/#dwc-root #dwc-tl\{[^}]*background/.test(bare), 'no silkscreen band under the hud, no panel band behind the timeline');
   ok(/--gauge\s*:\s*68px/.test(bare) && /--gauge\s*:\s*90px/.test(bare) && /\.dwc-gauge\{[^}]*width:var\(--gauge\)/.test(bare), 'gauge size tokens: 68px phone, 90px desktop');
-  ok(hud.indexOf('id="dwc-dock"') < hud.indexOf('class="dwc-res"') && hud.indexOf('id="dwc-gauge-l"') < hud.indexOf('id="dwc-stat"') && hud.indexOf('id="dwc-stat"') < hud.indexOf('id="dwc-gauge-r"'),
-     'ability row above the resource row; stat line between the gauges');
-  ok(/class="dwc-res-l">[^]*?id="dwc-gauge-h"[^]*?id="dwc-gauge-l"[^]*?<\/div>[^]*?id="dwc-stat"/.test(hud), 'VITAE coil over MOVEMENT pips, left of the stat line');
+  ok(/class="dwc-res-l">[^]*?id="dwc-gauge-h"[^]*?id="dwc-gauge-l"[^]*?<\/div>[^]*?id="dwc-gauge-r"[^]*?id="dwc-stat"/.test(hud) && hud.indexOf('id="dwc-dock"') < hud.indexOf('class="dwc-res-l"'),
+     'ARPG bar: dock, VITAE-over-MOVEMENT column, MANA, stat line as one wrapping band');
+  ok(/#dwc-hud\{[^}]*flex-wrap:wrap/.test(bare) && /@media \(max-width:599px\)\{[^@]*#dwc-dock\{[^}]*flex:0 0 100%/.test(bare), 'portrait phones wrap the dock onto its own line');
+  ok(/#dwc-gauge-l\{[^}]*aspect-ratio:56\/20/.test(bare) && code.includes('viewBox="0 0 56 20"'), 'MOVEMENT is a 56x20 pip strip');
   ok(/#dwc-gauge-h\{[^}]*color:var\(--ox-hi\)/.test(bare), 'VITAE coil is oxblood');
   ok(!/id="dwc-dock"[\s\S]*?dwc-gauge[\s\S]*?id="dwc-satchel"/.test(hud), 'gauges are out of the dock row');
   ok(code.includes('PNEUMA, RANGE'), 'slot aria-labels spell PNEUMA as the stat line does');
@@ -278,7 +279,7 @@ console.log('-- dock');
   const u = T.cur();
   ok(!!u && u.id === 'op', 'OPERATOR has the first turn in the stub fight');
   const stat = byId['dwc-stat'];
-  ok(/<b>OPERATOR<\/b> · VITAE <b>\d+\/\d+<\/b>$/.test(stat.innerHTML), 'nothing armed: stat line is name · VITAE only -- ' + stat.innerHTML);
+  ok(/^<b>OPERATOR<\/b>$/.test(stat.innerHTML), 'nothing armed: stat line is the name only -- ' + stat.innerHTML);
   ok(/class="op-cap">PERCVSSIO</.test(byId['dwc-banks'].children[0].innerHTML) && /class="op-cap">AMPVLLA VITAE</.test(byId['dwc-satchel'].children[0].innerHTML), 'every slot carries its name as a caption');
 
   u.banks = ['PERCVSSIO', 'ABRASIO', 'CONCRETIO', 'IMPVLSVS', 'IMMOLATIO', 'IACVLVM'];
