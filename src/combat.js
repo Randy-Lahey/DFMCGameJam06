@@ -519,8 +519,36 @@ const DWC_CSS = `
   width:max-content; max-width:100%; min-width:0; margin:0 auto;
   min-height:var(--dock-h);
 }
-/* gauge placeholders (a later phase fills them); hidden = reserve nothing */
-#dwc-root .dwc-gauge{ width:var(--slot); height:var(--slot); flex:0 0 auto; }
+/* gauges: CYCLES pips left, PNEUMA coil right, for the CURRENT unit
+   (drawGauges, next to drawHud). Each is one --slot square holding an inline
+   56x56 svg; the label lives inside the svg so the box stays square.
+   hidden = reserve nothing -- the author display:flex would beat the UA
+   [hidden] rule, so restate it. */
+#dwc-root .dwc-gauge{
+  width:var(--slot); height:var(--slot); flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--teal);
+}
+#dwc-root .dwc-gauge[hidden]{ display:none; }
+#dwc-root .dwc-gauge svg{ width:100%; height:100%; display:block; overflow:visible; }
+/* svg text: sizes are viewBox units (7 -> 6px at the 48px slot, 7px at 56) */
+#dwc-root .dwc-g-lbl{
+  font-size:7px; font-weight:700; letter-spacing:var(--ls-2);
+  fill:var(--dim); text-anchor:middle;
+}
+#dwc-root .dwc-g-trace{ stroke:currentColor; stroke-width:.75; opacity:.55; fill:none; }
+#dwc-root .dwc-g-frame{ stroke:var(--tealdim); stroke-width:1; fill:var(--surf-1); }
+#dwc-root .dwc-g-pip{ fill:var(--teal); filter:drop-shadow(0 0 3px #39c8c1aa); }
+#dwc-root .dwc-g-pip.dwc-spent{ fill:var(--surf-sunk); stroke:var(--tealdim); stroke-width:1; filter:none; }
+#dwc-root .dwc-g-vessel{ stroke:currentColor; stroke-width:1.25; fill:var(--surf-sunk); }
+#dwc-root .dwc-g-fill{ fill:var(--teal); opacity:.55; }
+#dwc-root .dwc-g-fill-top{ stroke:var(--teal-hi); stroke-width:1; }
+#dwc-root .dwc-g-rung{ stroke:var(--tealdim); stroke-width:.75; }
+#dwc-root .dwc-g-cap{ fill:var(--tealdim); }
+#dwc-root .dwc-g-num{
+  font-size:12px; font-weight:700; fill:var(--white); text-anchor:middle;
+  paint-order:stroke; stroke:#04090b; stroke-width:3px; stroke-linejoin:round;
+}
 #dwc-root #dwc-banks,
 #dwc-root #dwc-satchel{
   display:flex; gap:var(--s2); align-items:center;
@@ -1825,6 +1853,69 @@ function placeEndBtn(){
   endb.style.bottom=need>pct?need+"px":"";
 }
 window.addEventListener("resize",placeEndBtn);   // once: initLogic runs once per mount
+
+// --- gauges: two per-turn pools flanking the dock (ruling C) ---------------
+// Diablo II puts life left / mana right; we put CYCLES left, PNEUMA right,
+// for the CURRENT unit -- foe turns show the foe's numbers. VITAE is not a
+// gauge. Left is discrete pips (three-of-four must be countable), right is a
+// coil that drains as casts spend it. Built by string concat into innerHTML:
+// no ids inside (the markup is per gauge), no handlers.
+// Gauge labels are an open ruling (PNEUMA/CYCLES vs MANA/MOVEMENT): two
+// strings, nothing else in the vocabulary depends on them.
+const GAUGE_LABEL_L="CYCLES", GAUGE_LABEL_R="PNEUMA";
+const DWC_GAUGES=true;    // ruling C: CYCLES left, PNEUMA right, current unit
+function drawGauges(u){
+  const L=document.getElementById("dwc-gauge-l"), R=document.getElementById("dwc-gauge-r");
+  if(!L||!R) return;
+  if(!DWC_GAUGES||!u){ L.hidden=true; R.hidden=true; L.innerHTML=""; R.innerHTML=""; return; }
+  const clamp=(n,m)=>Math.max(0,Math.min(m,n|0));
+  const open='<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
+  // -- left: CYCLES as pips in a circuit-trace frame. Notched (PCB-edge)
+  //    corners on the OUTER side, traces running in from the frame to the
+  //    pip group. Spent pips are the ones from the RIGHT.
+  {
+    const max=clamp(u.maxCycles,8), n=clamp(u.cycles,max);
+    const pw=8, pg=4, ph=22, py=8, tot=max*pw+(max-1)*pg, x0=28-tot/2;
+    let s=open;
+    s+='<path class="dwc-g-frame" d="M8,2 H51 Q54,2 54,5 V51 Q54,54 51,54 H8 L2,48 V8 Z"/>';
+    // traces: mid-height from each frame edge to the group, pads at the ends
+    const ty=py+ph/2;
+    s+='<path class="dwc-g-trace" d="M2,'+ty+' H'+(x0-3)+' M'+(x0+tot+3)+','+ty+' H54 M'+(x0+pw/2)+',2 V'+(py-2)+' M'+(x0+tot-pw/2)+',54 V'+(py+ph+2)+'"/>';
+    s+='<rect x="'+(x0-4.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
+    s+='<rect x="'+(x0+tot+1.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
+    for(let i=0;i<max;i++){
+      s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg))+'" y="'+py+'" width="'+pw+'" height="'+ph+'" rx="1.5"/>';
+    }
+    s+='<text class="dwc-g-lbl" x="28" y="45">'+GAUGE_LABEL_L+'</text></svg>';
+    L.innerHTML=s; L.setAttribute("role","img");
+    L.setAttribute("aria-label",GAUGE_LABEL_L+" "+n+" of "+max);
+    L.hidden=false;
+  }
+  // -- right: PNEUMA as a capacitor/coil. Vessel outline, fill from the
+  //    bottom, five rungs drawn OVER the fill so it reads as windings, then
+  //    the numeral with a dark stroke so it survives the half-fill.
+  {
+    const max=Math.max(1,u.maxPneuma|0), n=clamp(u.pneuma,max), frac=n/max;
+    const vx=10, vy=4, vw=36, vh=36, ix=vx+1, iy=vy+1, iw=vw-2, ih=vh-2;
+    const fh=Math.round(ih*frac*2)/2, fy=iy+ih-fh;
+    let s=open;
+    s+='<rect class="dwc-g-cap" x="22" y="1" width="12" height="3" rx="1"/>';
+    s+='<rect class="dwc-g-cap" x="22" y="40" width="12" height="3" rx="1"/>';
+    s+='<rect class="dwc-g-vessel" x="'+vx+'" y="'+vy+'" width="'+vw+'" height="'+vh+'" rx="3"/>';
+    if(fh>0){
+      s+='<rect class="dwc-g-fill" x="'+ix+'" y="'+fy+'" width="'+iw+'" height="'+fh+'" rx="2"/>';
+      s+='<line class="dwc-g-fill-top" x1="'+ix+'" y1="'+fy+'" x2="'+(ix+iw)+'" y2="'+fy+'"/>';
+    }
+    let rungs="";
+    for(let k=1;k<=5;k++){ const ry=(iy+ih*k/6).toFixed(1); rungs+='M'+(vx-2)+','+ry+' H'+(vx+vw+2)+' '; }
+    s+='<path class="dwc-g-rung" d="'+rungs.trim()+'"/>';
+    s+='<text class="dwc-g-num" x="28" y="26.5">'+n+'/'+max+'</text>';
+    s+='<text class="dwc-g-lbl" x="28" y="52">'+GAUGE_LABEL_R+'</text></svg>';
+    R.innerHTML=s; R.setAttribute("role","img");
+    R.setAttribute("aria-label",GAUGE_LABEL_R+" "+n+" of "+max);
+    R.hidden=false;
+  }
+}
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
         satchel=document.getElementById("dwc-satchel"), dock=document.getElementById("dwc-dock"),
@@ -1849,11 +1940,12 @@ function drawHud(){
       b.onclick=()=>{state.phase="battle"; newRound();};
       board.appendChild(b);
     }
+    drawGauges(null);   // placement: no current unit, nothing to gauge
     endb.style.display="none"; return;
   }
   endb.style.display="";
   placeEndBtn();
-  const u=cur(); if(!u) return;
+  const u=cur(); if(!u){ drawGauges(null); return; }
   stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
     const names=[];   // for the learnability line: the slots carry no names
@@ -1928,6 +2020,7 @@ function drawHud(){
       }
     }
   } else { endb.disabled=true; }
+  drawGauges(u);   // both sides: a foe's turn shows the foe's pools
 }
 
 /* ============================= input ============================== */

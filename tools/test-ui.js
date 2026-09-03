@@ -335,5 +335,53 @@ console.log('-- END TVRN plaque');
   ok(code.includes('document.getElementById("dwc-endbtn").onclick='), 'END TVRN onclick handler still assigned on #dwc-endbtn');
 }
 
+// ------------------------------------------------------------ gauges
+// Round-2 ruling C: CYCLES pips left, PNEUMA coil right, for the current unit.
+console.log('-- gauges');
+{
+  ok(/const GAUGE_LABEL_L="CYCLES", GAUGE_LABEL_R="PNEUMA";/.test(code), 'gauge labels are the two constants (rename = two strings)');
+  ok(/const DWC_GAUGES=true;/.test(code), 'gauges are switched on');
+  ok(code.includes('function drawGauges('), 'drawGauges exists');
+  ok(bare.includes('.dwc-gauge[hidden]') && bare.includes('.dwc-g-pip') && bare.includes('.dwc-g-fill'), 'sheet styles the gauge, its pips and its fill');
+  // Stubbed run: 3 of 4 cycles, 7 of 14 pneuma on the current unit.
+  const vm = require('vm');
+  const byId = {};
+  const mk = () => { const t = { attrs: {}, style: {}, children: [], hidden: true, innerHTML: '', className: '',
+      classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } } };
+    t.style.setProperty = () => {}; t.setAttribute = (k, v) => { t.attrs[k] = String(v); }; t.getAttribute = k => t.attrs[k] ?? null;
+    t.appendChild = c => { t.children.push(c); return c; }; t.removeChild = () => {}; t.remove = () => {}; t.insertBefore = () => {};
+    t.addEventListener = () => {}; t.removeEventListener = () => {}; t.focus = () => {};
+    t.querySelector = () => mk(); t.querySelectorAll = () => [];
+    t.getBoundingClientRect = () => ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 });
+    t.getBBox = () => ({ x: 0, y: 0, width: 10, height: 10 }); t.childNodes = []; return t; };
+  const doc = { getElementById: id => (byId[id] = byId[id] || mk()), createElement: mk, createElementNS: () => mk(),
+    querySelector: () => mk(), querySelectorAll: () => [], addEventListener() {}, removeEventListener() {},
+    activeElement: null, body: mk(), documentElement: mk(), head: mk() };
+  const ctx = { document: doc, console, setTimeout: () => 0, clearTimeout() {}, requestAnimationFrame: () => 0,
+    matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
+    innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, navigator: { maxTouchPoints: 0 }, addEventListener() {}, removeEventListener() {} };
+  ctx.window = ctx; ctx.self = ctx; vm.createContext(ctx);
+  for (const f of ['data/balance.js', 'src/icons.js', 'src/combat.js']) vm.runInContext(src(f), ctx, { filename: f });
+  ctx.DW_COMBAT.start({ fight: 1, party: [{ id: 'op', frac: 1 }] });
+  const T = ctx.__DWC_TEST, s = T.state;
+  ok(byId['dwc-gauge-l'].hidden === true && byId['dwc-gauge-r'].hidden === true, 'placement: both gauges hidden');
+  const free = [];
+  for (let x = 0; x < 2; x++) for (let y = 0; y < 12; y++) if (!s.units.some(u => u.alive && u.x === x && u.y === y)) free.push([x, y]);
+  while (s.toPlace.length) { const u = s.units.find(v => v.id === s.toPlace.shift()); [u.x, u.y] = free.shift(); }
+  s.phase = 'battle'; T.newRound();
+  const u = T.cur(); u.maxCycles = 4; u.cycles = 3; u.maxPneuma = 14; u.pneuma = 7; T.drawHud();
+  const L = byId['dwc-gauge-l'], R = byId['dwc-gauge-r'];
+  ok(L.hidden === false && R.hidden === false, 'battle: both gauges shown');
+  ok(L.attrs['aria-label'] === 'CYCLES 3 of 4' && L.attrs['role'] === 'img', 'left gauge aria: ' + L.attrs['aria-label']);
+  ok(R.attrs['aria-label'] === 'PNEUMA 7 of 14' && R.attrs['role'] === 'img', 'right gauge aria: ' + R.attrs['aria-label']);
+  const pips = L.innerHTML.match(/class="dwc-g-pip[^"]*"/g) || [];
+  ok(pips.length === 4 && pips.filter(p => /dwc-spent/.test(p)).length === 1 && !/dwc-spent/.test(pips[2]) && /dwc-spent/.test(pips[3]),
+     'four pips, exactly the last one spent (' + pips.join(' ') + ')');
+  ok(R.innerHTML.includes(">7/14<"), 'coil shows the 7/14 numeral');
+  ok(/CYCLES/.test(L.innerHTML) && /PNEUMA/.test(R.innerHTML), 'labels rendered from the constants');
+  u.pneuma = 0; T.drawHud();
+  ok(R.attrs['aria-label'] === 'PNEUMA 0 of 14', 'drains: aria follows the pool (' + R.attrs['aria-label'] + ')');
+}
+
 console.log(fail ? '\n' + fail + ' FAILED (' + pass + ' passed)' : '\nall ' + pass + ' checks passed');
 process.exit(fail ? 1 : 0);
