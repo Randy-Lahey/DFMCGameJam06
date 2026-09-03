@@ -247,5 +247,43 @@ console.log('-- THRONVS: the Archon down seals the face');
      s.face.cleared.length === 3, 'RETVRN keeps the sealed face');
 }
 
+// ============================================================ wipe
+console.log('-- wipe: two cleared, OPERATOR severed, RETVRN resets the day');
+{
+  const plain = FACE.tiles.filter(t => !t.archon).map(t => t.id);
+  s.hasCube = true;                     // a real run reaches town through takeCube()
+  s.face.cleared = plain.slice(0, 2); s.face.sealed = false;
+  s.bag.argent = 77; s.ampoules = 2;
+  s.bag.items.push({ kind: 'FLUX', flux: 'VITRIOL', label: 'VITRIOL', sprite: 'flux', rarity: 'UNCOMMON' });
+  const bagN = s.bag.items.length, rig = JSON.stringify(s.loadout);
+  enter('PVTREFACTORIVM');
+  const before = Object.assign({}, s.face.affix);
+  T.lead().hp = 0;
+  T.resolveRound(null);
+  ok(s.over === 'SEVERED', 'OPERATOR at 0 -> SEVERED');
+  T.wipe();
+  ok(s.over === null && T.F.name === 'THE REFVGE' && s.tile === null, 'wipe returns to THE REFVGE');
+  ok(s.face.cleared.length === 0 && s.face.sealed === false, 'all tile progress reset');
+  ok(plain.every(T.tileUnlocked) && !T.tileUnlocked('THRONVS'), 'three OPEN again, THRONVS SEALED again');
+  ok(s.circle.members.every(m => m.hp === m.vitae), 'every member back at max VITAE');
+  ok(s.bag.argent === 77 && s.ampoules === 2 && s.bag.items.length === bagN &&
+     JSON.stringify(s.loadout) === rig, 'ARGENT, ampoules, bag and loadout untouched');
+  ok(s.log.some(l => /THE DAY ENDS\. THE FACE TVRNS\. NEW SEALS\./.test(l.text)), 'the day-ends line logged');
+  // The reroll is random, so identical labels are possible (1 in 120):
+  // reroll until something differs, bounded, and assert the labels can move.
+  let differs = FACE.tiles.some(t => s.face.affix[t.id] !== before[t.id]);
+  for (let i = 0; i < 40 && !differs; i++) {
+    T.rerollAffixes();
+    differs = FACE.tiles.some(t => s.face.affix[t.id] !== before[t.id]);
+  }
+  ok(differs, 'affix labels rerolled (at least one tile differs from before the wipe)');
+  ok(new Set(FACE.tiles.map(t => s.face.affix[t.id])).size === 4, 'rerolled labels still distinct');
+  // Tutorial wipe (no Cube) keeps today's behaviour: the run ends, no RETVRN.
+  s.hasCube = false; s.over = 'SEVERED';
+  T.wipe();
+  ok(s.over === 'SEVERED', 'wipe is a no-op before the Cube: the tutorial run just ends');
+  s.hasCube = true; s.over = null;
+}
+
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

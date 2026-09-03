@@ -940,6 +940,22 @@
     loadTown();
   }
 
+  // Party wipe past the tutorial: the day ends, not the run. Everyone wakes
+  // whole in THE REFVGE, every tile is OPEN again under a new label, the
+  // cleared count is back to 0. ARGENT, bag, loadout and ampoules are kept.
+  // A tutorial wipe (no Cube yet) keeps today's behaviour: the run ends.
+  const canWipe = () => state.over === 'SEVERED' && state.hasCube;
+  function wipe() {
+    if (!canWipe()) return;
+    state.face.cleared = [];
+    state.face.sealed = false;
+    rerollAffixes();
+    state.circle.members.forEach(m => { m.hp = m.vitae; });
+    state.over = null;
+    log('THE DAY ENDS. THE FACE TVRNS. NEW SEALS.', 'bad');
+    loadTown();
+  }
+
   function checkEnd() {
     if (operator().hp <= 0) {
       state.over = 'SEVERED';
@@ -2293,6 +2309,10 @@
     loadTown(); draw();
   });
   document.getElementById('sever-again').addEventListener('click', () => window.location.reload());
+  document.getElementById('sever-return').addEventListener('click', () => {
+    if (!tapOk()) return;
+    wipe(); draw();
+  });
 
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
@@ -2331,6 +2351,7 @@
     }
 
     if (state.over === 'SEVERED') {
+      document.getElementById('sever-return').hidden = !canWipe();
       const dead = state.foes.filter(f => f.hp <= 0).length;
       document.getElementById('sever-stats').innerHTML = [
         ['SVRVIVED TO TVRN', state.turn],
@@ -2675,6 +2696,8 @@
     // screen: reading your haul after the descent is half the reward.
     if (k === 'i') { e.preventDefault(); openInv(); draw(); return; }
     if (k === 'm' && window.DW_SFX) { e.preventDefault(); log(DW_SFX.toggle() ? 'AVDIO MVTED.' : 'AVDIO LIVE.', 'good'); draw(); return; }
+    // The sever screen's RETVRN answers to ENTER / SPACE as well as a tap.
+    if (canWipe() && (k === 'enter' || k === ' ')) { e.preventDefault(); wipe(); draw(); return; }
     if (finished()) return;
 
     // ? is a reference lookup, so it stays available mid-round.
@@ -3373,7 +3396,7 @@
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
                   hermitSacrifice, takeCube, enterCombat, debugSacrifice,
-                  tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile, extract,
+                  tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile, extract, wipe,
                   get F() { return F; } };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
