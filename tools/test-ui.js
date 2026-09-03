@@ -393,5 +393,14 @@ console.log('-- gauges');
   ok(R.attrs['aria-label'] === 'MANA 0 of 14', 'drains: aria follows the pool (' + R.attrs['aria-label'] + ')');
 }
 
+// ------------------------------------------------------------ fixed track (RULED A)
+console.log('-- fixed track');
+{
+  ok(/const BANK_SOCKETS=4;/.test(code), 'bar is 4 bank sockets wide');
+  ok(bare.includes('.op.sock{') && /\.op\.sock\{[^}]*pointer-events:none/.test(bare), 'empty sockets are styled and inert');
+  ok(code.includes('for(let k=u.banks.length;k<BANK_SOCKETS;k++) banks.appendChild(sockEl());'), 'banks pad to BANK_SOCKETS');
+  ok(code.includes('satchel.appendChild(sockEl()); dock.classList.remove("dwc-nosat");'), 'empty satchel shows one socket');
+}
+
 console.log(fail ? '\n' + fail + ' FAILED (' + pass + ' passed)' : '\nall ' + pass + ' checks passed');
 process.exit(fail ? 1 : 0);
