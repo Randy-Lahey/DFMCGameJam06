@@ -1930,7 +1930,7 @@ function drawGauges(u){
     s+='<circle class="dwc-g-vessel" cx="'+cx+'" cy="'+cy+'" r="'+r+'"/>';
     // fill + meniscus (chord across the circle at fy)
     if(frac>0){
-      const d=fy-cy, hw=Math.sqrt(Math.max(0,ir*ir-d*d)).toFixed(1);
+      const d=fy-cy, hw=Math.round(Math.sqrt(Math.max(0,ir*ir-d*d))*10)/10;   // number, not toFixed: cx+hw must add, not concatenate
       s+='<rect class="dwc-g-fill" clip-path="url(#'+cid+')" x="'+(cx-ir)+'" y="'+fy+'" width="'+(ir*2)+'" height="'+(cy+ir-fy).toFixed(1)+'"/>';
       s+='<line class="dwc-g-fill-top" x1="'+(cx-hw)+'" y1="'+fy+'" x2="'+(cx+hw)+'" y2="'+fy+'"/>';
     }
