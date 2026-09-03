@@ -176,8 +176,6 @@ const DWC_CSS = `
           var(--s2) calc(var(--s3) + var(--sa-l));
   overflow:hidden;                    /* the TRACK scrolls, not the strip */
   background:var(--surf-1);
-  border-bottom:var(--hair) solid var(--bd);
-  box-shadow:0 1px 0 #39c8c112;
   color:var(--dim); font-size:var(--fs-sm); letter-spacing:var(--ls-2);
 }
 /* the scrolling half: chips only */
@@ -235,8 +233,6 @@ const DWC_CSS = `
 #dwc-root #dwc-hud::before{
   content:""; position:absolute; left:0; right:0; top:30%; bottom:0; z-index:-1;
   pointer-events:none;
-  border-top:var(--hair) solid var(--bd);
-  box-shadow:var(--panel-lip);
   background-image:
     linear-gradient(#39c8c108 var(--hair), transparent var(--hair)),
     linear-gradient(90deg, #39c8c108 var(--hair), transparent var(--hair));
@@ -876,7 +872,6 @@ const DWC_CSS = `
   #dwc-root #dwc-dock{ grid-column:2; }
   /* On portrait and desktop the viewBox's own bottom margin absorbs the
      overlay; on landscape it does not, so the board gives up the dock's row. */
-  #dwc-root #dwc-board{ padding-bottom:var(--dock-h); }
   /* phone-sized plaque even at 844 wide (this block follows min-width:760) */
   #dwc-root #dwc-endbtn{ width:64px; height:76px; }
   #dwc-root .end-plq{ width:52px; height:52px; }

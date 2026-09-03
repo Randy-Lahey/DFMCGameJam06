@@ -219,8 +219,8 @@ console.log('-- dock');
   ok(datas.length > 0 && datas.every(d => /data:image\/svg\+xml/.test(d)), 'every data: url() in the sheet is inline SVG (' + datas.length + ')');
   ok(/#dwc-root #dwc-hud\{[^}]*position:absolute/.test(bare), '#dwc-hud overlays the board (position:absolute)');
   ok(/#dwc-root #dwc-hud\{[^}]*pointer-events:none/.test(bare), '#dwc-hud fade zone passes taps through to the board');
-  ok(/@media \(max-height:460px\)\{[\s\S]*?#dwc-root #dwc-board\{[^}]*padding-bottom:var\(--dock-h\)/.test(bare),
-     'landscape phone insets the board so the dock never covers a tile');
+  ok(!/#dwc-board{[^}]*padding-bottom:var(--dock-h)/.test(bare), 'board is never inset for the dock: the battlefield runs under the fade zone');
+  ok(!/#dwc-tl{[^}]*border-bottom/.test(bare) && !/#dwc-hud::before{[^}]*border-top/.test(bare), 'no rule lines above or below the board');
   ok(code.includes('PNEUMA, RANGE'), 'slot aria-labels spell PNEUMA as the stat line does');
   ok(/const rangeText=/.test(code), 'rangeText helper exists (numeric range for aria + stat line)');
   ok(code.includes('hudArmed.clear()') && code.includes('hudArmed.add(u.id)'), 'learnability set is reset per fight and marked on arming');
