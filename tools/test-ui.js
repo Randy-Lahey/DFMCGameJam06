@@ -310,5 +310,30 @@ console.log('-- dock');
   ok(/BVRNT/.test(stat.innerHTML) && /class="warn"/.test(stat.innerHTML), 'tapping the burnt slot flashes whyNot in the stat line');
 }
 
+// ------------------------------------------------------------ END TVRN plaque
+// Round-2 ruling A: the turn control floats over the board, anchored to
+// #dwc-board (20% up, 15% in from the right), clamped clear of the dock.
+console.log('-- END TVRN plaque');
+{
+  const hud = html ? html[1] : '';
+  const boardOpen = hud.indexOf('id="dwc-board"'), boardClose = hud.indexOf('</div>', boardOpen);
+  const endAt = hud.indexOf('id="dwc-endbtn"');
+  ok(endAt > boardOpen && endAt < boardClose, '#dwc-endbtn lives inside #dwc-board, after the svg');
+  ok(!/id="dwc-dock"[\s\S]*?id="dwc-endbtn"[\s\S]*?<\/div>\s*<\/div>/.test(hud.slice(hud.indexOf('id="dwc-dock"'))) ||
+     hud.indexOf('id="dwc-endbtn"') < hud.indexOf('id="dwc-dock"'), '#dwc-endbtn is no longer in the dock row');
+  ok(/id="dwc-endbtn"[^>]*aria-label="END TVRN"/.test(hud), 'plaque carries aria-label END TVRN');
+  ok(/class="end-plq"/.test(hud) && /class="end-lbl">END TVRN</.test(hud), 'plaque has the glyph well and the END TVRN label');
+  const endRule = bare.match(/#dwc-root #dwc-endbtn\{([^}]*)\}/);
+  ok(!!endRule && /position:absolute/.test(endRule[1]) && /right:15%/.test(endRule[1]) && /bottom:20%/.test(endRule[1]),
+     'plaque is absolute, right:15%, bottom:20% of the board');
+  ok(!!endRule && /touch-action:manipulation/.test(endRule[1]), 'plaque sets touch-action:manipulation');
+  ok(!!endRule && /z-index:\s*1[0-9]/.test(endRule[1]), 'plaque stacks above the svg');
+  ok(/\.end-plq\{[^}]*clip-path:polygon/.test(bare), 'octagon via clip-path');
+  ok(code.includes('function placeEndBtn(') && code.includes('addEventListener("resize",placeEndBtn)'),
+     'placeEndBtn clamp exists and re-runs on resize');
+  ok(code.includes('window.iconHTML("endtvrn"'), 'plaque glyph is the endtvrn icon from the registry');
+  ok(code.includes('document.getElementById("dwc-endbtn").onclick='), 'END TVRN onclick handler still assigned on #dwc-endbtn');
+}
+
 console.log(fail ? '\n' + fail + ' FAILED (' + pass + ' passed)' : '\nall ' + pass + ' checks passed');
 process.exit(fail ? 1 : 0);

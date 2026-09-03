@@ -509,7 +509,8 @@ const DWC_CSS = `
 #dwc-root .op.item.sel .op-cost,
 #dwc-root .op.item.sel .op-dose{ color:#e28a76; }
 
-/* --- the dock: [gauge] banks | satchel [gauge] END TVRN, centred ------------
+/* --- the dock: [gauge] banks | satchel [gauge], centred (END TVRN is a
+   board-anchored plaque, see section 6) --------------------------------------
    width:max-content + max-width:100% keeps the row only as wide as its
    content (so the board stays tappable either side of it) while still
    letting the tracks shrink and then scroll when the banks overflow. */
@@ -549,22 +550,61 @@ const DWC_CSS = `
 /* placement: no slots at all, so the row reserves nothing over the board */
 #dwc-root #dwc-dock.dwc-empty{ min-height:0; }
 
-/* --- end turn: compact oxblood, slot-high, at the dock's right ------------- */
-#dwc-root #dwc-endbtn,
-#dwc-root button.end{
-  flex:0 0 auto; align-self:center;
-  display:flex; align-items:center; justify-content:center;
-  height:var(--slot); min-height:0;
-  padding:0 var(--s3); margin-left:var(--s1);
-  border-color:var(--ox); color:var(--danger-fg);
-  background:linear-gradient(180deg,#160a0e,#0a1214);
-  font-size:var(--fs-sm); font-weight:700;
-  letter-spacing:var(--ls-3); text-transform:uppercase;
-  white-space:nowrap;
+/* --- END TVRN: a floating plaque anchored to the BOARD, not the dock ---------
+   An octagonal oxblood seal carrying the hourglass rune, with a stencil
+   label beneath. It lives in #dwc-board (after the svg), parked 20% up and
+   15% in from the board's right edge; translate(50%,50%) centres the box on
+   that anchor. Board-anchored on purpose: on portrait the tiles stop well
+   above the hud, so the plaque sits in the letterboxed void below them and
+   the dock row stays gauges + banks + satchel. The hud overlays the board's
+   bottom, so 20% is not always clear -- placeEndBtn() (next to drawHud)
+   lifts it in px only when the anchor would land inside the hud, and clears
+   the override again when the sheet's 20% suffices. The button box is the
+   tap target: 64x76 phone, 72x84 desktop, both past --hit. */
+#dwc-root #dwc-endbtn{
+  position:absolute; right:15%; bottom:20%;
+  transform:translate(50%,50%);
+  z-index:15;
+  width:64px; height:76px; min-height:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:0; margin:0; border:none; border-radius:0;
+  background:transparent; box-shadow:none;
+  touch-action:manipulation; pointer-events:auto;
+  -webkit-tap-highlight-color:transparent;
 }
-#dwc-root button.end:hover{ border-color:#c8203a; color:#ff90a0; background:#1c0b10; }
-#dwc-root button.end:active{ background:var(--ox-ink); }
-#dwc-root button.end:disabled{ color:var(--dim); border-color:var(--bd-ox); background:var(--surf-1); }
+#dwc-root #dwc-endbtn:hover{ background:transparent; }
+#dwc-root #dwc-endbtn:active{ transform:translate(50%,50%) translateY(1px); background:transparent; }
+#dwc-root #dwc-endbtn:disabled{ opacity:.45; cursor:default; background:transparent; box-shadow:none; }
+/* the seal: a 3px oxblood octagon frame over an ink well (the ::before) */
+#dwc-root .end-plq{
+  position:relative; width:52px; height:52px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+  background:var(--ox);
+  transition:background-color var(--t-fast) var(--ease);
+}
+#dwc-root .end-plq::before{
+  content:""; position:absolute; inset:3px;
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+  background:linear-gradient(180deg,#160a0e,#0a1214);
+}
+/* the rune: a currentColor svg from icons.js (ensureDom fills it), gold,
+   above the well */
+#dwc-root .end-plq .dwi{
+  position:relative; z-index:1;
+  color:var(--gold); filter:drop-shadow(0 0 4px #d9a44188);
+  transition:color var(--t-fast) var(--ease);
+}
+#dwc-root .end-lbl{
+  margin-top:3px; font-size:8px; font-weight:700; line-height:1;
+  letter-spacing:2px; text-transform:uppercase; white-space:nowrap;
+  color:var(--danger-fg); text-shadow:0 1px 0 #000;
+}
+#dwc-root #dwc-endbtn:hover .end-plq{ background:#c8203a; }
+#dwc-root #dwc-endbtn:hover .end-plq .dwi{ color:var(--warn-fg); filter:drop-shadow(0 0 6px #d9a441cc); }
+#dwc-root #dwc-endbtn:hover .end-lbl{ color:#ff90a0; }
+#dwc-root #dwc-endbtn:disabled .end-plq .dwi{ color:var(--dim); filter:none; }
+#dwc-root #dwc-endbtn:disabled .end-lbl{ color:var(--dim); }
 
 /* --- ENGAGE (placement) ---------------------------------------------------
    Floats over the board, well clear of the HUD, and never over the notch. */
@@ -762,6 +802,10 @@ const DWC_CSS = `
   }
   #dwc-root #dwc-tl{ padding-left:calc(var(--s4) + var(--sa-l));
                      padding-right:calc(var(--s4) + var(--sa-r)); }
+  /* END TVRN plaque grows with the slots */
+  #dwc-root #dwc-endbtn{ width:72px; height:84px; }
+  #dwc-root .end-plq{ width:60px; height:60px; }
+  #dwc-root .end-lbl{ font-size:9px; }
 }
 
 /* --- very narrow phones (<=360px): tighten, never wrap the track ------- */
@@ -769,7 +813,6 @@ const DWC_CSS = `
   #dwc-root{ --chip:40px; }
   #dwc-root #dwc-hud{ padding-left:calc(var(--s2) + var(--sa-l));
                       padding-right:calc(var(--s2) + var(--sa-r)); }
-  #dwc-root #dwc-endbtn{ padding:var(--s2); letter-spacing:var(--ls-2); }
 }
 
 /* --- short viewport / landscape phone (844x390): protect the board ------
@@ -806,7 +849,10 @@ const DWC_CSS = `
   /* On portrait and desktop the viewBox's own bottom margin absorbs the
      overlay; on landscape it does not, so the board gives up the dock's row. */
   #dwc-root #dwc-board{ padding-bottom:var(--dock-h); }
-  #dwc-root #dwc-endbtn{ font-size:var(--fs-xs); }
+  /* phone-sized plaque even at 844 wide (this block follows min-width:760) */
+  #dwc-root #dwc-endbtn{ width:64px; height:76px; }
+  #dwc-root .end-plq{ width:52px; height:52px; }
+  #dwc-root .end-lbl{ font-size:8px; }
   #dwc-root #dwc-engage{
     bottom:calc(22% + var(--sa-b)); padding:var(--s2) var(--s5);
     font-size:var(--fs-lg); min-height:44px;
@@ -829,6 +875,9 @@ const DWC_CSS = `
   #dwc-root button:hover{ background:var(--surf-2); border-color:var(--tealdim); }
   #dwc-root .op:hover{ border-color:var(--st-ready); }
   #dwc-root .op.sel:hover{ border-color:var(--st-sel); }
+  #dwc-root #dwc-endbtn:hover .end-plq{ background:var(--ox); }
+  #dwc-root #dwc-endbtn:hover .end-plq .dwi{ color:var(--gold); filter:drop-shadow(0 0 4px #d9a44188); }
+  #dwc-root #dwc-endbtn:hover .end-lbl{ color:var(--danger-fg); }
   #dwc-root .tile.hl-move:hover,
   #dwc-root .tile.hl-rng:hover,
   #dwc-root .tile.hl-heal:hover,
@@ -847,6 +896,7 @@ const DWC_CSS = `
   #dwc-root .tile{ transition-duration:.001ms !important; }
   #dwc-root button:active{ transform:none; }
   #dwc-root #dwc-engage:active{ transform:translateX(-50%); }
+  #dwc-root #dwc-endbtn:active{ transform:translate(50%,50%); }
   #dwc-root .dwc-unit{ transition:none; }
   #dwc-root .fx-dmg,
   #dwc-root .fx-say{ animation:none !important; opacity:1; }
@@ -868,7 +918,7 @@ const DWC_CSS = `
   #dwc-root .tile{ stroke-width:1.25; }
 }
 `;
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-dock">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n      <button id="dwc-endbtn" class="end">END TVRN</button>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-dock">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -881,6 +931,11 @@ function ensureDom(){
   const st=document.createElement("style"); st.textContent=DWC_CSS;
   document.head.appendChild(st);
   root=document.createElement("div"); root.id="dwc-root"; root.innerHTML=DWC_HTML;
+  // END TVRN plaque glyph. The ICO shim lives inside initLogic (not yet run,
+  // and a const besides), so go to the registry directly with the same
+  // guard: a page without icons.js gets an empty seal, not a throw.
+  const plq=root.querySelector(".end-plq");
+  if(plq) plq.innerHTML=window.iconHTML?window.iconHTML("endtvrn",{size:30}):"";
   root.style.display="none"; document.body.appendChild(root);
   initLogic();
 }
@@ -1749,6 +1804,27 @@ let hudArmed=new Set();
 // Which selection the track was last scrolled for. drawHud runs on every
 // draw(); scrolling on every pass would yank the row back under the thumb.
 let scrolledSel=null;
+// END TVRN plaque clamp. The sheet parks it 20% up #dwc-board, but the hud
+// overlays the board's bottom and on short viewports 20% lands inside it.
+// With transform:translate(50%,50%) the box is dropped by half its height,
+// so its VISUAL bottom edge is (bottom offset - eh/2); keeping that 8px
+// above the hud means bottom >= hh + 8 + eh/2. Set in px only when needed;
+// otherwise cleared so the 20% rule stays the source of truth. Runs from
+// drawHud (battle) and on resize. Stub-safe: every measurement is checked.
+function placeEndBtn(){
+  const endb=document.getElementById("dwc-endbtn"), hud=document.getElementById("dwc-hud"),
+        board=document.getElementById("dwc-board");
+  if(!endb||!hud||!board||!endb.style) return;
+  if(state.phase!=="battle"){ endb.style.bottom=""; return; }
+  const hr=hud.getBoundingClientRect(), br=board.getBoundingClientRect(), er=endb.getBoundingClientRect();
+  const hh=hr&&hr.height, bh=br&&br.height, eh=er&&er.height;
+  if(typeof hh!=="number"||typeof bh!=="number"||typeof eh!=="number"||!(bh>0)) return;
+  const need=hh+8+eh/2, pct=bh*0.20;
+  // (if need+eh exceeds bh the plaque would poke above the board: nothing
+  // sane to do on a viewport that short, so it just clamps and stays tappable)
+  endb.style.bottom=need>pct?need+"px":"";
+}
+window.addEventListener("resize",placeEndBtn);   // once: initLogic runs once per mount
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
         satchel=document.getElementById("dwc-satchel"), dock=document.getElementById("dwc-dock"),
@@ -1776,6 +1852,7 @@ function drawHud(){
     endb.style.display="none"; return;
   }
   endb.style.display="";
+  placeEndBtn();
   const u=cur(); if(!u) return;
   stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
