@@ -82,6 +82,7 @@ const DWC_CSS = `
   --chip:44px;            /* timeline chip edge                              */
   --slot:48px;            /* dock slot edge: 48 phone, 56 desktop (media)    */
   --dock-h:calc(var(--slot) + 16px);   /* dock row: slot + 8px glow room each side */
+  --gauge:68px;           /* resource gauge edge: ~1.4x slot phone, ~1.6x desktop (90) */
 
   /* --- focus ring (keyboard only) ---------------------------------------- */
   --focus:var(--teal-hi);
@@ -175,7 +176,6 @@ const DWC_CSS = `
   padding:calc(var(--s2) + var(--sa-t)) calc(var(--s3) + var(--sa-r))
           var(--s2) calc(var(--s3) + var(--sa-l));
   overflow:hidden;                    /* the TRACK scrolls, not the strip */
-  background:var(--surf-1);
   color:var(--dim); font-size:var(--fs-sm); letter-spacing:var(--ls-2);
 }
 /* the scrolling half: chips only */
@@ -217,29 +217,25 @@ const DWC_CSS = `
 #dwc-root #dwc-board svg{ width:100%; height:100%; display:block; }
 
 /* --- hud (overlay on the bottom of the board, respects the home indicator)
-   Column: the stat line above, the dock row below. --------------------------- */
+   Two centred rows, Dofus-style: the ability row (dock: banks | satchel)
+   above, the resource row (.dwc-res: MOVEMENT gauge . stat line . MANA
+   gauge) below. Each row is only as wide as its content and centred, so the
+   stat line sits BETWEEN the gauges, not at the viewport edges. -------------- */
 #dwc-root #dwc-hud{
   position:absolute; left:0; right:0; bottom:0; z-index:12;
   pointer-events:none;
-  display:flex; flex-direction:column; gap:var(--s1);
+  display:flex; flex-direction:column; align-items:center; gap:var(--s1);
   padding:var(--s3) calc(var(--s3) + var(--sa-r))
           calc(var(--s2) + var(--sa-b)) calc(var(--s3) + var(--sa-l));
   background:linear-gradient(180deg, transparent 0, #04090bd9 30%, #04090bf5 100%);
 }
-/* the lip: a hairline where the void goes opaque, and the silkscreen grid
-   (8px cyan at 3% -- reads as etched board, not texture) confined to the
-   opaque part below it. z-index:-1 keeps it under the stat line and dock
-   inside the hud's own stacking context. */
-#dwc-root #dwc-hud::before{
-  content:""; position:absolute; left:0; right:0; top:30%; bottom:0; z-index:-1;
-  pointer-events:none;
-  background-image:
-    linear-gradient(#39c8c108 var(--hair), transparent var(--hair)),
-    linear-gradient(90deg, #39c8c108 var(--hair), transparent var(--hair));
-  background-size:8px 8px;
+#dwc-root #dwc-dock,
+#dwc-root .dwc-res{ pointer-events:auto; }
+/* resource row: the stat line shrinks (and ellipsises) before the gauges do */
+#dwc-root .dwc-res{
+  display:flex; align-items:center; gap:var(--s2);
+  max-width:100%; min-width:0;
 }
-#dwc-root #dwc-stat,
-#dwc-root #dwc-dock{ pointer-events:auto; }
 
 
 /* ==========================================================================
@@ -249,7 +245,7 @@ const DWC_CSS = `
 /* NOTE: block, not flex -- the stat line is mixed text + <b> runs, and a flex
    container would shatter them into anonymous items and kill the ellipsis. */
 #dwc-root #dwc-stat{
-  min-width:0;
+  flex:0 1 auto; min-width:0;
   color:var(--dim);
   font-size:var(--fs-sm); letter-spacing:var(--ls-2);
   text-transform:uppercase; text-align:center;
@@ -505,8 +501,9 @@ const DWC_CSS = `
 #dwc-root .op.item.sel .op-cost,
 #dwc-root .op.item.sel .op-dose{ color:#e28a76; }
 
-/* --- the dock: [gauge] banks | satchel [gauge], centred (END TVRN is a
-   board-anchored plaque, see section 6) --------------------------------------
+/* --- the dock: banks | satchel, centred: row 1 of the hud (END TVRN is a
+   board-anchored plaque, see section 6; the gauges flank the stat line in
+   row 2) ----------------------------------------------------------------------
    width:max-content + max-width:100% keeps the row only as wide as its
    content (so the board stays tappable either side of it) while still
    letting the tracks shrink and then scroll when the banks overflow. */
@@ -515,19 +512,21 @@ const DWC_CSS = `
   width:max-content; max-width:100%; min-width:0; margin:0 auto;
   min-height:var(--dock-h);
 }
-/* gauges: CYCLES pips left, PNEUMA coil right, for the CURRENT unit
-   (drawGauges, next to drawHud). Each is one --slot square holding an inline
-   56x56 svg; the label lives inside the svg so the box stays square.
+/* gauges: MOVEMENT pips left, MANA coil right, for the CURRENT unit
+   (drawGauges, next to drawHud). Each is one --gauge square (PoE: the orbs
+   outsize the skill slots) holding an inline 56x56 svg; the label lives
+   inside the svg so the box stays square.
    hidden = reserve nothing -- the author display:flex would beat the UA
    [hidden] rule, so restate it. */
 #dwc-root .dwc-gauge{
-  width:var(--slot); height:var(--slot); flex:0 0 auto;
+  width:var(--gauge); height:var(--gauge); flex:0 0 auto;
   display:flex; align-items:center; justify-content:center;
   color:var(--teal);
 }
 #dwc-root .dwc-gauge[hidden]{ display:none; }
 #dwc-root .dwc-gauge svg{ width:100%; height:100%; display:block; overflow:visible; }
-/* svg text: sizes are viewBox units (7 -> 6px at the 48px slot, 7px at 56) */
+/* svg text: sizes are viewBox units (label 7 -> 8.5px at the 68px gauge,
+   11.25px at 90; numeral 12 -> 14.6px at 68, 19.3px at 90) */
 #dwc-root .dwc-g-lbl{
   font-size:7px; font-weight:700; letter-spacing:var(--ls-2);
   fill:var(--dim); text-anchor:middle;
@@ -819,7 +818,7 @@ const DWC_CSS = `
 
 /* --- wide / desktop: bigger slots, wider gutters ------------------------- */
 @media (min-width:760px){
-  #dwc-root{ --slot:56px; }
+  #dwc-root{ --slot:56px; --gauge:90px; }
   #dwc-root #dwc-hud{
     padding-left:calc(var(--s4) + var(--sa-l));
     padding-right:calc(var(--s4) + var(--sa-r));
@@ -845,33 +844,18 @@ const DWC_CSS = `
   /* Chips shrink: they are display-only (no handler), so the 44px rule does
      not bind them. Buttons keep the full 44px -- measured, that costs the
      board 10px of height here (294 -> 284), which is cheap for a real tap. */
-  #dwc-root{ --chip:34px; --hit:44px; --slot:48px; }   /* phone slots even at 844 wide */
+  #dwc-root{ --chip:34px; --hit:44px; --slot:48px; --gauge:68px; }   /* phone slots and gauges even at 844 wide */
   #dwc-root #dwc-tl{
     gap:var(--s1);
     padding-top:calc(var(--s1) + var(--sa-t)); padding-bottom:var(--s1);
     font-size:var(--fs-xs);
   }
   #dwc-root .dwc-chip{ font-size:var(--fs-md); }
-  /* stat line INLINE left of the dock to save height: three columns so the
-     dock stays centred in the viewport with the stat in the left gutter */
+  /* the two hud rows keep their shape; only the vertical padding tightens */
   #dwc-root #dwc-hud{
-    display:grid;
-    grid-template-columns:minmax(150px,26%) 1fr minmax(0,26%);
-    align-items:center;
-    gap:var(--s1) var(--s2);
     padding-top:var(--s1);
     padding-bottom:calc(var(--s1) + var(--sa-b));
   }
-  /* two short lines beat one ellipsised one */
-  #dwc-root #dwc-stat{
-    grid-column:1; text-align:left;
-    white-space:normal; max-height:2.6em;
-    font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3;
-  }
-  #dwc-root #dwc-stat::before{ height:9px; }
-  #dwc-root #dwc-dock{ grid-column:2; }
-  /* On portrait and desktop the viewBox's own bottom margin absorbs the
-     overlay; on landscape it does not, so the board gives up the dock's row. */
   /* phone-sized plaque even at 844 wide (this block follows min-width:760) */
   #dwc-root #dwc-endbtn{ width:64px; height:76px; }
   #dwc-root .end-plq{ width:52px; height:52px; }
@@ -941,7 +925,7 @@ const DWC_CSS = `
   #dwc-root .tile{ stroke-width:1.25; }
 }
 `;
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-dock">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-dock">\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n    </div>\n    <div class="dwc-res">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-stat">—</div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -1941,7 +1925,8 @@ function drawHud(){
   endb.style.display="";
   placeEndBtn();
   const u=cur(); if(!u){ drawGauges(null); return; }
-  stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
+  // name · VITAE only: CYCLES and PNEUMA are the two gauges flanking this line
+  stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
     const names=[];   // for the learnability line: the slots carry no names
     for(const id of u.banks){

@@ -221,6 +221,12 @@ console.log('-- dock');
   ok(/#dwc-root #dwc-hud\{[^}]*pointer-events:none/.test(bare), '#dwc-hud fade zone passes taps through to the board');
   ok(!/#dwc-board{[^}]*padding-bottom:var(--dock-h)/.test(bare), 'board is never inset for the dock: the battlefield runs under the fade zone');
   ok(!/#dwc-tl{[^}]*border-bottom/.test(bare) && !/#dwc-hud::before{[^}]*border-top/.test(bare), 'no rule lines above or below the board');
+  // Round-2 addendum: no bands above or below the arena, two centred rows, bigger gauges.
+  ok(!bare.includes('#dwc-hud::before') && !/#dwc-root #dwc-tl\{[^}]*background/.test(bare), 'no silkscreen band under the hud, no panel band behind the timeline');
+  ok(/--gauge\s*:\s*68px/.test(bare) && /--gauge\s*:\s*90px/.test(bare) && /\.dwc-gauge\{[^}]*width:var\(--gauge\)/.test(bare), 'gauge size tokens: 68px phone, 90px desktop');
+  ok(hud.indexOf('id="dwc-dock"') < hud.indexOf('class="dwc-res"') && hud.indexOf('id="dwc-gauge-l"') < hud.indexOf('id="dwc-stat"') && hud.indexOf('id="dwc-stat"') < hud.indexOf('id="dwc-gauge-r"'),
+     'ability row above the resource row; stat line between the gauges');
+  ok(!/id="dwc-dock"[\s\S]*?dwc-gauge[\s\S]*?id="dwc-satchel"/.test(hud), 'gauges are out of the dock row');
   ok(code.includes('PNEUMA, RANGE'), 'slot aria-labels spell PNEUMA as the stat line does');
   ok(/const rangeText=/.test(code), 'rangeText helper exists (numeric range for aria + stat line)');
   ok(code.includes('hudArmed.clear()') && code.includes('hudArmed.add(u.id)'), 'learnability set is reset per fight and marked on arming');
