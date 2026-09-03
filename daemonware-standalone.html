@@ -1814,62 +1814,83 @@
   const FILL = ' fill="currentColor" stroke="none"'; // the one filled accent per glyph
 
   const ICONS = {
-    // Melee strike, one adjacent foe: shaft -> struck point -> shock chevron.
+    // Melee strike, range 1: hammer -- thick shaft from the left driven into a big
+    // solid block flush with the right edge, two spark ticks behind the contact.
+    // Distinguished by mass and contact: the only strike glyph that "touches".
     percvssio: S(
-      '<path d="M2.2 12h4.6"/>' +
-      '<path d="M11 8.4l3.6 3.6-3.6 3.6-3.6-3.6z"' + FILL + "/>" +
-      '<path d="M17 6.2l5 5.8-5 5.8"/>'
+      '<path d="M2.5 12h12" stroke-width="2.2"/>' +
+      '<path d="M14.5 5h7.5v14h-7.5z"' + FILL + "/>" +
+      '<path d="M9.5 6.5l2.5 2.5M9.5 17.5l2.5-2.5" stroke-width="2.2"/>'
     ),
-    // Melee sweep: broken ring around a core, cardinal ticks = everything touching you.
+    // Sweep around self, range 0: filled core with 8 radiating spokes -- a burst
+    // ring, no arrowheads, no direction. Reads "everything adjacent to me".
     abrasio: S(
-      '<circle cx="12" cy="12" r="2.4"' + FILL + "/>" +
-      '<path d="M12 5a7 7 0 0 1 7 7M12 19a7 7 0 0 1-7-7"/>' +
-      '<path d="M12 2.2v2.2M21.8 12h-2.2M12 21.8v-2.2M2.2 12h2.2"/>'
+      '<circle cx="12" cy="12" r="2.6"' + FILL + "/>" +
+      '<path d="M12 2v4.5M22 12h-4.5M12 22v-4.5M2 12h4.5" stroke-width="2.2"/>' +
+      '<path d="M4.9 4.9l3.2 3.2M19.1 4.9l-3.2 3.2M19.1 19.1l-3.2-3.2M4.9 19.1l3.2-3.2" stroke-width="2.2"/>'
     ),
-    // Hex/debuff: binding sigil -- hex cell, clamped core, reads through walls.
+    // Hex/bind, ranged with no line of sight: sigil -- hexagon cell, filled inner
+    // diamond, two horizontal shackle bars crossing right through it. Reads "bound".
     concretio: S(
-      '<path d="M12 2.4l8.3 4.8v9.6L12 21.6l-8.3-4.8V7.2z"/>' +
-      '<path d="M12 8l3.4 4-3.4 4-3.4-4z"' + FILL + "/>" +
-      '<path d="M6.2 9.6v4.8M17.8 9.6v4.8"/>'
+      '<path d="M12 2.2l7.8 4.9v9.8L12 21.8l-7.8-4.9V7.1z"/>' +
+      '<path d="M12 7.5l3.8 4.5-3.8 4.5-3.8-4.5z"' + FILL + "/>" +
+      '<path d="M2.5 9.5h19M2.5 14.5h19" stroke-width="2.2"/>'
     ),
-    // Sniper bolt: a single hard zigzag lance, legible down to 12px.
-    fvlgvr: S('<path d="M13.8 2.2L5.4 13.2h5.2l-1.4 8.6L18.6 10.8h-5.2z"/>'),
-    // Cross-shaped AoE: four arms off a burning core, sparks in the quadrants.
+    // Ranged bolt, range 4-6: long thin zigzag lightning from the top-left corner
+    // to a target ring (with filled centre) in the bottom-right. Reads "far".
+    fvlgvr: S(
+      '<path d="M2.5 2.5L8 4 7 11 14 10 15.5 15.5" stroke-width="2.2"/>' +
+      '<circle cx="18.6" cy="18.6" r="3"/>' +
+      '<circle cx="18.6" cy="18.6" r="1.2"' + FILL + "/>"
+    ),
+    // AoE flame with self-cost: filled teardrop flame with a hollow inner notch,
+    // plus a small ring at the bottom-left base = "costs me". A solid mass, so it
+    // cannot be confused with fvlgvr's thin line.
     immolatio: S(
-      '<path d="M12 2.4v6.2M12 15.4v6.2M2.4 12h6.2M15.4 12h6.2"/>' +
-      '<path d="M12 9l3 3-3 3-3-3z"' + FILL + "/>" +
-      '<path d="M6.6 6.6l2.2 2.2M17.4 6.6L15.2 8.8M17.4 17.4L15.2 15.2M6.6 17.4l2.2-2.2"/>'
+      '<path fill-rule="evenodd" d="M13.5 2.5C13.5 7 18.8 9 18.8 14A6.3 6.3 0 0 1 6.2 14C6.2 10.8 8.8 9.4 9.2 7.2C10.4 9.6 12 9.4 12 7.8C13.5 8.8 13.5 4.5 13.5 2.5zM12.5 12C12.5 14 15 14.6 15 16.5A2.5 2.5 0 0 1 10 16.5C10 14.6 12.5 14 12.5 12z"' + FILL + "/>" +
+      '<circle cx="4.3" cy="19.7" r="1.9"/>'
     ),
-    // Swap places: two counter-running arrows, no overlap so it stays clean at 16px.
+    // Swap places: two stacked counter-running horizontal arrows with filled
+    // heads -- top runs right, bottom runs left. Clearly two-way.
     permvto: S(
-      '<path d="M4.2 8.5h12M13 5l3.5 3.5L13 12"/>' +
-      '<path d="M19.8 15.5h-12M11 12l-3.5 3.5L11 19"/>'
+      '<path d="M3 8h11M21 16H10" stroke-width="2.2"/>' +
+      '<path d="M13.5 4l7.5 4-7.5 4zM10.5 12L3 16l7.5 4z"' + FILL + "/>"
     ),
-    // Shove: arrow driving a body into a wall plate.
+    // Knockback shove, range 1: fat arrow with a filled head pushing a solid disc
+    // (the body) against a vertical wall line on the right edge. Reads "push".
     impvlsvs: S(
-      '<path d="M20.6 4.5v15"/>' +
-      '<path d="M2.4 12h8.6M8.6 9l3 3-3 3"/>' +
-      '<path d="M14.4 8.4h4v7.2h-4z"' + FILL + "/>"
+      '<path d="M21 4v16" stroke-width="2.2"/>' +
+      '<path d="M2.5 12h6" stroke-width="2.2"/>' +
+      '<path d="M8 8.2l4.4 3.8-4.4 3.8zM11.9 12a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0z"' + FILL + "/>"
     ),
-    // Foe melee: opposed jaws, one fang solid so the bite reads instantly.
+    // Foe bite, range 1: two opposing jaw arcs with four filled fangs closing on
+    // a small central dot. Reads "mouth"; the only glyph with curved jaws.
     morsvs: S(
-      '<path d="M3.5 6.5c4.5 3.6 12.5 3.6 17 0"/>' +
-      '<path d="M3.5 17.5c4.5-3.6 12.5-3.6 17 0"/>' +
-      '<path d="M7.6 8.9l2.2 4.2 2.2-4.2z"' + FILL + "/>" +
-      '<path d="M14.6 15.1l1.9-3.7 1.9 3.7"/>'
+      '<path d="M3 6.5C7.5 10.5 16.5 10.5 21 6.5M3 17.5C7.5 13.5 16.5 13.5 21 17.5" stroke-width="2.2"/>' +
+      '<path d="M5.4 8.1l2.1 4.7 2.5-3.5zM14 9.3l2.5 3.5 2.1-4.7zM5.4 15.9l2.1-4.7 2.5 3.5zM14 14.7l2.5-3.5 2.1 4.7zM10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0z"' + FILL + "/>"
     ),
-    // Foe ranged: dart in flight -- solid head, fletching bars for the vector.
+    // Foe thrown dart, range 2-4: straight diagonal shaft with a solid triangular
+    // head at the top-right and a motion arc trailing behind the tail. Straight,
+    // not zigzag, so it never reads as fvlgvr.
     iacvlvm: S(
-      '<path d="M5.5 18.5L17 7"/>' +
-      '<path d="M20.5 3.5l-1.9 5.1-3.2-3.2z"' + FILL + "/>" +
-      '<path d="M3.4 16l3.2 3.2M6.2 13.2l3.2 3.2"/>'
+      '<path d="M7 17L16.5 7.5" stroke-width="2.2"/>' +
+      '<path d="M21.5 2.5L19.7 8.5 15.5 4.3z"' + FILL + "/>" +
+      '<path d="M2.5 13A8.5 8.5 0 0 0 11 21.5"/>'
     ),
     // Healing vial: combat.js VIAL_SVG geometry, rescaled 12x16 -> 24x24 box
     // (x1.4, centred) and recoloured to currentColor so it tints with the button.
+    // The only upright bottle silhouette; unchanged, it already reads at 20px.
     ampvlla: S(
       '<path d="M9.2 2.2h5.6v2.3H9.2z"' + FILL + "/>" +
       '<path d="M10 5.5h4v3.7l3.6 7.8v3.6L16.1 21.8H8.1L6.4 20.7v-3.6l3.6-7.8z"/>' +
       '<path d="M7.8 16.8h8.4v3.2l-1.1 1.3H8.9l-1.1-1.3z"' + FILL + "/>"
+    ),
+    // END TVRN plaque: hourglass rune -- filled top bulb (sand) over an open
+    // outline bottom bulb, meeting at a waist, capped by two bold horizontal bars.
+    endtvrn: S(
+      '<path d="M4.5 3h15M4.5 21h15" stroke-width="2.2"/>' +
+      '<path d="M5 5h14l-7 7.4z"' + FILL + "/>" +
+      '<path d="M5.2 19.5L12 12.4l6.8 7.1" stroke-width="2.2"/>'
     )
   };
 
@@ -2026,7 +2047,8 @@ const DWC_CSS = `
   /* --- controls ----------------------------------------------------------- */
   --hit:44px;             /* minimum touch target                            */
   --chip:44px;            /* timeline chip edge                              */
-  --op-w:208px;           /* ability button track width (widest name + badge) */
+  --slot:48px;            /* dock slot edge: 48 phone, 56 desktop (media)    */
+  --dock-h:calc(var(--slot) + 16px);   /* dock row: slot + 8px glow room each side */
 
   /* --- focus ring (keyboard only) ---------------------------------------- */
   --focus:var(--teal-hi);
@@ -2100,11 +2122,15 @@ const DWC_CSS = `
 
 /* ==========================================================================
    3. LAYOUT   timeline strip / board / hud
-   Column flex. The board takes the slack; the HUD is in normal flow at the
-   bottom, so it can NEVER cover the board.
+   Column flex. The board takes ALL the slack, down to the bottom of the wrap.
+   The HUD is an OVERLAY pinned to that bottom edge over a translucent void
+   gradient, so the board reads through it (ruling: overlay, not in-flow).
+   The HUD itself lets pointer events fall through to the board; only the
+   stat line and the dock catch them.
    ========================================================================== */
 
 #dwc-root #dwc-wrap{
+  position:relative;
   display:flex; flex-direction:column;
   height:100%; min-height:0;
 }
@@ -2117,8 +2143,6 @@ const DWC_CSS = `
           var(--s2) calc(var(--s3) + var(--sa-l));
   overflow:hidden;                    /* the TRACK scrolls, not the strip */
   background:var(--surf-1);
-  border-bottom:var(--hair) solid var(--bd);
-  box-shadow:0 1px 0 #39c8c112;
   color:var(--dim); font-size:var(--fs-sm); letter-spacing:var(--ls-2);
 }
 /* the scrolling half: chips only */
@@ -2159,28 +2183,30 @@ const DWC_CSS = `
 }
 #dwc-root #dwc-board svg{ width:100%; height:100%; display:block; }
 
-/* --- hud (bottom, respects the home indicator) --------------------------- */
+/* --- hud (overlay on the bottom of the board, respects the home indicator)
+   Column: the stat line above, the dock row below. --------------------------- */
 #dwc-root #dwc-hud{
-  flex:0 0 auto;
-  display:grid;
-  grid-template-columns:1fr auto;
-  grid-template-areas:
-    "stat stat"
-    "ops  end";
-  gap:var(--s2);
-  align-items:stretch;
-  padding:var(--s2) calc(var(--s3) + var(--sa-r))
+  position:absolute; left:0; right:0; bottom:0; z-index:12;
+  pointer-events:none;
+  display:flex; flex-direction:column; gap:var(--s1);
+  padding:var(--s3) calc(var(--s3) + var(--sa-r))
           calc(var(--s2) + var(--sa-b)) calc(var(--s3) + var(--sa-l));
-  min-height:56px;
-  border-top:var(--hair) solid var(--bd);
-  background-color:var(--surf-1);
-  /* silkscreen: a 8px cyan grid at 3% -- reads as etched board, not texture */
+  background:linear-gradient(180deg, transparent 0, #04090bd9 30%, #04090bf5 100%);
+}
+/* the lip: a hairline where the void goes opaque, and the silkscreen grid
+   (8px cyan at 3% -- reads as etched board, not texture) confined to the
+   opaque part below it. z-index:-1 keeps it under the stat line and dock
+   inside the hud's own stacking context. */
+#dwc-root #dwc-hud::before{
+  content:""; position:absolute; left:0; right:0; top:30%; bottom:0; z-index:-1;
+  pointer-events:none;
   background-image:
     linear-gradient(#39c8c108 var(--hair), transparent var(--hair)),
     linear-gradient(90deg, #39c8c108 var(--hair), transparent var(--hair));
   background-size:8px 8px;
-  box-shadow:var(--panel-lip);
 }
+#dwc-root #dwc-stat,
+#dwc-root #dwc-dock{ pointer-events:auto; }
 
 
 /* ==========================================================================
@@ -2190,11 +2216,12 @@ const DWC_CSS = `
 /* NOTE: block, not flex -- the stat line is mixed text + <b> runs, and a flex
    container would shatter them into anonymous items and kill the ellipsis. */
 #dwc-root #dwc-stat{
-  grid-area:stat; min-width:0;
+  min-width:0;
   color:var(--dim);
   font-size:var(--fs-sm); letter-spacing:var(--ls-2);
-  text-transform:uppercase;
-  white-space:normal; overflow:hidden;
+  text-transform:uppercase; text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-shadow:0 1px 2px #000, 0 0 6px #04090b;   /* it sits over the board */
 }
 /* silkscreen tick: the house mark that opens every label */
 #dwc-root #dwc-stat::before{
@@ -2300,163 +2327,275 @@ const DWC_CSS = `
 }
 #dwc-root button:disabled:hover{ background:var(--surf-1); border-color:var(--bd); }
 
-/* --- ability button ------------------------------------------------------
-   ANATOMY (two grid rows, four columns):
-     .op-key | .op-ic | .op-nm    | .op-badge
-     .op-key | .op-ic | .op-meta  | .op-badge
-   Key + icon + badge span both rows.
+/* --- ability slot ----------------------------------------------------------
+   ANATOMY (Diablo-II dock slot: one square, NO name -- the name goes to the
+   stat line when the slot is armed):
+     .op-key    top-left hotkey plaque
+     .op-ic     the icon, filling the slot; state overlays paint on its
+                ::before (wash) and ::after (cracks / recharge sweep)
+     .op-cost   bottom-right pneuma cost
+     .op-dose   top-right dose count (satchel items only)
+     .op-badge  state number (recharge turns / strain), placed per state
+   State is ONE st-* class per slot, hardest first:
+     burnt > recharge > spent > need > strain.
+   The slot is flex:0 1 var(--slot): with too many banks it shrinks to 44px
+   (the touch minimum) before the track scrolls. aspect-ratio keeps it square.
    -------------------------------------------------------------------------- */
 #dwc-root .op{
-  flex:0 0 auto;
-  display:grid;
-  grid-template-columns:auto auto minmax(0,1fr) auto;
-  grid-template-areas:
-    "key ic nm   nm"
-    "key ic meta badge";
-  align-items:center;
-  column-gap:var(--s2); row-gap:0;
-  width:var(--op-w); max-width:70vw;
-  padding:var(--s1) var(--s2);
-  text-align:left;
+  position:relative; overflow:hidden;
+  flex:0 1 var(--slot); min-width:44px;
+  width:var(--slot); height:auto; aspect-ratio:1/1; min-height:44px;
+  padding:0; margin:0;
+  border:var(--hair) solid var(--st-ready); border-radius:var(--r1);
+  background:var(--surf-2);
+  color:var(--white);
 }
 
-/* hotkey plaque: 1-4, stencilled */
+/* hotkey plaque: 1-4, gold on ink, top-left */
 #dwc-root .op-key{
-  grid-area:key;
+  position:absolute; left:2px; top:2px; z-index:3;
   display:flex; align-items:center; justify-content:center;
-  width:16px; height:16px;
-  border:var(--hair) solid var(--bd-live); border-radius:var(--r1);
-  color:var(--dim); background:#020809;
-  font-size:var(--fs-micro); line-height:1; letter-spacing:0;
+  min-width:14px; height:14px; padding:0 2px;
+  border:var(--hair) solid var(--gold-dim); border-radius:var(--r1);
+  color:var(--gold); background:#0b1518;
+  font-size:11px; font-weight:700; line-height:1; letter-spacing:0;
 }
-/* icon slot: holds an inline svg, an img, or a single glyph */
+/* icon: fills the slot; the glyph is (slot - 14px) square. drawHud emits
+   every icon at one size and this rule wins over the width/height attrs. */
 #dwc-root .op-ic{
-  grid-area:ic;
+  position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
-  width:20px; height:20px; flex:0 0 auto;
   color:currentColor; opacity:.9;
 }
 #dwc-root .op-ic svg,
-#dwc-root .op-ic img{ width:100%; height:100%; display:block; }
-/* name */
-#dwc-root .op-nm{
-  grid-area:nm; min-width:0;
-  font-size:var(--fs-md); font-weight:700;
-  text-transform:uppercase; letter-spacing:var(--ls-2);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+#dwc-root .op-ic img{
+  width:calc(var(--slot) - 14px); height:calc(var(--slot) - 14px);
+  max-width:calc(100% - 14px); max-height:calc(100% - 14px);
+  display:block;
 }
-/* cost + range meta */
-#dwc-root .op-meta{
-  grid-area:meta; min-width:0;
-  font-size:var(--fs-xs); letter-spacing:var(--ls-1);
-  color:var(--dim); text-transform:uppercase;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+/* pneuma cost: bottom-right */
+#dwc-root .op-cost{
+  position:absolute; right:3px; bottom:2px; z-index:3;
+  font-size:10px; font-weight:700; line-height:1; letter-spacing:0;
+  color:var(--dim); text-shadow:0 1px 0 #000, 0 0 3px #000;
 }
-#dwc-root .op-meta b{ color:var(--white); font-weight:700; }
+/* dose count: top-right (satchel items) */
+#dwc-root .op-dose{
+  position:absolute; right:3px; top:2px; z-index:3;
+  font-size:10px; font-weight:700; line-height:1; letter-spacing:0;
+  color:var(--dim); text-shadow:0 1px 0 #000;
+}
+/* state number: positioned by the st-* rules below; empty = gone */
+#dwc-root .op-badge{
+  position:absolute; z-index:4; pointer-events:none;
+  font-weight:700; line-height:1; letter-spacing:0;
+}
 
 /* --- icon slot contents (registry output: svg | img | glyph span) ----- */
 #dwc-root .dwi{ display:inline-block; vertical-align:middle;
   pointer-events:none; flex:0 0 auto; }
 #dwc-root .dwi-glyph{ opacity:.7; }
 
-/* --- ability button states ----------------------------------------------- */
-#dwc-root .op{ border-color:var(--st-ready); }
+/* --- ability slot states --------------------------------------------------- */
 #dwc-root .op:hover{ border-color:var(--teal); }
 
-/* selected / armed: gold frame + a solid gold rail down the left edge.
-   The rail is what separates SELECTED from merely UNAVAILABLE at a glance. */
+/* selected / armed: gold frame (doubled by an inset ring) + glow */
 #dwc-root .op.sel{
   border-color:var(--st-sel); color:var(--gold);
-  background:linear-gradient(90deg, var(--gold-ink), var(--surf-2) 60%);
-  box-shadow:inset 3px 0 0 var(--gold), var(--glow-gold);
+  background:var(--gold-ink);
+  box-shadow:inset 0 0 0 1px var(--gold), var(--glow-gold);
 }
-#dwc-root .op.sel .op-key{ border-color:var(--gold-dim); color:var(--gold); }
-#dwc-root .op.sel .op-meta{ color:var(--warn-fg); }
+#dwc-root .op.sel .op-key{ border-color:var(--gold); }
+#dwc-root .op.sel .op-cost{ color:var(--gold); }
 #dwc-root .op.sel:hover{ border-color:var(--gold); }
 
 /* unavailable but still tappable (tapping answers WHY -- keep the pointer) */
 #dwc-root .op.off{
   color:var(--white); border-color:var(--st-off);
   background:var(--surf-1); box-shadow:none;
-  opacity:.72; cursor:pointer;   /* .55 on --dim measured 2.0:1; this clears 4.5 */
+  opacity:.75; cursor:pointer;
 }
-#dwc-root .op.off:hover{ background:var(--surf-2); border-color:var(--bd-live); opacity:.75; }
-#dwc-root .op.off .op-nm{ font-weight:400; }
+#dwc-root .op.off:hover{ background:var(--surf-2); border-color:var(--bd-live); }
 /* selected wins over off (an armed-but-blocked spell still reads as armed) */
-#dwc-root .op.off.sel{ opacity:.8; color:var(--gold); border-color:var(--st-sel);
-  box-shadow:inset 3px 0 0 var(--gold);    /* .off zeroes it later in the cascade */
-  background:linear-gradient(90deg, var(--gold-ink), var(--surf-1) 60%); }
+#dwc-root .op.off.sel{ opacity:.85; color:var(--gold); border-color:var(--st-sel);
+  background:var(--gold-ink);
+  box-shadow:inset 0 0 0 1px var(--gold); }   /* .off zeroes it later in the cascade */
 
-/* --- state badge --------------------------------------------------------- */
-#dwc-root .op-badge{
-  grid-area:badge; justify-self:end; align-self:center;
-  display:inline-flex; align-items:center; gap:3px;
-  padding:1px 3px;
-  max-width:82px; overflow:hidden;
-  border:var(--hair) solid currentColor; border-radius:var(--r1);
-  font-size:var(--fs-micro); line-height:1.5;
-  letter-spacing:0; text-transform:uppercase; white-space:nowrap;
-  text-overflow:ellipsis;
-  color:var(--dim); background:#02080999;
+/* burnt: oxblood wash + hand-drawn cracks over the icon */
+#dwc-root .op.st-burnt{ border-color:var(--st-burnt); }
+#dwc-root .st-burnt .op-ic::before{
+  content:""; position:absolute; inset:0; background:#9e1b2e99;
+}
+#dwc-root .st-burnt .op-ic::after{
+  content:""; position:absolute; inset:0; opacity:.8;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffd3d9' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 2l4 6-2 4 5 5-1 5'/%3E%3Cpath d='M21 4l-5 5 1 4-4 3'/%3E%3Cpath d='M7 8l-4 3'/%3E%3Cpath d='M12 17l5 2 2 3'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+/* recharge: clockwise void sweep; --p = remaining fraction (drawHud sets it) */
+#dwc-root .st-recharge .op-ic{ color:var(--teal); }   /* the un-swept part stays lit */
+#dwc-root .st-recharge .op-ic::after{
+  content:""; position:absolute; inset:0;
+  background:conic-gradient(#04090be6 calc(var(--p) * 1turn), transparent 0);
+}
+#dwc-root .st-recharge .op-badge{
+  inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:16px; color:var(--st-recharge);
+  text-shadow:0 0 4px #000, 0 1px 2px #000, 0 0 8px #000;
+}
+/* spent: icon greyed */
+#dwc-root .st-spent .op-ic{ color:var(--st-off); opacity:.55; }
+#dwc-root .st-spent .op-cost{ color:var(--st-off); }
+/* need: the cost is the problem, so the cost turns danger red */
+#dwc-root .st-need .op-cost{ color:var(--danger-fg); }
+/* strain: dashed gold ring that thickens with --p = strain / BURN_AT */
+#dwc-root .st-strain::before{
+  content:""; position:absolute; inset:-1px; z-index:2; pointer-events:none;   /* sits ON the frame, thickens inward */
+  border:calc(1px + 3px * var(--p)) dashed var(--gold); border-radius:inherit;
+  opacity:.9;
+}
+#dwc-root .st-strain .op-badge{
+  top:5px; right:5px; padding:1px 2px;           /* inside the ring, not on it */
+  border-radius:var(--r1); background:#0b1518cc;
+  font-size:10px; color:var(--gold); text-shadow:0 1px 0 #000;
 }
 #dwc-root .op-badge:empty{ display:none; }
-/* variants */
-#dwc-root .b-recharge{ color:var(--st-recharge); background:#062023cc; }
-#dwc-root .b-spent{    color:#8fb3b0;            border-style:dotted; }
-#dwc-root .b-burnt{    color:#ffd3d9; background:var(--ox); border-color:var(--ox); }
-#dwc-root .b-strain{   color:var(--st-strain);   border-style:dashed; background:#1c160899; }
-#dwc-root .b-need{     color:var(--st-need);     background:var(--gold-ink); }
-#dwc-root .b-dose{     color:var(--dim);         border-color:var(--bd-live); }
 
 /* --- satchel item variant ------------------------------------------------- */
 #dwc-root .op.item{ border-color:var(--st-item); }
 #dwc-root .op.item .op-ic{ color:var(--st-item-sel); }
+#dwc-root .op.item.st-spent .op-ic{ color:var(--st-off); }
 #dwc-root .op.item:hover{ border-color:#a03a2c; }
 #dwc-root .op.item.sel{
   border-color:var(--st-item-sel); color:#e28a76;
-  background:linear-gradient(90deg,#2a0f0a,var(--surf-2) 60%);
-  box-shadow:inset 3px 0 0 var(--st-item-sel), 0 0 8px #d6402a55;
+  background:#2a0f0a;
+  box-shadow:inset 0 0 0 1px var(--st-item-sel), 0 0 8px #d6402a55;
 }
-#dwc-root .op.item.sel .op-meta{ color:#c0806f; }
+#dwc-root .op.item.sel .op-cost,
+#dwc-root .op.item.sel .op-dose{ color:#e28a76; }
 
-/* --- action row: ONE horizontally scrolling track, never a 3-row mess ----- */
-#dwc-root #dwc-banks{
-  grid-area:ops; min-width:0;
-  display:flex; align-items:stretch; gap:var(--s2);
-  overflow-x:auto; overflow-y:hidden;
-  padding-bottom:var(--s1);           /* room for the scrollbar */
-  scrollbar-width:thin; scrollbar-color:var(--tealdim) var(--surf-sunk);
+/* --- the dock: [gauge] banks | satchel [gauge], centred (END TVRN is a
+   board-anchored plaque, see section 6) --------------------------------------
+   width:max-content + max-width:100% keeps the row only as wide as its
+   content (so the board stays tappable either side of it) while still
+   letting the tracks shrink and then scroll when the banks overflow. */
+#dwc-root #dwc-dock{
+  display:flex; align-items:center; justify-content:center; gap:var(--s2);
+  width:max-content; max-width:100%; min-width:0; margin:0 auto;
+  min-height:var(--dock-h);
 }
-/* Visible affordance #1: the track fades out at both edges, so a clipped
-   button always reads as "there is more this way". */
-#dwc-root #dwc-banks{
-  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 10px,
-                     #000 calc(100% - 20px), transparent 100%);
-          mask-image:linear-gradient(90deg, transparent 0, #000 10px,
-                     #000 calc(100% - 20px), transparent 100%);
-}
-/* visible affordance #2: a thin in-palette rail under the track */
-#dwc-root #dwc-banks::-webkit-scrollbar{ height:4px; }
-#dwc-root #dwc-banks::-webkit-scrollbar-track{ background:var(--surf-sunk); border-radius:2px; }
-#dwc-root #dwc-banks::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
-#dwc-root #dwc-banks::-webkit-scrollbar-thumb:hover{ background:var(--teal); }
-
-/* --- end turn ------------------------------------------------------------- */
-#dwc-root #dwc-endbtn,
-#dwc-root button.end{
-  grid-area:end; align-self:stretch;
+/* gauges: CYCLES pips left, PNEUMA coil right, for the CURRENT unit
+   (drawGauges, next to drawHud). Each is one --slot square holding an inline
+   56x56 svg; the label lives inside the svg so the box stays square.
+   hidden = reserve nothing -- the author display:flex would beat the UA
+   [hidden] rule, so restate it. */
+#dwc-root .dwc-gauge{
+  width:var(--slot); height:var(--slot); flex:0 0 auto;
   display:flex; align-items:center; justify-content:center;
-  flex:0 0 auto;
-  padding:var(--s2) var(--s3);
-  border-color:var(--ox); color:var(--danger-fg);
-  background:linear-gradient(180deg,#160a0e,#0a1214);
-  font-size:var(--fs-sm); font-weight:700;
-  letter-spacing:var(--ls-3); text-transform:uppercase;
-  white-space:nowrap;
+  color:var(--teal);
 }
-#dwc-root button.end:hover{ border-color:#c8203a; color:#ff90a0; background:#1c0b10; }
-#dwc-root button.end:active{ background:var(--ox-ink); }
-#dwc-root button.end:disabled{ color:var(--dim); border-color:var(--bd-ox); background:var(--surf-1); }
+#dwc-root .dwc-gauge[hidden]{ display:none; }
+#dwc-root .dwc-gauge svg{ width:100%; height:100%; display:block; overflow:visible; }
+/* svg text: sizes are viewBox units (7 -> 6px at the 48px slot, 7px at 56) */
+#dwc-root .dwc-g-lbl{
+  font-size:7px; font-weight:700; letter-spacing:var(--ls-2);
+  fill:var(--dim); text-anchor:middle;
+}
+#dwc-root .dwc-g-trace{ stroke:currentColor; stroke-width:.75; opacity:.55; fill:none; }
+#dwc-root .dwc-g-frame{ stroke:var(--tealdim); stroke-width:1; fill:var(--surf-1); }
+#dwc-root .dwc-g-pip{ fill:var(--teal); filter:drop-shadow(0 0 3px #39c8c1aa); }
+#dwc-root .dwc-g-pip.dwc-spent{ fill:var(--surf-sunk); stroke:var(--tealdim); stroke-width:1; filter:none; }
+#dwc-root .dwc-g-vessel{ stroke:currentColor; stroke-width:1.25; fill:var(--surf-sunk); }
+#dwc-root .dwc-g-fill{ fill:var(--teal); opacity:.55; }
+#dwc-root .dwc-g-fill-top{ stroke:var(--teal-hi); stroke-width:1; }
+#dwc-root .dwc-g-rung{ stroke:var(--tealdim); stroke-width:.75; }
+#dwc-root .dwc-g-cap{ fill:var(--tealdim); }
+#dwc-root .dwc-g-num{
+  font-size:12px; font-weight:700; fill:var(--white); text-anchor:middle;
+  paint-order:stroke; stroke:#04090b; stroke-width:3px; stroke-linejoin:round;
+}
+#dwc-root #dwc-banks,
+#dwc-root #dwc-satchel{
+  display:flex; gap:var(--s2); align-items:center;
+  flex:0 1 auto; min-width:0;
+  overflow-x:auto; overflow-y:hidden;
+  padding:var(--s2) var(--s1);        /* vertical room for the armed glow */
+  scrollbar-width:thin; scrollbar-color:var(--tealdim) transparent;
+}
+/* the satchel is one slot wide: it never gives up width to the banks track
+   (measured at 390: both shrinking left the ampoule clipped to 41px) */
+#dwc-root #dwc-satchel{ flex-shrink:0; }
+#dwc-root #dwc-banks::-webkit-scrollbar,
+#dwc-root #dwc-satchel::-webkit-scrollbar{ height:3px; }
+#dwc-root #dwc-banks::-webkit-scrollbar-track,
+#dwc-root #dwc-satchel::-webkit-scrollbar-track{ background:transparent; }
+#dwc-root #dwc-banks::-webkit-scrollbar-thumb,
+#dwc-root #dwc-satchel::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
+/* banks | satchel divider: an oxblood hairline that fades at both ends */
+#dwc-root .dwc-sep{
+  flex:0 0 auto; width:1px; align-self:stretch;
+  margin:var(--s1) var(--s1);
+  background:linear-gradient(180deg, transparent, var(--bd-ox), transparent);
+}
+/* empty satchel: no divider, no empty track eating a gap */
+#dwc-root #dwc-dock.dwc-nosat .dwc-sep,
+#dwc-root #dwc-dock.dwc-nosat #dwc-satchel{ display:none; }
+/* placement: no slots at all, so the row reserves nothing over the board */
+#dwc-root #dwc-dock.dwc-empty{ min-height:0; }
+
+/* --- END TVRN: a floating plaque anchored to the BOARD, not the dock ---------
+   An octagonal oxblood seal carrying the hourglass rune, with a stencil
+   label beneath. It lives in #dwc-board (after the svg), parked 20% up and
+   15% in from the board's right edge; translate(50%,50%) centres the box on
+   that anchor. Board-anchored on purpose: on portrait the tiles stop well
+   above the hud, so the plaque sits in the letterboxed void below them and
+   the dock row stays gauges + banks + satchel. The hud overlays the board's
+   bottom, so 20% is not always clear -- placeEndBtn() (next to drawHud)
+   lifts it in px only when the anchor would land inside the hud, and clears
+   the override again when the sheet's 20% suffices. The button box is the
+   tap target: 64x76 phone, 72x84 desktop, both past --hit. */
+#dwc-root #dwc-endbtn{
+  position:absolute; right:15%; bottom:20%;
+  transform:translate(50%,50%);
+  z-index:15;
+  width:64px; height:76px; min-height:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:0; margin:0; border:none; border-radius:0;
+  background:transparent; box-shadow:none;
+  touch-action:manipulation; pointer-events:auto;
+  -webkit-tap-highlight-color:transparent;
+}
+#dwc-root #dwc-endbtn:hover{ background:transparent; }
+#dwc-root #dwc-endbtn:active{ transform:translate(50%,50%) translateY(1px); background:transparent; }
+#dwc-root #dwc-endbtn:disabled{ opacity:.45; cursor:default; background:transparent; box-shadow:none; }
+/* the seal: a 3px oxblood octagon frame over an ink well (the ::before) */
+#dwc-root .end-plq{
+  position:relative; width:52px; height:52px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+  background:var(--ox);
+  transition:background-color var(--t-fast) var(--ease);
+}
+#dwc-root .end-plq::before{
+  content:""; position:absolute; inset:3px;
+  clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+  background:linear-gradient(180deg,#160a0e,#0a1214);
+}
+/* the rune: a currentColor svg from icons.js (ensureDom fills it), gold,
+   above the well */
+#dwc-root .end-plq .dwi{
+  position:relative; z-index:1;
+  color:var(--gold); filter:drop-shadow(0 0 4px #d9a44188);
+  transition:color var(--t-fast) var(--ease);
+}
+#dwc-root .end-lbl{
+  margin-top:3px; font-size:8px; font-weight:700; line-height:1;
+  letter-spacing:2px; text-transform:uppercase; white-space:nowrap;
+  color:var(--danger-fg); text-shadow:0 1px 0 #000;
+}
+#dwc-root #dwc-endbtn:hover .end-plq{ background:#c8203a; }
+#dwc-root #dwc-endbtn:hover .end-plq .dwi{ color:var(--warn-fg); filter:drop-shadow(0 0 6px #d9a441cc); }
+#dwc-root #dwc-endbtn:hover .end-lbl{ color:#ff90a0; }
+#dwc-root #dwc-endbtn:disabled .end-plq .dwi{ color:var(--dim); filter:none; }
+#dwc-root #dwc-endbtn:disabled .end-lbl{ color:var(--dim); }
 
 /* --- ENGAGE (placement) ---------------------------------------------------
    Floats over the board, well clear of the HUD, and never over the notch. */
@@ -2645,27 +2784,26 @@ const DWC_CSS = `
    10. RESPONSIVE
    ========================================================================== */
 
-/* --- wide / desktop: one HUD row, stat line inline --------------------- */
+/* --- wide / desktop: bigger slots, wider gutters ------------------------- */
 @media (min-width:760px){
+  #dwc-root{ --slot:56px; }
   #dwc-root #dwc-hud{
-    grid-template-columns:minmax(190px,24%) minmax(0,1fr) auto;
-    grid-template-areas:"stat ops end";
-    align-items:center;
     padding-left:calc(var(--s4) + var(--sa-l));
     padding-right:calc(var(--s4) + var(--sa-r));
   }
-  #dwc-root #dwc-stat{ font-size:var(--fs-sm); }
-  #dwc-root .op{ width:220px; max-width:none; }
   #dwc-root #dwc-tl{ padding-left:calc(var(--s4) + var(--sa-l));
                      padding-right:calc(var(--s4) + var(--sa-r)); }
+  /* END TVRN plaque grows with the slots */
+  #dwc-root #dwc-endbtn{ width:72px; height:84px; }
+  #dwc-root .end-plq{ width:60px; height:60px; }
+  #dwc-root .end-lbl{ font-size:9px; }
 }
 
 /* --- very narrow phones (<=360px): tighten, never wrap the track ------- */
 @media (max-width:360px){
-  #dwc-root{ --op-w:200px; --chip:40px; }
+  #dwc-root{ --chip:40px; }
   #dwc-root #dwc-hud{ padding-left:calc(var(--s2) + var(--sa-l));
                       padding-right:calc(var(--s2) + var(--sa-r)); }
-  #dwc-root #dwc-endbtn{ padding:var(--s2); letter-spacing:var(--ls-2); }
 }
 
 /* --- short viewport / landscape phone (844x390): protect the board ------
@@ -2674,34 +2812,37 @@ const DWC_CSS = `
   /* Chips shrink: they are display-only (no handler), so the 44px rule does
      not bind them. Buttons keep the full 44px -- measured, that costs the
      board 10px of height here (294 -> 284), which is cheap for a real tap. */
-  #dwc-root{ --chip:34px; --hit:44px; }
+  #dwc-root{ --chip:34px; --hit:44px; --slot:48px; }   /* phone slots even at 844 wide */
   #dwc-root #dwc-tl{
     gap:var(--s1);
     padding-top:calc(var(--s1) + var(--sa-t)); padding-bottom:var(--s1);
     font-size:var(--fs-xs);
   }
   #dwc-root .dwc-chip{ font-size:var(--fs-md); }
+  /* stat line INLINE left of the dock to save height: three columns so the
+     dock stays centred in the viewport with the stat in the left gutter */
   #dwc-root #dwc-hud{
-    grid-template-columns:minmax(176px,26%) minmax(0,1fr) auto;
-    grid-template-areas:"stat ops end";
+    display:grid;
+    grid-template-columns:minmax(150px,26%) 1fr minmax(0,26%);
     align-items:center;
     gap:var(--s1) var(--s2);
     padding-top:var(--s1);
     padding-bottom:calc(var(--s1) + var(--sa-b));
-    min-height:0;
-    max-height:38vh;
   }
-  /* two short lines beat one ellipsised one: PNEUMA was never visible here */
-  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3; }
+  /* two short lines beat one ellipsised one */
+  #dwc-root #dwc-stat{
+    grid-column:1; text-align:left;
+    white-space:normal; max-height:2.6em;
+    font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3;
+  }
   #dwc-root #dwc-stat::before{ height:9px; }
-  #dwc-root .op{
-    width:188px; padding:2px var(--s2);
-    column-gap:var(--s1);
-  }
-  #dwc-root .op-nm{ font-size:var(--fs-sm); }
-  #dwc-root .op-meta{ font-size:var(--fs-micro); }
-  #dwc-root #dwc-banks{ padding-bottom:2px; }
-  #dwc-root #dwc-endbtn{ font-size:var(--fs-xs); }
+  #dwc-root #dwc-dock{ grid-column:2; }
+  /* On portrait and desktop the viewBox's own bottom margin absorbs the
+     overlay; on landscape it does not, so the board gives up the dock's row. */
+  /* phone-sized plaque even at 844 wide (this block follows min-width:760) */
+  #dwc-root #dwc-endbtn{ width:64px; height:76px; }
+  #dwc-root .end-plq{ width:52px; height:52px; }
+  #dwc-root .end-lbl{ font-size:8px; }
   #dwc-root #dwc-engage{
     bottom:calc(22% + var(--sa-b)); padding:var(--s2) var(--s5);
     font-size:var(--fs-lg); min-height:44px;
@@ -2724,6 +2865,9 @@ const DWC_CSS = `
   #dwc-root button:hover{ background:var(--surf-2); border-color:var(--tealdim); }
   #dwc-root .op:hover{ border-color:var(--st-ready); }
   #dwc-root .op.sel:hover{ border-color:var(--st-sel); }
+  #dwc-root #dwc-endbtn:hover .end-plq{ background:var(--ox); }
+  #dwc-root #dwc-endbtn:hover .end-plq .dwi{ color:var(--gold); filter:drop-shadow(0 0 4px #d9a44188); }
+  #dwc-root #dwc-endbtn:hover .end-lbl{ color:var(--danger-fg); }
   #dwc-root .tile.hl-move:hover,
   #dwc-root .tile.hl-rng:hover,
   #dwc-root .tile.hl-heal:hover,
@@ -2742,6 +2886,7 @@ const DWC_CSS = `
   #dwc-root .tile{ transition-duration:.001ms !important; }
   #dwc-root button:active{ transform:none; }
   #dwc-root #dwc-engage:active{ transform:translateX(-50%); }
+  #dwc-root #dwc-endbtn:active{ transform:translate(50%,50%); }
   #dwc-root .dwc-unit{ transition:none; }
   #dwc-root .fx-dmg,
   #dwc-root .fx-say{ animation:none !important; opacity:1; }
@@ -2759,12 +2904,11 @@ const DWC_CSS = `
   #dwc-root .dwc-chip{ opacity:.8; border-width:2px; }
   #dwc-root .op{ border-width:2px; }
   #dwc-root .op.off{ opacity:.8; }
-  #dwc-root .op-badge{ border-width:2px; }
   #dwc-root button:focus-visible{ outline-width:3px; }
   #dwc-root .tile{ stroke-width:1.25; }
 }
 `;
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-dock">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -2777,6 +2921,11 @@ function ensureDom(){
   const st=document.createElement("style"); st.textContent=DWC_CSS;
   document.head.appendChild(st);
   root=document.createElement("div"); root.id="dwc-root"; root.innerHTML=DWC_HTML;
+  // END TVRN plaque glyph. The ICO shim lives inside initLogic (not yet run,
+  // and a const besides), so go to the registry directly with the same
+  // guard: a page without icons.js gets an empty seal, not a throw.
+  const plq=root.querySelector(".end-plq");
+  if(plq) plq.innerHTML=window.iconHTML?window.iconHTML("endtvrn",{size:30}):"";
   root.style.display="none"; document.body.appendChild(root);
   initLogic();
 }
@@ -3632,14 +3781,110 @@ function drawTimeline(){
 // stale index.html (or a headless test that skips it) must degrade to a bare
 // button rather than throw on every redraw.
 const ICO=(id,o)=>window.iconHTML?window.iconHTML(id,o):"";
+// Slot icons are emitted at ONE size; the sheet resizes them from --slot
+// (.op-ic svg), so phone and desktop share a markup path.
+const SLOT_ICON=34;
+// Numeric range for the aria-label and the stat line: "3", "1–4", sweep "0".
+const rangeText=bk=>bk.kind==="sweep"?"0":(bk.min===bk.max?String(bk.min):bk.min+"–"+bk.max);
+// Learnability guard (UI only): dock slots carry no names, so until a unit
+// has armed something this fight the stat line lists its bank names.
+// Cleared in apiStart next to the fight state.
+let hudArmed=new Set();
 
 // Which selection the track was last scrolled for. drawHud runs on every
 // draw(); scrolling on every pass would yank the row back under the thumb.
 let scrolledSel=null;
+// END TVRN plaque clamp. The sheet parks it 20% up #dwc-board, but the hud
+// overlays the board's bottom and on short viewports 20% lands inside it.
+// With transform:translate(50%,50%) the box is dropped by half its height,
+// so its VISUAL bottom edge is (bottom offset - eh/2); keeping that 8px
+// above the hud means bottom >= hh + 8 + eh/2. Set in px only when needed;
+// otherwise cleared so the 20% rule stays the source of truth. Runs from
+// drawHud (battle) and on resize. Stub-safe: every measurement is checked.
+function placeEndBtn(){
+  const endb=document.getElementById("dwc-endbtn"), hud=document.getElementById("dwc-hud"),
+        board=document.getElementById("dwc-board");
+  if(!endb||!hud||!board||!endb.style) return;
+  if(state.phase!=="battle"){ endb.style.bottom=""; return; }
+  const hr=hud.getBoundingClientRect(), br=board.getBoundingClientRect(), er=endb.getBoundingClientRect();
+  const hh=hr&&hr.height, bh=br&&br.height, eh=er&&er.height;
+  if(typeof hh!=="number"||typeof bh!=="number"||typeof eh!=="number"||!(bh>0)) return;
+  const need=hh+8+eh/2, pct=bh*0.20;
+  // (if need+eh exceeds bh the plaque would poke above the board: nothing
+  // sane to do on a viewport that short, so it just clamps and stays tappable)
+  endb.style.bottom=need>pct?need+"px":"";
+}
+window.addEventListener("resize",placeEndBtn);   // once: initLogic runs once per mount
+
+// --- gauges: two per-turn pools flanking the dock (ruling C) ---------------
+// Diablo II puts life left / mana right; we put CYCLES left, PNEUMA right,
+// for the CURRENT unit -- foe turns show the foe's numbers. VITAE is not a
+// gauge. Left is discrete pips (three-of-four must be countable), right is a
+// coil that drains as casts spend it. Built by string concat into innerHTML:
+// no ids inside (the markup is per gauge), no handlers.
+// Gauge labels are an open ruling (PNEUMA/CYCLES vs MANA/MOVEMENT): two
+// strings, nothing else in the vocabulary depends on them.
+const GAUGE_LABEL_L="CYCLES", GAUGE_LABEL_R="PNEUMA";
+const DWC_GAUGES=true;    // ruling C: CYCLES left, PNEUMA right, current unit
+function drawGauges(u){
+  const L=document.getElementById("dwc-gauge-l"), R=document.getElementById("dwc-gauge-r");
+  if(!L||!R) return;
+  if(!DWC_GAUGES||!u){ L.hidden=true; R.hidden=true; L.innerHTML=""; R.innerHTML=""; return; }
+  const clamp=(n,m)=>Math.max(0,Math.min(m,n|0));
+  const open='<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
+  // -- left: CYCLES as pips in a circuit-trace frame. Notched (PCB-edge)
+  //    corners on the OUTER side, traces running in from the frame to the
+  //    pip group. Spent pips are the ones from the RIGHT.
+  {
+    const max=clamp(u.maxCycles,8), n=clamp(u.cycles,max);
+    const pw=8, pg=4, ph=22, py=8, tot=max*pw+(max-1)*pg, x0=28-tot/2;
+    let s=open;
+    s+='<path class="dwc-g-frame" d="M8,2 H51 Q54,2 54,5 V51 Q54,54 51,54 H8 L2,48 V8 Z"/>';
+    // traces: mid-height from each frame edge to the group, pads at the ends
+    const ty=py+ph/2;
+    s+='<path class="dwc-g-trace" d="M2,'+ty+' H'+(x0-3)+' M'+(x0+tot+3)+','+ty+' H54 M'+(x0+pw/2)+',2 V'+(py-2)+' M'+(x0+tot-pw/2)+',54 V'+(py+ph+2)+'"/>';
+    s+='<rect x="'+(x0-4.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
+    s+='<rect x="'+(x0+tot+1.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
+    for(let i=0;i<max;i++){
+      s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg))+'" y="'+py+'" width="'+pw+'" height="'+ph+'" rx="1.5"/>';
+    }
+    s+='<text class="dwc-g-lbl" x="28" y="45">'+GAUGE_LABEL_L+'</text></svg>';
+    L.innerHTML=s; L.setAttribute("role","img");
+    L.setAttribute("aria-label",GAUGE_LABEL_L+" "+n+" of "+max);
+    L.hidden=false;
+  }
+  // -- right: PNEUMA as a capacitor/coil. Vessel outline, fill from the
+  //    bottom, five rungs drawn OVER the fill so it reads as windings, then
+  //    the numeral with a dark stroke so it survives the half-fill.
+  {
+    const max=Math.max(1,u.maxPneuma|0), n=clamp(u.pneuma,max), frac=n/max;
+    const vx=10, vy=4, vw=36, vh=36, ix=vx+1, iy=vy+1, iw=vw-2, ih=vh-2;
+    const fh=Math.round(ih*frac*2)/2, fy=iy+ih-fh;
+    let s=open;
+    s+='<rect class="dwc-g-cap" x="22" y="1" width="12" height="3" rx="1"/>';
+    s+='<rect class="dwc-g-cap" x="22" y="40" width="12" height="3" rx="1"/>';
+    s+='<rect class="dwc-g-vessel" x="'+vx+'" y="'+vy+'" width="'+vw+'" height="'+vh+'" rx="3"/>';
+    if(fh>0){
+      s+='<rect class="dwc-g-fill" x="'+ix+'" y="'+fy+'" width="'+iw+'" height="'+fh+'" rx="2"/>';
+      s+='<line class="dwc-g-fill-top" x1="'+ix+'" y1="'+fy+'" x2="'+(ix+iw)+'" y2="'+fy+'"/>';
+    }
+    let rungs="";
+    for(let k=1;k<=5;k++){ const ry=(iy+ih*k/6).toFixed(1); rungs+='M'+(vx-2)+','+ry+' H'+(vx+vw+2)+' '; }
+    s+='<path class="dwc-g-rung" d="'+rungs.trim()+'"/>';
+    s+='<text class="dwc-g-num" x="28" y="26.5">'+n+'/'+max+'</text>';
+    s+='<text class="dwc-g-lbl" x="28" y="52">'+GAUGE_LABEL_R+'</text></svg>';
+    R.innerHTML=s; R.setAttribute("role","img");
+    R.setAttribute("aria-label",GAUGE_LABEL_R+" "+n+" of "+max);
+    R.hidden=false;
+  }
+}
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
+        satchel=document.getElementById("dwc-satchel"), dock=document.getElementById("dwc-dock"),
         endb=document.getElementById("dwc-endbtn");
-  banks.innerHTML="";
+  banks.innerHTML=""; satchel.innerHTML="";
+  dock.classList.add("dwc-nosat");   // lifted below once an item slot is built
+  dock.classList.toggle("dwc-empty", state.phase==="place");   // no slots during placement
   let selBtn=null;
   // ENGAGE moved to #dwc-board: it is position:fixed anyway, and inside the
   // scrolling track it ate a flex slot and forced a :has() guard on the
@@ -3657,48 +3902,56 @@ function drawHud(){
       b.onclick=()=>{state.phase="battle"; newRound();};
       board.appendChild(b);
     }
+    drawGauges(null);   // placement: no current unit, nothing to gauge
     endb.style.display="none"; return;
   }
   endb.style.display="";
-  const u=cur(); if(!u) return;
+  placeEndBtn();
+  const u=cur(); if(!u){ drawGauges(null); return; }
   stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
+    const names=[];   // for the learnability line: the slots carry no names
     for(const id of u.banks){
       const bk=bankFor(u,id), b=document.createElement("button");
-      const off=!canCast(u,id);
-      b.className="op"+(state.sel===id?" sel":"")+(off?" off":"");
-      if(state.sel===id) selBtn=b;
-      const rng=bk.kind==="sweep"?"SELF":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max);
-      // One badge only, hardest state first: burnt > recharge > spent > need > strain.
-      const bd=u.burnt&&u.burnt[id]?["b-burnt","BVRNT"]
-        :u.cds[id]>0?["b-recharge",`RECHARGE ${u.cds[id]}`]
-        :(!bk.repeat&&u.cast[id]?["b-spent","SPENT"]
-        :(u.pneuma<bk.cost?["b-need",`NEED ${bk.cost}◆`]
-        :(u.strain&&u.strain[id]?["b-strain",`STRAIN ${u.strain[id]}/${BURN_AT}`]:["",""])));
-      b.innerHTML=`<span class="op-key">${u.banks.indexOf(id)+1}</span>`+
-        `<span class="op-ic">${ICO(bk.icon||bk.name,{size:20})}</span>`+
-        `<span class="op-nm">${bk.name}</span>`+
-        `<span class="op-meta">${bk.cost}◆ · ${rng}</span>`+
-        `<span class="op-badge ${bd[0]}">${bd[1]}</span>`;
+      const off=!canCast(u,id), r=rangeText(bk);
+      names.push(bk.name);
+      // One state per slot, hardest first: burnt > recharge > spent > need > strain.
+      // st = class suffix, num = badge number, p = overlay fraction, sfx = aria suffix.
+      let st="", num="", p=0, sfx="";
+      if(u.burnt&&u.burnt[id]){ st="burnt"; sfx=", BVRNT"; }
+      else if(u.cds[id]>0){ st="recharge"; num=String(u.cds[id]); p=u.cds[id]/(bk.cd||1); sfx=", RECHARGE "+num; }
+      else if(!bk.repeat&&u.cast[id]){ st="spent"; sfx=", SPENT"; }
+      else if(u.pneuma<bk.cost){ st="need"; sfx=", NEED "+bk.cost; }
+      else if(u.strain&&u.strain[id]){ st="strain"; num=String(u.strain[id]); p=u.strain[id]/BURN_AT; sfx=", STRAIN "+num+" OF "+BURN_AT; }
+      b.className="op"+(state.sel===id?" sel":"")+(off?" off":"")+(st?" st-"+st:"");
+      if(st==="recharge"||st==="strain") b.style.setProperty("--p",Math.max(0,Math.min(1,p)));
+      b.setAttribute("aria-label",bk.name+", "+bk.cost+" PNEUMA, RANGE "+r+sfx);
       b.title=bk.desc;
+      b.innerHTML=`<span class="op-key">${u.banks.indexOf(id)+1}</span>`+
+        `<span class="op-ic">${ICO(bk.icon||bk.name,{size:SLOT_ICON})}</span>`+
+        `<span class="op-cost">${bk.cost}◆</span>`+
+        `<span class="op-badge">${num}</span>`;
       b.onclick=()=>{
         if(off&&state.sel!==id){ flashStat(whyNot(u,id)); return; }  // answered, not eaten
+        hudArmed.add(u.id);
         state.sel=state.sel===id?null:id; draw();
       };
       banks.appendChild(b);
+      if(state.sel===id){ selBtn=b; stat.innerHTML=`<b>${bk.name}</b> · <b>${bk.cost}◆</b> · <b>${r}</b>`; }
     }
     if(u.id==="op") for(const id in ITEMS){ // items are OPERATOR-only
       if(!state.items[id]) continue;        // empty satchel: no button, no noise
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
-      const ioff=!canUseItem(u,id)&&state.sel!==sid;
-      b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"");
-      if(state.sel===sid) selBtn=b;
+      const ioff=!canUseItem(u,id)&&state.sel!==sid, r=rangeText(it);
+      names.push(id);
+      b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"")+(u.cast[sid]?" st-spent":"");
+      b.setAttribute("aria-label",it.name+", "+it.cost+" PNEUMA, RANGE "+r+", "+n+" LEFT"+(u.cast[sid]?", SPENT":""));
       b.title=it.desc;
       b.innerHTML=`<span class="op-key">${u.banks.length+1}</span>`+
-        `<span class="op-ic">${ICO(it.icon||id,{size:20})}</span>`+
-        `<span class="op-nm">${it.name}</span>`+
-        `<span class="op-meta">${it.cost}◆ · ${it.min}-${it.max}</span>`+
-        `<span class="op-badge ${u.cast[sid]?"b-spent":"b-dose"}">${u.cast[sid]?"SPENT":n+"/"+SATCHEL_MAX}</span>`;
+        `<span class="op-ic">${ICO(it.icon||id,{size:SLOT_ICON})}</span>`+
+        `<span class="op-dose">${n}</span>`+
+        `<span class="op-cost">${it.cost}◆</span>`+
+        `<span class="op-badge"></span>`;
       b.onclick=()=>{
         if(ioff){
           flashStat(u.cast[sid]?it.name+" IS SPENT \u2014 ONE VSE PER TVRN"
@@ -3706,13 +3959,18 @@ function drawHud(){
             :"SATCHEL EMPTY"));
           return;
         }
+        hudArmed.add(u.id);
         state.sel=state.sel===sid?null:sid; draw();
       };
-      banks.appendChild(b);
+      satchel.appendChild(b);
+      dock.classList.remove("dwc-nosat");
+      if(state.sel===sid) stat.innerHTML=`<b>${it.name}</b> · <b>${it.cost}◆</b> · <b>${r}</b> · <b>${n}</b> LEFT`;
     }
+    // Nothing armed yet this fight: name the slots, since the slots do not.
+    if(!state.sel&&!hudArmed.has(u.id)) stat.innerHTML=`<b>${u.name}</b> — ${names.join(" · ")}`;
     endb.disabled=false;
-    // Hotkey 2 armed ABRASIO with 137 of its 196px behind the edge fade. Bring
-    // a NEWLY selected button into the track; leave the thumb alone otherwise.
+    // Bring a NEWLY selected bank into the track; leave the thumb alone
+    // otherwise. Banks only -- the satchel track is one slot wide.
     if(!state.sel) scrolledSel=null;
     else if(selBtn&&state.sel!==scrolledSel){
       scrolledSel=state.sel;
@@ -3724,6 +3982,7 @@ function drawHud(){
       }
     }
   } else { endb.disabled=true; }
+  drawGauges(u);   // both sides: a foe's turn shows the foe's pools
 }
 
 /* ============================= input ============================== */
@@ -3786,11 +4045,11 @@ document.addEventListener("keydown",e=>{ if(!active) return;
   if(e.key>="1"&&e.key<="4"){
     const slot=+e.key-1;
     const id=u.banks[slot];
-    if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
+    if(id&&canCast(u,id)){ hudArmed.add(u.id); state.sel=state.sel===id?null:id; draw(); }
     else if(id){ flashStat(whyNot(u,id)); }
     else if(slot===u.banks.length&&u.id==="op"){
       const iid=Object.keys(ITEMS)[0], sid="item:"+iid;
-      if(canUseItem(u,iid)||state.sel===sid){ state.sel=state.sel===sid?null:sid; draw(); }
+      if(canUseItem(u,iid)||state.sel===sid){ hudArmed.add(u.id); state.sel=state.sel===sid?null:sid; draw(); }
     }
   } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
   else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
@@ -3823,13 +4082,14 @@ function finish(won){
   if(cfg&&cfg.onEnd) cfg.onEnd(res);
 }
 apiStart=function(){
+  hudArmed.clear();   // the learnability line resets with the fight state
   setupFight(cfg.fight||1);
   applyParty();
   draw(); drawTimeline(); drawHud();
 };
 // Headless-test seam: live references into the closure so node tests can
 // drive placement/rounds. The game itself never reads this.
-window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, canCast, whyNot, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
+window.__DWC_TEST={ get state(){return state;}, draw, drawHud, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, canCast, whyNot, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
 }
 window.DW_COMBAT={
   start(config){
