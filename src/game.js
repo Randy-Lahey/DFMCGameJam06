@@ -902,11 +902,16 @@
   }
 
   // Leaving is a choice, not a state you fall into: CLEARED means the floor is
-  // empty, WIN means you actually took the descent.
+  // empty, WIN means you actually took the descent. On a face tile the same
+  // prop is the EXTRACT back to THE REFVGE.
   function answerExit(yes) {
     if (state.modal !== 'exit') return;
     state.modal = null;
-    if (!yes) { log('THE CIRCLE STEPS BACK FROM THE DESCENT.'); return; }
+    if (!yes) {
+      log(state.tile ? 'THE CIRCLE STAYS ON THE TILE.' : 'THE CIRCLE STEPS BACK FROM THE DESCENT.');
+      return;
+    }
+    if (state.tile) { extract(); return; }
     const i = FLOORS.indexOf(F);
     if (i >= 0 && i + 1 < FLOORS.length) {
       log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
@@ -917,6 +922,24 @@
     log('THE SEAL HOLDS BEHIND YOV. THE CIRCLE BREAKS BACK TOWARD THE REAL.', 'good');
   }
 
+  // Extract: the tile is banked as cleared and the circle walks back to THE
+  // REFVGE. No heal -- AMPVLLAE are the only healing -- except once: when
+  // the third ordinary tile clears, the Cube opens and the whole party is
+  // restored (severed members included) before the Archon.
+  function extract() {
+    const id = state.tile;
+    if (!id) return;
+    if (!state.face.cleared.includes(id)) state.face.cleared.push(id);
+    log(`${id} EXTRACTED.`, 'good');
+    const plain = FACE.tiles.filter(t => !t.archon);
+    if (plain.every(t => state.face.cleared.includes(t.id)) &&
+        state.face.cleared.length === plain.length) {
+      state.circle.members.forEach(m => { m.hp = m.vitae; });
+      log('THE CVBE OPENS. VITAE RESTORED. THRONVS VNSEALS.', 'good');
+    }
+    loadTown();
+  }
+
   function checkEnd() {
     if (operator().hp <= 0) {
       state.over = 'SEVERED';
@@ -925,8 +948,19 @@
     }
     // A floor that never had foes (THE REFVGE) is not "cleared", it is home.
     if (state.foes.length && !liveFoes().length && !state.over) {
+      const t = state.tile && tileOf(state.tile);
+      if (t && t.archon) {
+        // The Archon down IS the face: no extract on THRONVS, the fight is
+        // the way off it.
+        state.face.sealed = true;
+        state.over = 'WIN';
+        log('THE ARCHON FALLS. NIGREDO SEALED.', 'good');
+        return;
+      }
       state.over = 'CLEARED';
-      log(`${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.`, 'good');
+      log(state.tile
+        ? `${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE EXTRACT VNSEALS.`
+        : `${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.`, 'good');
     }
   }
 
@@ -1164,12 +1198,12 @@
     }
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
     if (p.kind === 'stairs') {
-      const left = state.hasCube ? 0 : liveFoes().length;
+      const left = exitLeft();
       // Sealed is a STATE, not a keybind. E still opens the act round here —
       // stealing that key at the exit while enemies close would be cruel.
       if (left) return { prop: p, locked: true,
-                         text: 'DESCENT SEALED \u00b7 ' + left + ' ENEM' + (left > 1 ? 'IES' : 'Y') + ' LEFT' };
-      return { prop: p, text: 'LEAVE THE FLOOR' };
+                         text: p.label + ' SEALED \u00b7 ' + left + ' ENEM' + (left > 1 ? 'IES' : 'Y') + ' LEFT' };
+      return { prop: p, text: state.tile ? 'EXTRACT TO THE REFVGE' : 'LEAVE THE FLOOR' };
     }
     return null;
   }
@@ -1221,12 +1255,18 @@
     }
     if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. ' + actHint() + '.', 'good');
     if (p.kind === 'stairs') {
-      // The Cube IS the key: once granted, the descent ignores the seal.
-      const left = state.hasCube ? 0 : liveFoes().length;
+      const left = exitLeft();
       if (left) log('THE ' + p.label + ' IS SEALED. ' + left + ' STILL STAND.', 'bad');
+      else if (state.tile) log('THE ' + p.label + ' IS OPEN. ' + actHint() + '.', 'good');
       else log('THE ' + p.label + ' OPENS BELOW. ' + actHint() + '.', 'good');
     }
   }
+
+  // Foes still standing between the circle and the exit prop. In the
+  // tutorial the Cube IS the key (the descent ignores the seal once it is
+  // granted); on a face tile the seal is the rule -- a tile is CLEARED when
+  // every foe is dead, and the EXTRACT unseals then and only then.
+  const exitLeft = () => (state.hasCube && !state.tile) ? 0 : liveFoes().length;
 
   // ---------------------------------------------------------- act round
   // Any member who has not acted may act, in any order. The round resolves
@@ -2246,6 +2286,12 @@
     draw();
   });
   document.getElementById('again').addEventListener('click', () => window.location.reload());
+  // The face is sealed; the walk back to town keeps everything. What comes
+  // after a sealed face is a later order.
+  document.getElementById('win-return').addEventListener('click', () => {
+    if (!tapOk() || state.over !== 'WIN') return;
+    loadTown(); draw();
+  });
   document.getElementById('sever-again').addEventListener('click', () => window.location.reload());
 
   function syncOverlays() {
@@ -2274,6 +2320,10 @@
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
+      // Same prop, two verbs: the tutorial descends, a face tile extracts.
+      document.getElementById('dlg-eyebrow').textContent = state.tile ? 'EXTRACT' : 'DESCENT';
+      document.getElementById('dlg-title').textContent = state.tile
+        ? 'EXTRACT TO THE REFVGE?' : 'Would you like to leave this floor?';
       document.getElementById('dlg-note').textContent = onFloor
         ? 'THE FLOOR IS QUIET. ' + onFloor + ' DROP' + (onFloor > 1 ? 'S' : '')
           + ' STILL LYING THERE.'
@@ -2291,6 +2341,13 @@
     }
 
     if (state.over === 'WIN') {
+      // Two wins share the box: the tutorial descent (RECOMPILE reloads) and
+      // the Archon down (NIGREDO SEALED, RETVRN walks back to town).
+      const sealed = state.face.sealed;
+      document.getElementById('win-title').textContent =
+        sealed ? 'NIGREDO SEALED.' : "YOU'RE WINNER!!!";
+      document.getElementById('again').hidden = sealed;
+      document.getElementById('win-return').hidden = !sealed;
       const flux = state.bag.items.filter(i => i.kind === 'FLUX').length;
       const data = state.bag.items.filter(i => i.kind === 'DATA').length;
       const dead = state.foes.filter(f => f.hp <= 0).length;
@@ -2348,9 +2405,10 @@
       : liveFoes().length + ' / ' + state.foes.length + ' ENEMIES';
 
     const prompt = document.getElementById('prompt');
-    if (state.over === 'WIN') prompt.textContent = 'FLOOR 01 COMPLETE.';
+    if (state.over === 'WIN') prompt.textContent = state.face.sealed ? 'NIGREDO SEALED.' : 'FLOOR 01 COMPLETE.';
     else if (state.over === 'SEVERED') prompt.textContent = 'THE WORK ENDS.';
-    else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
+    else if (state.over === 'CLEARED') prompt.textContent = state.tile
+      ? 'TILE QUIET \u2014 THE EXTRACT IS OPEN.' : 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
       prompt.textContent = state.pending.member.name + (isCoarse()
         ? ' \u2014 TAP AN ENEMY IN THE WASH \u00b7 CANCEL BACKS OUT'
@@ -2405,7 +2463,7 @@
   // Crawl and tactical combat use different VITAE scales, so state crosses
   // the seam as a FRACTION of max: hp/vitae out, vitae/maxVitae back in.
   const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis', GVTTA: 'gvtta' };
-  const COMBAT_TPL = { TESTA: 't', SILIQVA: 's' };
+  const COMBAT_TPL = { TESTA: 't', SILIQVA: 's', ARCHON: 'a' };
 
   // Placeholder crawl -> tactical transition. Full-screen flash: void black,
   // gold rule lines, ENGAGED wordmark. Holds ~0.8s, then hands off to the
@@ -3315,7 +3373,7 @@
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
                   hermitSacrifice, takeCube, enterCombat, debugSacrifice,
-                  tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile,
+                  tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile, extract,
                   get F() { return F; } };
 
   // The controls screen quotes the shared-pool size. Injected from the bible

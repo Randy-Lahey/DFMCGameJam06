@@ -67,8 +67,9 @@ global.clearTimeout = () => {};
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/town.js', 'data/balance.js',
-                 'data/fxsheets.js', 'src/sprites.js', 'src/game.js']) {
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/town.js',
+                 'data/vestibvlvm.js', 'data/cinerevm.js', 'data/pvtrefactorivm.js', 'data/thronvs.js',
+                 'data/balance.js', 'data/fxsheets.js', 'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
@@ -118,9 +119,6 @@ console.log('-- rerollAffixes: four distinct labels from the pool');
 // ============================================================ town + face
 console.log('-- THE REFVGE, THE CVBE, the face modal');
 {
-  // Stand-in tile floor until the real one lands (data/vestibvlvm.js, C3).
-  if (!window.FLOOR_VESTIBVLVM)
-    window.FLOOR_VESTIBVLVM = Object.assign({}, window.FLOOR02, { name: 'VESTIBVLVM' });
   T.loadTown();
   ok(T.F.name === 'THE REFVGE' && s.tile === null, 'loadTown lands in THE REFVGE with tile null');
   ok(T.F.foes.length === 0 && s.foes.length === 0, 'town has no foes');
@@ -155,6 +153,98 @@ console.log('-- THE REFVGE, THE CVBE, the face modal');
   T.loadTown();
   ok(s.tile === null && T.F.name === 'THE REFVGE', 'loadTown from a tile returns home');
   ok(JSON.stringify(s.face.affix) === before, 'a return to town keeps the day\'s affixes');
+}
+
+// ============================================================ extract
+// Enter a tile from town, kill everything, walk to the EXTRACT, answer yes.
+const enter = id => { T.openFace(); T.chooseTile(id); s.modal = null; };
+const killAll = () => { s.foes.forEach(f => { f.hp = 0; }); };
+const standOn = p => { const L = T.lead(); L.c = p.c; L.r = p.r; s.mode = 'move'; s.stepsUsed = 0; };
+console.log('-- extract: cleared tile banked, no heal, back to town');
+{
+  T.recruit('CALX');
+  enter('VESTIBVLVM');
+  const ext = T.F.props.find(p => p.kind === 'stairs');
+  ok(ext && ext.label === 'EXTRACT', 'the tile carries an EXTRACT prop');
+  standOn(ext);
+  let it = T.interactable();
+  ok(it && it.locked && /EXTRACT SEALED/.test(it.text), 'EXTRACT is sealed while foes stand (the Cube is no key here)');
+  // Wound the party so a heal would show, then clear the tile.
+  const op = T.lead(), calx = s.circle.members.find(m => m.name === 'CALX');
+  op.hp = 9; calx.hp = 11;
+  killAll();
+  T.resolveRound(null);
+  ok(s.over === 'CLEARED', 'all foes dead -> tile CLEARED (not terminal)');
+  ok(s.log[0] && /EXTRACT VNSEALS/.test(s.log[0].text), 'the cleared line names the EXTRACT');
+  it = T.interactable();
+  ok(it && !it.locked && /EXTRACT TO THE REFVGE/.test(it.text), 'EXTRACT unseals once the tile is clear');
+  T.openAct();
+  ok(s.modal === 'exit', 'E on the EXTRACT opens the exit dialog');
+  T.answerExit(false);
+  ok(s.modal === null && s.tile === 'VESTIBVLVM' && T.F.name === 'VESTIBVLVM',
+     'NO keeps the circle on the tile (free to loot)');
+  s.modal = 'exit';
+  T.answerExit(true);
+  ok(s.face.cleared.join() === 'VESTIBVLVM', 'YES banks the tile as cleared');
+  ok(T.F.name === 'THE REFVGE' && s.tile === null, 'extract returns to THE REFVGE');
+  const op2 = T.lead(), calx2 = s.circle.members.find(m => m.name === 'CALX');
+  ok(op2.hp === 9 && calx2.hp === 11, 'no heal on extract: VITAE carried as-is');
+  ok(s.log.some(l => /VESTIBVLVM EXTRACTED/.test(l.text)), 'EXTRACTED line logged');
+  T.openFace();
+  ok(s.modal === 'face', 'the face reopens in town');
+  T.chooseTile('VESTIBVLVM');
+  ok(s.modal === 'face' && T.F.name === 'THE REFVGE', 'a CLEARED tile is inert');
+  T.closeFace();
+}
+
+console.log('-- third clear: the Cube opens, full heal, THRONVS unseals');
+{
+  enter('CINEREVM');
+  ok(s.tile === 'CINEREVM' && T.F.name === 'CINEREVM', 'second tile loads');
+  killAll(); T.resolveRound(null);
+  T.extract();
+  ok(s.face.cleared.length === 2 && T.F.name === 'THE REFVGE', 'two cleared, home again');
+  ok(T.tileUnlocked('THRONVS') === false, 'THRONVS still sealed at two');
+  ok(T.lead().hp === 9, 'still no heal at two');
+  enter('PVTREFACTORIVM');
+  // Sever CALX on the way: the third clear must revive him at full.
+  const calx = s.circle.members.find(m => m.name === 'CALX');
+  calx.hp = 0;
+  killAll(); T.resolveRound(null);
+  T.extract();
+  ok(s.face.cleared.length === 3, 'three cleared');
+  ok(s.circle.members.every(m => m.hp === m.vitae), 'every member at max VITAE, severed revived');
+  ok(s.log.some(l => /THE CVBE OPENS\. VITAE RESTORED\. THRONVS VNSEALS\./.test(l.text)),
+     'the Cube-opens line logged');
+  ok(T.tileUnlocked('THRONVS') === true, 'THRONVS unsealed');
+  T.extract();
+  ok(s.face.cleared.length === 3, 'extract off the face is a no-op (tile null)');
+}
+
+console.log('-- THRONVS: the Archon down seals the face');
+{
+  let lastCfg = null;
+  window.DW_COMBAT = {
+    start(c) { lastCfg = c; c.onEnd({ won: true, party: c.party.map(p => ({ id: p.id, frac: 0.5 })), foes: [] }); },
+    isActive() { return false; },
+  };
+  enter('THRONVS');
+  ok(s.tile === 'THRONVS' && T.F.name === 'THRONVS', 'THRONVS loads once unsealed');
+  ok(s.foes.length === 1 && s.foes[0].kind === 'ARCHON', 'one ARCHON foe stands on the tile');
+  ok(!T.F.props.some(p => p.kind === 'stairs'), 'no EXTRACT on THRONVS: the fight is the way off');
+  // Bump the Archon: contact commits to the chamber, the stub wins it.
+  const a = s.foes[0], L = T.lead();
+  L.c = a.c - 1; L.r = a.r; s.stepsUsed = 0; s.mode = 'move';
+  T.moveInput(1, 0);
+  ok(lastCfg && lastCfg.foes.some(f => f.tpl === 'a'), 'the Archon crosses the seam as tpl a');
+  ok(lastCfg.archon === undefined, 'a real fight, not the scripted apparition');
+  ok(a.hp === 0, 'the chamber win severs the Archon on the crawl');
+  ok(s.face.sealed === true && s.over === 'WIN', 'face sealed, run state WIN');
+  ok(s.log.some(l => /NIGREDO SEALED/.test(l.text)), 'NIGREDO SEALED logged');
+  // RETVRN walks home without a reset.
+  T.loadTown();
+  ok(T.F.name === 'THE REFVGE' && s.over === null && s.face.sealed === true &&
+     s.face.cleared.length === 3, 'RETVRN keeps the sealed face');
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

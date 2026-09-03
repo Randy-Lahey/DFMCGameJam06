@@ -1246,8 +1246,8 @@ function buildEncounter(foes){
     if(!isObst(x,y)&&cells.length<8) cells.push([x,y]);
   return {name:"ENCOVNTER", foes:foes.map((f,i)=>({
     tpl:f.tpl, id:"e"+(i+1), srcId:f.srcId,
-    name:f.tpl==="s"?"SILIQVA":"TESTA",
-    spd:(f.tpl==="s"?11:9)-i, x:cells[i][0], y:cells[i][1], frac:f.frac,
+    name:f.tpl==="s"?"SILIQVA":f.tpl==="a"?"ARCHON":"TESTA",
+    spd:(f.tpl==="s"?11:f.tpl==="a"?10:9)-i, x:cells[i][0], y:cells[i][1], frac:f.frac,
   }))};
 }
 function setupFight(n){

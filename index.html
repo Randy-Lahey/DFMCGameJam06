@@ -1067,8 +1067,8 @@
 <!-- exit confirmation -->
 <div id="modal" class="overlay">
   <div class="dialog">
-    <div class="dlg-eyebrow">DESCENT</div>
-    <div class="dlg-title">Would you like to leave this floor?</div>
+    <div id="dlg-eyebrow" class="dlg-eyebrow">DESCENT</div>
+    <div id="dlg-title" class="dlg-title">Would you like to leave this floor?</div>
     <div id="dlg-note" class="dlg-note"></div>
     <div class="dlg-actions">
       <button class="box yes" data-answer="yes">YES</button>
@@ -1123,10 +1123,11 @@
 
 <div id="win" class="overlay">
   <div class="winbox">
-    <div class="win-title">YOU'RE WINNER!!!</div>
+    <div id="win-title" class="win-title">YOU'RE WINNER!!!</div>
     <div class="win-rule"></div>
     <div id="win-stats" class="win-stats"></div>
     <button class="box" id="again">RECOMPILE</button>
+    <button class="box yes" id="win-return" hidden>RETVRN TO THE REFVGE</button>
   </div>
 </div>
 
@@ -1135,6 +1136,10 @@
 <script src="data/floor02.js?v=422c2907"></script>
 <script src="data/face.js?v=422c2907"></script>
 <script src="data/town.js?v=422c2907"></script>
+<script src="data/vestibvlvm.js?v=422c2907"></script>
+<script src="data/cinerevm.js?v=422c2907"></script>
+<script src="data/pvtrefactorivm.js?v=422c2907"></script>
+<script src="data/thronvs.js?v=422c2907"></script>
 <script src="data/balance.js?v=422c2907"></script>
 <script src="data/fxsheets.js?v=422c2907"></script>
 <script src="src/sprites.js?v=422c2907"></script>
