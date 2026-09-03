@@ -67,7 +67,7 @@ global.clearTimeout = () => {};
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/town.js', 'data/balance.js',
                  'data/fxsheets.js', 'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
@@ -113,6 +113,48 @@ console.log('-- rerollAffixes: four distinct labels from the pool');
     }
     if (i === 49) ok(true, '50 rerolls: every tile labelled, all from the pool, no two alike');
   }
+}
+
+// ============================================================ town + face
+console.log('-- THE REFVGE, THE CVBE, the face modal');
+{
+  // Stand-in tile floor until the real one lands (data/vestibvlvm.js, C3).
+  if (!window.FLOOR_VESTIBVLVM)
+    window.FLOOR_VESTIBVLVM = Object.assign({}, window.FLOOR02, { name: 'VESTIBVLVM' });
+  T.loadTown();
+  ok(T.F.name === 'THE REFVGE' && s.tile === null, 'loadTown lands in THE REFVGE with tile null');
+  ok(T.F.foes.length === 0 && s.foes.length === 0, 'town has no foes');
+  const cube = T.F.props.find(p => p.kind === 'cube');
+  ok(!!cube && cube.label === 'THE CVBE', 'town has THE CVBE');
+  // Stand beside the cube and step into it: bump-to-talk.
+  const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    .map(([dc, dr]) => ({ c: cube.c + dc, r: cube.r + dr }))
+    .find(t => T.F.tiles.some(([c, r]) => c === t.c && r === t.r));
+  const L = T.lead();
+  L.c = nb.c; L.r = nb.r; s.stepsUsed = 0; s.mode = 'move'; s.modal = null;
+  T.moveInput(cube.c - nb.c, cube.r - nb.r);
+  ok(s.modal === 'face', 'bumping THE CVBE opens the face');
+  ok(L.c === nb.c && L.r === nb.r && s.stepsUsed === 0,
+     'the bump enters no tile and spends no step');
+  T.closeFace();
+  ok(s.modal === null, 'closeFace (ESC) shuts the face');
+  const it = T.interactable();
+  ok(it && it.prop.kind === 'cube' && /ENTER THE CVBE/.test(it.text),
+     'the E tag offers THE CVBE from beside it');
+  T.openAct();
+  ok(s.modal === 'face', 'E opens the face from beside the cube');
+  T.chooseTile('THRONVS');
+  ok(s.modal === 'face' && s.tile === null && T.F.name === 'THE REFVGE',
+     'selecting sealed THRONVS with <3 cleared is a no-op');
+  const before = JSON.stringify(s.face.affix);
+  T.chooseTile('VESTIBVLVM');
+  ok(s.modal === null && s.tile === 'VESTIBVLVM' && T.F === window.FLOOR_VESTIBVLVM,
+     'selecting VESTIBVLVM loads its floor and sets state.tile');
+  ok(JSON.stringify(s.face.affix) === before, 'entering a tile does not reroll the affixes');
+  ok(s.foes.length === T.F.foes.length && s.foes.every(f => f.hp > 0), 'tile foes stand fresh');
+  T.loadTown();
+  ok(s.tile === null && T.F.name === 'THE REFVGE', 'loadTown from a tile returns home');
+  ok(JSON.stringify(s.face.affix) === before, 'a return to town keeps the day\'s affixes');
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

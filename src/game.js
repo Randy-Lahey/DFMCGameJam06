@@ -28,6 +28,7 @@
   if (!window.FLOOR01) missing.push('data/floor01.js');
   if (!window.FLOOR02) missing.push('data/floor02.js');
   if (!window.FACE_NIGREDO) missing.push('data/face.js');
+  if (!window.FLOOR_REFVGE) missing.push('data/town.js');
   if (!window.BALANCE) missing.push('data/balance.js');
   if (!window.SPRITES) missing.push('src/sprites.js');
   if (missing.length) {
@@ -922,7 +923,8 @@
       log('THE OPERATOR IS SEVERED. THE WORK ENDS.', 'bad');
       return;
     }
-    if (!liveFoes().length && !state.over) {
+    // A floor that never had foes (THE REFVGE) is not "cleared", it is home.
+    if (state.foes.length && !liveFoes().length && !state.over) {
       state.over = 'CLEARED';
       log(`${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.`, 'good');
     }
@@ -1004,7 +1006,10 @@
 
     // Header floor label is floor-scoped UI too.
     const brandSub = document.querySelector('.brand small');
-    if (brandSub) brandSub.textContent = `${F.name} // VERTICAL SLICE`;
+    if (brandSub) brandSub.textContent =
+      state.tile ? `${FACE.name} // ${state.tile} · ${state.face.affix[state.tile] || ''}`
+      : F === window.FLOOR_REFVGE ? F.name
+      : `${F.name} // VERTICAL SLICE`;
 
     buildRoster();
     renderFanChips();
@@ -1084,6 +1089,40 @@
     state.modal = null;
     state.hasCube = true;
     log('THE CVBE IS YOVRS. IT IS THE ONLY DOOR.', 'good');
+    // The tutorial ends here: whatever is left of FLOOR 02 is abandoned and
+    // the circle stands in THE REFVGE with the Cube.
+    loadTown();
+  }
+
+  // ---------------------------------------------------------- the refuge
+  // THE REFVGE is a walkable floor with one prop, THE CVBE. Every return --
+  // the Cube handoff, an extract, a wipe -- comes through here.
+  function loadTown() {
+    state.tile = null;
+    if (!Object.keys(state.face.affix).length) rerollAffixes();
+    loadFloor(window.FLOOR_REFVGE);
+  }
+  function openFace() {
+    if (state.modal || finished()) return;
+    state.modal = 'face';
+    log('THE CVBE TVRNS. FOVR SEALS.', 'good');
+  }
+  function closeFace() {
+    if (state.modal !== 'face') return;
+    state.modal = null;
+  }
+  // Pick a tile off the face. CLEARED and SEALED rows are inert: nothing
+  // happens, the modal stays up.
+  function chooseTile(id) {
+    if (state.modal !== 'face') return;
+    const t = tileOf(id);
+    if (!t || !tileUnlocked(id) || state.face.cleared.includes(id)) return;
+    const floor = window[t.floor];
+    if (!floor) { warn(`${id} IS NOT COMPILED.`, 'bad'); return; }
+    state.modal = null;
+    state.tile = id;
+    log(`THE CIRCLE ENTERS ${id} · ${state.face.affix[id] || ''}.`, 'good');
+    loadFloor(floor);
   }
 
   // The Hermit's bargain: one daemon joins, the choice is final, and the
@@ -1103,12 +1142,12 @@
     log('THE HERMIT FALLS IN AT THE REAR. THE WAY EAST OPENS.', 'dim');
   }
 
-  // NPCs are props that BLOCK their tile and talk when bumped. Only the
-  // Hermit for now; the helper keeps every walkability check honest. Once
-  // the bargain is done he steps into the static: no body, no block --
-  // keyed off state so a fresh run brings him back.
-  const npcAt = (c, r) => !state.hermitMet &&
-    F.props.find(p => p.kind === 'hermit' && p.c === c && p.r === r);
+  // NPCs are props that BLOCK their tile and talk when bumped: the Hermit
+  // and THE CVBE. The helper keeps every walkability check honest. Once the
+  // bargain is done the Hermit steps into the static: no body, no block --
+  // keyed off state so a fresh run brings him back. The Cube always blocks.
+  const npcAt = (c, r) => F.props.find(p => p.c === c && p.r === r &&
+    ((p.kind === 'hermit' && !state.hermitMet) || p.kind === 'cube'));
 
   // Naming a key to a player who has no keyboard is worse than saying nothing.
   const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
@@ -1118,7 +1157,11 @@
   function interactable() {
     if (blocked() || state.mode !== 'move' || !lead()) return null;
     const p = propAt(lead().c, lead().r);
-    if (!p) return null;
+    if (!p) {
+      // THE CVBE blocks its tile, so it is acted on from beside it.
+      const cube = F.props.find(q => q.kind === 'cube' && adjacent(q, lead()));
+      return cube ? { prop: cube, text: 'ENTER ' + cube.label } : null;
+    }
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
     if (p.kind === 'stairs') {
       const left = state.hasCube ? 0 : liveFoes().length;
@@ -1245,6 +1288,7 @@
     const it = interactable();
     if (it && !it.locked && it.prop.kind === 'chest') { openCache(it.prop); return; }
     if (it && !it.locked && it.prop.kind === 'stairs') { state.modal = 'exit'; return; }
+    if (it && it.prop.kind === 'cube') { openFace(); return; }
     state.mode = 'act';
     const first = pendingMembers()[0];
     state.sel = first ? first.name : null;
@@ -1378,9 +1422,11 @@
       resolveRound({ kind: 'hold' });
       return;
     }
-    if (npcAt(nc, nr)) {
+    const npc = npcAt(nc, nr);
+    if (npc) {
       // Bump-to-talk, the same verb as bump-to-engage. Talking is free:
       // no step spent, no round resolved.
+      if (npc.kind === 'cube') { openFace(); return; }
       state.modal = 'hermit';
       log('A HOODED PROCESS RESOLVES OVT OF THE STATIC.', 'good');
       return;
@@ -1754,7 +1800,7 @@
       const k = key(p.c, p.r);
       if (!state.seen.has(k)) continue;
       if (p.hidden && !state.revealed.has(k)) continue;
-      const col = p.kind === 'stairs' ? 'var(--gold)'
+      const col = p.kind === 'stairs' || p.kind === 'cube' ? 'var(--gold)'
                 : p.kind === 'chest' ? 'var(--shell)' : 'var(--blood)';
       g += `<rect x="${p.c + .22}" y="${p.r + .22}" width=".56" height=".56"
                   fill="${col}" opacity=".95"/>`;
@@ -2098,6 +2144,41 @@
   const cubeEl = document.getElementById('cube');
   const cubeTakeEl = document.getElementById('cube-take');
   if (cubeTakeEl) cubeTakeEl.addEventListener('click', () => { takeCube(); draw(); });
+  const faceEl = document.getElementById('face');
+  const faceRowsEl = document.getElementById('face-rows');
+  if (faceRowsEl) faceRowsEl.addEventListener('click', e => {
+    const row = e.target.closest('[data-tile]');
+    if (!row || row.disabled || !tapOk()) return;
+    chooseTile(row.dataset.tile);
+    draw();
+  });
+  // Tap outside the card closes the face, same as ESC. The card itself
+  // swallows the click, so only the dim backdrop dismisses.
+  if (faceEl) faceEl.addEventListener('click', e => {
+    if (e.target !== faceEl || !tapOk()) return;
+    closeFace(); draw();
+  });
+
+  // Four rows: ID, affix label, state. Rebuilt on open; the buttons carry
+  // their own disabled flag so the click handler never has to re-derive it.
+  function renderFace() {
+    if (!faceRowsEl) return;
+    faceRowsEl.innerHTML = FACE.tiles.map((t, i) => {
+      const cleared = state.face.cleared.includes(t.id);
+      const sealed = !tileUnlocked(t.id);
+      const st = cleared ? 'CLEARED' : sealed ? 'SEALED' : 'OPEN';
+      const tint = t.archon ? 'blood' : 'cyan';
+      return `<button class="starter${cleared ? ' cleared' : ''}${sealed ? ' sealed' : ''}"
+                      data-tile="${t.id}" style="--tint:var(--${tint})"
+                      ${cleared || sealed ? 'disabled' : ''}
+                      aria-label="${t.id}, ${state.face.affix[t.id] || ''}, ${st}">
+                <span class="st-key">${i + 1}</span>
+                <span class="st-name">${t.id}</span>
+                <span class="st-role">${state.face.affix[t.id] || '—'}</span>
+                <span class="st-state">${st}</span>
+              </button>`;
+    }).join('');
+  }
   const startersEl = document.getElementById('starters');
 
   // Starter cards, built once from the numbers bible. Presentation-layer
@@ -2171,6 +2252,11 @@
     modalEl.classList.toggle('open', state.modal === 'exit');
     hermitEl.classList.toggle('open', state.modal === 'hermit');
     cubeEl.classList.toggle('open', state.modal === 'cube');
+    if (faceEl) {
+      const faceOpen = state.modal === 'face';
+      if (faceOpen && !faceEl.classList.contains('open')) renderFace();
+      faceEl.classList.toggle('open', faceOpen);
+    }
     winEl.classList.toggle('open', state.over === 'WIN');
     severEl.classList.toggle('open', state.over === 'SEVERED');
 
@@ -2503,6 +2589,15 @@
     if (state.modal === 'cube') {
       e.preventDefault();
       if (k === 'enter' || k === ' ' || k === 'escape' || k === '1') { takeCube(); draw(); }
+      return;
+    }
+    // The face: 1-4 enters a tile, ESC steps back from the Cube.
+    if (state.modal === 'face') {
+      e.preventDefault();
+      const idx = ['1', '2', '3', '4'].indexOf(k);
+      if (idx >= 0) chooseTile(FACE.tiles[idx].id);
+      else if (k === 'escape') closeFace();
+      draw();
       return;
     }
     // The Hermit's bargain has no escape key: the choice is the only door.
@@ -3220,7 +3315,8 @@
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
                   hermitSacrifice, takeCube, enterCombat, debugSacrifice,
-                  tileUnlocked, rerollAffixes, get F() { return F; } };
+                  tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile,
+                  get F() { return F; } };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.

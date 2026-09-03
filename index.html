@@ -225,6 +225,16 @@
   .starter .st-role{font-size:9px;letter-spacing:.2em;opacity:.75}
   .starter .st-pitch{font-size:9.5px;letter-spacing:.16em;opacity:.9;margin-top:2px}
   .starter .st-stats{font-size:9px;letter-spacing:.18em;opacity:.55}
+  /* ---- the face: four tile rows in the Hermit's card style. CLEARED and
+     SEALED rows are real disabled buttons, so they are inert to tap, key
+     and focus alike rather than merely dimmed. */
+  .facerows{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
+  @media (max-width:520px){ .facerows{grid-template-columns:1fr} }
+  .starter:disabled{opacity:.38;cursor:default}
+  .starter:disabled:hover{background:transparent}
+  .starter .st-state{font-size:9px;letter-spacing:.24em;margin-top:2px;color:var(--cyan)}
+  .starter.cleared .st-state{color:var(--gold)}
+  .starter.sealed .st-state{color:var(--blood)}
   .dlg-keys{font-size:9px;letter-spacing:.24em;opacity:.6;margin-top:14px}
 
   .box{
@@ -1092,6 +1102,16 @@
   </div>
 </div>
 
+<!-- THE CVBE: the NIGREDO face. Four tiles, 1-4 or tap; ESC closes. -->
+<div id="face" class="overlay">
+  <div class="dialog hermitbox">
+    <div class="dlg-eyebrow">THE CVBE &middot; NIGREDO</div>
+    <div class="dlg-title">Four seals. Three are open to you.</div>
+    <div id="face-rows" class="facerows"></div>
+    <div class="dlg-keys">1 &ndash; 4 ENTERS &middot; ESC CLOSES</div>
+  </div>
+</div>
+
 <div id="sever" class="overlay">
   <div class="winbox severbox">
     <div class="win-title sever-title">SEVERED</div>
@@ -1114,6 +1134,7 @@
 <script src="data/floor01.js?v=422c2907"></script>
 <script src="data/floor02.js?v=422c2907"></script>
 <script src="data/face.js?v=422c2907"></script>
+<script src="data/town.js?v=422c2907"></script>
 <script src="data/balance.js?v=422c2907"></script>
 <script src="data/fxsheets.js?v=422c2907"></script>
 <script src="src/sprites.js?v=422c2907"></script>

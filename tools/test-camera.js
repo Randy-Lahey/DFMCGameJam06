@@ -70,7 +70,7 @@ const stage = document.getElementById('stage');
 stage.setAttribute = (k, v) => { if (k === 'viewBox') viewBoxes.push(v); };
 
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/town.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }

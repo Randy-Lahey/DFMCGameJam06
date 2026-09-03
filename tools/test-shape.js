@@ -25,10 +25,29 @@ const MIN_LEN = 2, MAX_LEN = 5;
 for (const file of files) {
   const src = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   global.window = global;
+  // The floor under test is whatever global THIS file defined. Scanning all
+  // of global found the FIRST floor loaded, so a multi-file run tested
+  // floor 01 over and over.
+  const before = new Set(Object.keys(global));
   new Function(src)();
-  const F = Object.values(global).find(v => v && v.tiles && v.spawns) ||
-            global.FLOOR01;
+  const fresh = Object.keys(global).filter(k => !before.has(k)).map(k => global[k]);
+  const F = fresh.find(v => v && v.tiles && v.spawns) ||
+            Object.values(global).find(v => v && v.tiles && v.spawns);
   const tag = path.basename(file);
+  // Two floors are one room by design and have no corridors to measure:
+  // THRONVS (the Archon's chamber) and, potentially, any single-room floor.
+  // A one-room floor must still be a solid rectangle, so "no corridors"
+  // cannot be faked by a blob of tiles.
+  const oneRoom = (() => {
+    const cs = F.tiles.map(t => t[0]), rs = F.tiles.map(t => t[1]);
+    const w = Math.max(...cs) - Math.min(...cs) + 1, h = Math.max(...rs) - Math.min(...rs) + 1;
+    return w * h === F.tiles.length;
+  })();
+  // The Archon's floor is a dead end on purpose: no extract, the fight is the
+  // only way off it. THE REFVGE has no foes and no exit either -- the Cube is
+  // its door. Every other floor needs an exit the player can reach.
+  const archonFloor = F.foes.length > 0 && F.foes.every(f => f.kind === 'ARCHON');
+  const wantsExit = F.foes.length > 0 && !archonFloor;
 
   const key = (c, r) => c + ',' + r;
   const walk = new Set(F.tiles.map(t => key(t[0], t[1])));
@@ -61,7 +80,7 @@ for (const file of files) {
     runs.push(run);
   }
 
-  ok(runs.length > 0, `${tag}: floor has corridors at all`);
+  ok(runs.length > 0 || oneRoom, `${tag}: floor has corridors at all (or is one solid room)`);
   for (const run of runs) {
     const rows = new Set(run.map(t => t[1])), cols = run.map(t => t[0]);
     const at = `(${Math.min(...cols)}-${Math.max(...cols)}, r${[...rows][0]})`;
@@ -103,11 +122,11 @@ for (const file of files) {
   ok(F.foes.every(f => !taken.has(key(f.c, f.r))), `${tag}: no foe standing on a spawn`);
   ok(new Set(F.foes.map(f => key(f.c, f.r))).size === F.foes.length,
      `${tag}: no two foes share a tile`);
-  ok(F.props.some(p => p.kind === 'stairs'), `${tag}: floor has an exit`);
+  const st = F.props.find(p => p.kind === 'stairs');
+  if (wantsExit) ok(!!st, `${tag}: floor has an exit`);
 
   // ---- the exit is not trivially next to the spawn
-  const st = F.props.find(p => p.kind === 'stairs');
-  ok(Math.abs(st.c - start.c) + Math.abs(st.r - start.r) > 10,
+  if (st) ok(Math.abs(st.c - start.c) + Math.abs(st.r - start.r) > 10,
      `${tag}: stairs are a journey, not a step`);
 }
 

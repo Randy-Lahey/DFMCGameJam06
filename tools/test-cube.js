@@ -68,7 +68,7 @@ global.clearTimeout = () => {};
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/town.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
@@ -113,7 +113,15 @@ console.log('-- modal dismissible, game continues');
   T.takeCube();
   ok(s.modal === null, 'modal closed on TAKE THE CVBE');
   ok(s.hasCube === true, 'state.hasCube === true');
-  ok(s.log[0] && /CVBE IS YOVRS/.test(s.log[0].text), 'grant line logged');
+  ok(s.log.some(l => /CVBE IS YOVRS/.test(l.text)), 'grant line logged');
+  // The tutorial ends on the spot: FLOOR 02's remainder is abandoned and the
+  // circle stands in THE REFVGE with every tile of the face labelled.
+  ok(T.F.name === 'THE REFVGE', 'takeCube lands the circle in THE REFVGE');
+  ok(s.tile === null, 'state.tile is null in town');
+  const FACE = window.FACE_NIGREDO;
+  ok(FACE.tiles.every(t => FACE.affixPool.includes(s.face.affix[t.id])),
+     'all four affixes rolled on the first town load');
+  ok(T.F.props.some(p => p.kind === 'cube'), 'THE CVBE stands in town');
   // Crawl input no longer blocked: a movement round can start.
   const hpBefore = s.circle.members.map(m => m.hp).join(',');
   T.moveInput(0, 1);
