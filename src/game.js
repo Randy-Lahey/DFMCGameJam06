@@ -27,6 +27,7 @@
   const missing = [];
   if (!window.FLOOR01) missing.push('data/floor01.js');
   if (!window.FLOOR02) missing.push('data/floor02.js');
+  if (!window.FACE_NIGREDO) missing.push('data/face.js');
   if (!window.BALANCE) missing.push('data/balance.js');
   if (!window.SPRITES) missing.push('src/sprites.js');
   if (missing.length) {
@@ -36,10 +37,13 @@
     return;
   }
 
-  // The dungeon is an ordered stack of floors; F is ALWAYS the current one.
-  // Everything geometric (walkable, camera bounds, backdrop) derives from F
-  // and is rebuilt by loadFloor(), so F and walkable are lets, not consts.
+  // The tutorial is an ordered stack of two floors; after the Cube the run
+  // moves through THE REFVGE and the NIGREDO face's tiles (data/face.js).
+  // F is ALWAYS the current floor. Everything geometric (walkable, camera
+  // bounds, backdrop) derives from F and is rebuilt by loadFloor(), so F and
+  // walkable are lets, not consts.
   const FLOORS = [window.FLOOR01, window.FLOOR02];
+  const FACE = window.FACE_NIGREDO;
   let F = FLOORS[0];
   const B = window.BALANCE;
   const S = window.SPRITES;
@@ -122,7 +126,12 @@
         ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
     modal: null,                   // null | 'exit' | 'controls' | 'inv' | 'hermit' | 'cube'
-    hasCube: false,                // THE CVBE granted (inventory flag; cube UI is post-jam-beat work)
+    hasCube: false,                // THE CVBE granted; the tutorial ends and THE REFVGE loads
+    // Which NIGREDO tile the circle stands on: null in the tutorial and in
+    // THE REFVGE, else a tile id from FACE.tiles. The face itself is run
+    // state: ids cleared this day, id -> affix label, Archon down.
+    tile: null,
+    face: { cleared: [], affix: {}, sealed: false },
     hermitMet: false,              // bargain done; the NPC goes quiet afterwards
     ampoules: 0,                   // AMPVLLA VITAE doses; carried across floors, spent in the chamber (cap 3, mirrors combat SATCHEL_MAX)
     hermitGone: false,             // sacrifice beat fired; it fires exactly once per run
@@ -147,7 +156,6 @@
     // descent, and everything downstream (ops, roster panel, inventory rig)
     // reads this list, never B.party directly.
     roster: ['OPERATOR'],
-    floor: 0,
     // Members carry their OWN tiles now. There is deliberately no circle.c/r
     // any more — a stale read of it must fail loudly, not silently target one
     // ghost tile. Spawns are in command order: OPERATOR leads.
@@ -898,9 +906,10 @@
     if (state.modal !== 'exit') return;
     state.modal = null;
     if (!yes) { log('THE CIRCLE STEPS BACK FROM THE DESCENT.'); return; }
-    if (state.floor + 1 < FLOORS.length) {
+    const i = FLOORS.indexOf(F);
+    if (i >= 0 && i + 1 < FLOORS.length) {
       log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
-      loadFloor(state.floor + 1);
+      loadFloor(FLOORS[i + 1]);
       return;
     }
     state.over = 'WIN';
@@ -919,16 +928,37 @@
     }
   }
 
+  // ---------------------------------------------------------- the face
+  // NIGREDO is four tiles. The three ordinary tiles are open from the first
+  // day; the Archon's THRONVS unseals only once all three are cleared.
+  const tileOf = id => FACE.tiles.find(t => t.id === id);
+  function tileUnlocked(id) {
+    const t = tileOf(id);
+    if (!t) return false;
+    if (!t.archon) return true;
+    return FACE.tiles.every(o => o.archon || state.face.cleared.includes(o.id));
+  }
+  // Display-only labels for now: each tile draws one name from the pool, no
+  // two tiles the same. Rolled on the first town load and again on a wipe.
+  function rerollAffixes() {
+    const pool = FACE.affixPool.slice();
+    state.face.affix = {};
+    for (const t of FACE.tiles) {
+      const i = Math.floor(Math.random() * pool.length);
+      state.face.affix[t.id] = pool.splice(i, 1)[0];
+    }
+  }
+
   // ---------------------------------------------------------- floor loader
-  // Descending is the ONLY way floors change, and this is the only function
-  // that swaps F. Carries across floors: roster, VITAE (a severed
-  // daemon limps back at half VITAE -- the descent knits, it does not heal),
-  // bag, argent, loadout, the turn counter. Resets: foes, drops, fog, wards,
-  // cooldowns, camera, props (caches close again on THEIR floor -- each
-  // floor object keeps its own).
-  function loadFloor(i) {
-    state.floor = i;
-    F = FLOORS[i];
+  // This is the only function that swaps F: the tutorial descent, the walk
+  // back to THE REFVGE, and stepping onto a tile all come through here.
+  // Carries across floors: roster, VITAE (a severed daemon limps back at
+  // half VITAE -- the descent knits, it does not heal), bag, argent,
+  // loadout, the turn counter. Resets: foes, drops, fog, wards, cooldowns,
+  // camera, props (caches close again on THEIR floor -- each floor object
+  // keeps its own).
+  function loadFloor(floor) {
+    F = floor;
     walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
     F.props.forEach(p => { p.opened = false; });
     state.escort = null;                 // the escort does not descend ahead of the beat
@@ -1021,7 +1051,7 @@
     enterCombat(pack, { sacrifice: true, archon: true });
   }
   function maybeAmbush() {
-    if (state.floor !== 1 || state.ambushDone ||
+    if (F !== FLOORS[1] || state.ambushDone ||
         !state.hermitMet || state.hermitGone) return;
     const L = lead();
     if (!L || L.c < AMBUSH_ROOM.c0 || L.c > AMBUSH_ROOM.c1 ||
@@ -2359,10 +2389,10 @@
         (mods[cid] = mods[cid] || {})[slot.bank] = d;
       }
     }
-    // Floor 2+ chambers field 2-3 foes. The crawl pack is honest -- only
-    // touched foes are severed on the board -- so the shortfall is made up
-    // with srcId-less reinforcements the write-back already ignores.
-    if (state.floor >= 1 && foes.length) {
+    // Every chamber past floor 1 fields 2-3 foes. The crawl pack is honest
+    // -- only touched foes are severed on the board -- so the shortfall is
+    // made up with srcId-less reinforcements the write-back already ignores.
+    if (F !== FLOORS[0] && foes.length) {
       const want = Math.min(3, Math.max(foes.length, 2 + (Math.random() < 0.5 ? 1 : 0)));
       while (foes.length < want)
         foes.push({ tpl: Math.random() < 0.5 ? 't' : 's', frac: 1 });
@@ -3189,7 +3219,8 @@
                   lead, memberAt, foeTarget, validTargets, resolveRound,
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
-                  hermitSacrifice, takeCube, enterCombat, debugSacrifice };
+                  hermitSacrifice, takeCube, enterCombat, debugSacrifice,
+                  tileUnlocked, rerollAffixes, get F() { return F; } };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.

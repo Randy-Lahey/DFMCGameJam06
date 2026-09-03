@@ -18,7 +18,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SCRIPTS = ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/fxsheets.js', 'src/sprites.js', 'src/audio.js', 'src/icons.js', 'src/combat.js', 'src/game.js']
+SCRIPTS = ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js', 'data/fxsheets.js', 'src/sprites.js', 'src/audio.js', 'src/icons.js', 'src/combat.js', 'src/game.js']
 
 html = (ROOT / 'index.html').read_text(encoding='utf-8')
 

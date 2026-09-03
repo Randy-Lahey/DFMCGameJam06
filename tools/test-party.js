@@ -60,7 +60,7 @@ Object.defineProperty(global, 'navigator', { value: { maxTouchPoints: 0 }, confi
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js',
                  'data/fxsheets.js', 'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
@@ -93,7 +93,7 @@ ok(allOps().length === 1 && allOps()[0].op.name === 'PERCVSSIO',
 state.foes.forEach(f => { f.hp = 0; });
 state.modal = 'exit';
 answerExit(true);
-ok(state.modal === null && state.floor === 1, 'solo descent drops straight to floor 02, no gate');
+ok(state.modal === null && window.__DW.F === F2, 'solo descent drops straight to floor 02, no gate');
 ok(state.circle.members.length === 1, 'still solo on arrival: the bargain is in the room, not the stairs');
 
 // Walk the bump: teleport the leader next to the Hermit and step into him.
@@ -104,7 +104,7 @@ moveInput(0, 1);
 ok(state.modal === 'hermit', 'bumping the Hermit opens the bargain');
 ok(lead().c === H.c && lead().r === H.r - 1, 'the bump does not enter his tile');
 chooseStarter('CALX');
-ok(state.modal === null && state.floor === 1, 'the choice closes the modal and stays on floor 02');
+ok(state.modal === null && window.__DW.F === F2, 'the choice closes the modal and stays on floor 02');
 ok(state.roster.join(',') === 'OPERATOR,CALX', 'CALX joins the roster behind the OPERATOR');
 ok(state.circle.members.length === 2, 'CALX takes a body next to the circle');
 moveInput(0, 1);
@@ -112,7 +112,7 @@ ok(state.modal === null && lead().c === H.c && lead().r === H.r,
    'the Hermit is gone after the bargain: his tile opens and the way east is clear');
 
 // Reset to spawns so the seating assertion below keeps its meaning.
-loadFloor(1);
+loadFloor(F2);
 ok(state.circle.members.length === 2 &&
    state.circle.members.every((m, i) => m.c === F2.spawns[i].c && m.r === F2.spawns[i].r),
    'both members seat on FLOOR 02 spawns in command order');
@@ -127,7 +127,7 @@ ok(state.seen.size > 0 && state.seen.size < F2.tiles.length &&
 // against the same 4-member board it was written for.
 recruit('CINIS');
 recruit('GVTTA');
-loadFloor(0);
+loadFloor(F);
 state.modal = null;
 state.foes.forEach(f => { f.awake = false; });
 const M = state.circle.members;

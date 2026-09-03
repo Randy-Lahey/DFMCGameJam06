@@ -69,7 +69,7 @@ Object.defineProperty(global, 'navigator', { value: { maxTouchPoints: 0 }, confi
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
@@ -81,7 +81,7 @@ const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, roll
 window.__DW.recruit('CALX');
 window.__DW.recruit('CINIS');
 window.__DW.recruit('GVTTA');
-window.__DW.loadFloor(0);
+window.__DW.loadFloor(window.FLOOR01);
 const B = window.BALANCE;
 let pass = 0, fail = 0;
 const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.error('FAIL: ' + msg); } };

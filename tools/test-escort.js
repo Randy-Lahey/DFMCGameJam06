@@ -66,7 +66,7 @@ global.clearTimeout = () => {};
 
 // ---------------------------------------------------------------- load
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
@@ -95,7 +95,6 @@ const mkFoe = kind => ({ id: 'f' + (nextId++), kind, hp: 4, vitae: 4, c: 0, r: 0
 // ============================================================ before bargain
 console.log('-- before the bargain: no escort');
 {
-  s.floor = 0;
   T.enterCombat([mkFoe('TESTA')]);
   ok(lastCfg.guests === undefined, 'no guests before hermitMet');
   ok(lastCfg.foes.length === 1, 'floor 1 pack is not padded');
@@ -132,7 +131,7 @@ console.log('-- crawl: escort takes the tail-vacated tile, ghost rules');
     const [c, r] = k.split(',').map(Number);
     if (!F.tiles.some(t => t[0] === c && t[1] === r)) { F.tiles.push([c, r]); added.push([c, r]); }
   });
-  T.loadFloor(0);                         // rebuild walkable from patched tiles
+  T.loadFloor(window.FLOOR01);                         // rebuild walkable from patched tiles
   s.escort = { c: 3, r: 5 };              // loadFloor cleared it — restage
   const [op2, calx2] = s.circle.members;  // loadFloor rebuilt members
   op2.c = 5; op2.r = 5; calx2.c = 4; calx2.r = 5;
@@ -145,7 +144,7 @@ console.log('-- crawl: escort takes the tail-vacated tile, ghost rules');
     const i = F.tiles.findIndex(t => t[0] === c && t[1] === r);
     if (i >= 0) F.tiles.splice(i, 1);
   });
-  T.loadFloor(0);
+  T.loadFloor(window.FLOOR01);
   ok(s.escort === null, 'loadFloor clears the escort');
   s.hermitMet = true;                     // loadFloor left flags alone; keep run state
 }
@@ -161,7 +160,7 @@ console.log('-- explicit opts.guests is left untouched');
 // ============================================================ floor 2 pack
 console.log('-- floor 2: packs padded to 2-3, honest foes keep srcId');
 {
-  s.floor = 1;
+  T.loadFloor(window.FLOOR02);       // padding keys off the CURRENT floor, not an index
   const sizes = new Set();
   for (let i = 0; i < 40; i++) {
     const real = mkFoe('TESTA');
@@ -191,7 +190,7 @@ console.log('-- oversized packs are capped at 3');
 // ============================================================ exit ambush
 console.log('-- floor 2 exit ambush: forced, flagged, once');
 {
-  T.loadFloor(1);
+  T.loadFloor(window.FLOOR02);
   s.modal = null; s.mode = 'move'; s.stepsUsed = 0;
   s.hermitMet = true; s.hermitGone = false; s.ambushDone = false;
   s.foes.forEach(f => { f.awake = false; });
@@ -203,7 +202,7 @@ console.log('-- floor 2 exit ambush: forced, flagged, once');
   [[12, 2], [13, 2]].forEach(([c, r]) => {
     if (!has(c, r)) { F2.tiles.push([c, r]); added.push([c, r]); }
   });
-  T.loadFloor(1);
+  T.loadFloor(window.FLOOR02);
   s.modal = null; s.hermitMet = true; s.ambushDone = false;
   s.foes.forEach(f => { f.awake = false; });
   const L = s.circle.members[0];
@@ -230,7 +229,7 @@ console.log('-- floor 2 exit ambush: forced, flagged, once');
     const i = F2.tiles.findIndex(t => t[0] === c && t[1] === r);
     if (i >= 0) F2.tiles.splice(i, 1);
   });
-  T.loadFloor(0);
+  T.loadFloor(window.FLOOR01);
   s.hermitMet = true;
 }
 
@@ -238,8 +237,8 @@ console.log('-- floor 2 exit ambush: forced, flagged, once');
 console.log('-- hasCube unseals the stairs');
 {
   s.hasCube = true;
+  T.loadFloor(window.FLOOR02);
   s.modal = 'exit';
-  s.floor = 1;
   T.answerExit(true);
   ok(s.over === 'WIN', 'taking the DESCENT with the cube ends the run: escape');
   s.over = null; s.hasCube = false;
@@ -268,7 +267,7 @@ console.log('-- empty-foes debug entry is never padded');
 // ============================================================ ?sacrifice seam
 console.log('-- debugSacrifice: CALX aboard, straight into the sacrifice fight');
 {
-  T.loadFloor(0);
+  T.loadFloor(window.FLOOR01);
   s.modal = null; s.hermitMet = false; s.hermitGone = false; s.ambushDone = false;
   s.circle.members.length = 1;                       // solo OPERATOR, pre-bargain
   s.roster.length = 0; s.roster.push('OPERATOR');    // forget earlier recruits
