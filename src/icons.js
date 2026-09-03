@@ -23,62 +23,83 @@
   const FILL = ' fill="currentColor" stroke="none"'; // the one filled accent per glyph
 
   const ICONS = {
-    // Melee strike, one adjacent foe: shaft -> struck point -> shock chevron.
+    // Melee strike, range 1: hammer -- thick shaft from the left driven into a big
+    // solid block flush with the right edge, two spark ticks behind the contact.
+    // Distinguished by mass and contact: the only strike glyph that "touches".
     percvssio: S(
-      '<path d="M2.2 12h4.6"/>' +
-      '<path d="M11 8.4l3.6 3.6-3.6 3.6-3.6-3.6z"' + FILL + "/>" +
-      '<path d="M17 6.2l5 5.8-5 5.8"/>'
+      '<path d="M2.5 12h12" stroke-width="2.2"/>' +
+      '<path d="M14.5 5h7.5v14h-7.5z"' + FILL + "/>" +
+      '<path d="M9.5 6.5l2.5 2.5M9.5 17.5l2.5-2.5" stroke-width="2.2"/>'
     ),
-    // Melee sweep: broken ring around a core, cardinal ticks = everything touching you.
+    // Sweep around self, range 0: filled core with 8 radiating spokes -- a burst
+    // ring, no arrowheads, no direction. Reads "everything adjacent to me".
     abrasio: S(
-      '<circle cx="12" cy="12" r="2.4"' + FILL + "/>" +
-      '<path d="M12 5a7 7 0 0 1 7 7M12 19a7 7 0 0 1-7-7"/>' +
-      '<path d="M12 2.2v2.2M21.8 12h-2.2M12 21.8v-2.2M2.2 12h2.2"/>'
+      '<circle cx="12" cy="12" r="2.6"' + FILL + "/>" +
+      '<path d="M12 2v4.5M22 12h-4.5M12 22v-4.5M2 12h4.5" stroke-width="2.2"/>' +
+      '<path d="M4.9 4.9l3.2 3.2M19.1 4.9l-3.2 3.2M19.1 19.1l-3.2-3.2M4.9 19.1l3.2-3.2" stroke-width="2.2"/>'
     ),
-    // Hex/debuff: binding sigil -- hex cell, clamped core, reads through walls.
+    // Hex/bind, ranged with no line of sight: sigil -- hexagon cell, filled inner
+    // diamond, two horizontal shackle bars crossing right through it. Reads "bound".
     concretio: S(
-      '<path d="M12 2.4l8.3 4.8v9.6L12 21.6l-8.3-4.8V7.2z"/>' +
-      '<path d="M12 8l3.4 4-3.4 4-3.4-4z"' + FILL + "/>" +
-      '<path d="M6.2 9.6v4.8M17.8 9.6v4.8"/>'
+      '<path d="M12 2.2l7.8 4.9v9.8L12 21.8l-7.8-4.9V7.1z"/>' +
+      '<path d="M12 7.5l3.8 4.5-3.8 4.5-3.8-4.5z"' + FILL + "/>" +
+      '<path d="M2.5 9.5h19M2.5 14.5h19" stroke-width="2.2"/>'
     ),
-    // Sniper bolt: a single hard zigzag lance, legible down to 12px.
-    fvlgvr: S('<path d="M13.8 2.2L5.4 13.2h5.2l-1.4 8.6L18.6 10.8h-5.2z"/>'),
-    // Cross-shaped AoE: four arms off a burning core, sparks in the quadrants.
+    // Ranged bolt, range 4-6: long thin zigzag lightning from the top-left corner
+    // to a target ring (with filled centre) in the bottom-right. Reads "far".
+    fvlgvr: S(
+      '<path d="M2.5 2.5L8 4 7 11 14 10 15.5 15.5" stroke-width="2.2"/>' +
+      '<circle cx="18.6" cy="18.6" r="3"/>' +
+      '<circle cx="18.6" cy="18.6" r="1.2"' + FILL + "/>"
+    ),
+    // AoE flame with self-cost: filled teardrop flame with a hollow inner notch,
+    // plus a small ring at the bottom-left base = "costs me". A solid mass, so it
+    // cannot be confused with fvlgvr's thin line.
     immolatio: S(
-      '<path d="M12 2.4v6.2M12 15.4v6.2M2.4 12h6.2M15.4 12h6.2"/>' +
-      '<path d="M12 9l3 3-3 3-3-3z"' + FILL + "/>" +
-      '<path d="M6.6 6.6l2.2 2.2M17.4 6.6L15.2 8.8M17.4 17.4L15.2 15.2M6.6 17.4l2.2-2.2"/>'
+      '<path fill-rule="evenodd" d="M13.5 2.5C13.5 7 18.8 9 18.8 14A6.3 6.3 0 0 1 6.2 14C6.2 10.8 8.8 9.4 9.2 7.2C10.4 9.6 12 9.4 12 7.8C13.5 8.8 13.5 4.5 13.5 2.5zM12.5 12C12.5 14 15 14.6 15 16.5A2.5 2.5 0 0 1 10 16.5C10 14.6 12.5 14 12.5 12z"' + FILL + "/>" +
+      '<circle cx="4.3" cy="19.7" r="1.9"/>'
     ),
-    // Swap places: two counter-running arrows, no overlap so it stays clean at 16px.
+    // Swap places: two stacked counter-running horizontal arrows with filled
+    // heads -- top runs right, bottom runs left. Clearly two-way.
     permvto: S(
-      '<path d="M4.2 8.5h12M13 5l3.5 3.5L13 12"/>' +
-      '<path d="M19.8 15.5h-12M11 12l-3.5 3.5L11 19"/>'
+      '<path d="M3 8h11M21 16H10" stroke-width="2.2"/>' +
+      '<path d="M13.5 4l7.5 4-7.5 4zM10.5 12L3 16l7.5 4z"' + FILL + "/>"
     ),
-    // Shove: arrow driving a body into a wall plate.
+    // Knockback shove, range 1: fat arrow with a filled head pushing a solid disc
+    // (the body) against a vertical wall line on the right edge. Reads "push".
     impvlsvs: S(
-      '<path d="M20.6 4.5v15"/>' +
-      '<path d="M2.4 12h8.6M8.6 9l3 3-3 3"/>' +
-      '<path d="M14.4 8.4h4v7.2h-4z"' + FILL + "/>"
+      '<path d="M21 4v16" stroke-width="2.2"/>' +
+      '<path d="M2.5 12h6" stroke-width="2.2"/>' +
+      '<path d="M8 8.2l4.4 3.8-4.4 3.8zM11.9 12a3.6 3.6 0 1 0 7.2 0a3.6 3.6 0 1 0-7.2 0z"' + FILL + "/>"
     ),
-    // Foe melee: opposed jaws, one fang solid so the bite reads instantly.
+    // Foe bite, range 1: two opposing jaw arcs with four filled fangs closing on
+    // a small central dot. Reads "mouth"; the only glyph with curved jaws.
     morsvs: S(
-      '<path d="M3.5 6.5c4.5 3.6 12.5 3.6 17 0"/>' +
-      '<path d="M3.5 17.5c4.5-3.6 12.5-3.6 17 0"/>' +
-      '<path d="M7.6 8.9l2.2 4.2 2.2-4.2z"' + FILL + "/>" +
-      '<path d="M14.6 15.1l1.9-3.7 1.9 3.7"/>'
+      '<path d="M3 6.5C7.5 10.5 16.5 10.5 21 6.5M3 17.5C7.5 13.5 16.5 13.5 21 17.5" stroke-width="2.2"/>' +
+      '<path d="M5.4 8.1l2.1 4.7 2.5-3.5zM14 9.3l2.5 3.5 2.1-4.7zM5.4 15.9l2.1-4.7 2.5 3.5zM14 14.7l2.5-3.5 2.1 4.7zM10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0z"' + FILL + "/>"
     ),
-    // Foe ranged: dart in flight -- solid head, fletching bars for the vector.
+    // Foe thrown dart, range 2-4: straight diagonal shaft with a solid triangular
+    // head at the top-right and a motion arc trailing behind the tail. Straight,
+    // not zigzag, so it never reads as fvlgvr.
     iacvlvm: S(
-      '<path d="M5.5 18.5L17 7"/>' +
-      '<path d="M20.5 3.5l-1.9 5.1-3.2-3.2z"' + FILL + "/>" +
-      '<path d="M3.4 16l3.2 3.2M6.2 13.2l3.2 3.2"/>'
+      '<path d="M7 17L16.5 7.5" stroke-width="2.2"/>' +
+      '<path d="M21.5 2.5L19.7 8.5 15.5 4.3z"' + FILL + "/>" +
+      '<path d="M2.5 13A8.5 8.5 0 0 0 11 21.5"/>'
     ),
     // Healing vial: combat.js VIAL_SVG geometry, rescaled 12x16 -> 24x24 box
     // (x1.4, centred) and recoloured to currentColor so it tints with the button.
+    // The only upright bottle silhouette; unchanged, it already reads at 20px.
     ampvlla: S(
       '<path d="M9.2 2.2h5.6v2.3H9.2z"' + FILL + "/>" +
       '<path d="M10 5.5h4v3.7l3.6 7.8v3.6L16.1 21.8H8.1L6.4 20.7v-3.6l3.6-7.8z"/>' +
       '<path d="M7.8 16.8h8.4v3.2l-1.1 1.3H8.9l-1.1-1.3z"' + FILL + "/>"
+    ),
+    // END TVRN plaque: hourglass rune -- filled top bulb (sand) over an open
+    // outline bottom bulb, meeting at a waist, capped by two bold horizontal bars.
+    endtvrn: S(
+      '<path d="M4.5 3h15M4.5 21h15" stroke-width="2.2"/>' +
+      '<path d="M5 5h14l-7 7.4z"' + FILL + "/>" +
+      '<path d="M5.2 19.5L12 12.4l6.8 7.1" stroke-width="2.2"/>'
     )
   };
 
