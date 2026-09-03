@@ -2048,7 +2048,8 @@ const DWC_CSS = `
   --hit:44px;             /* minimum touch target                            */
   --chip:44px;            /* timeline chip edge                              */
   --slot:48px;            /* dock slot edge: 48 phone, 56 desktop (media)    */
-  --dock-h:calc(var(--slot) + 16px);   /* dock row: slot + 8px glow room each side */
+  --dock-h:calc(var(--slot) + 26px);   /* dock row: slot + 8px glow room each side + caption */
+  --gauge:68px;           /* resource gauge edge: ~1.4x slot phone, ~1.6x desktop (90) */
 
   /* --- focus ring (keyboard only) ---------------------------------------- */
   --focus:var(--teal-hi);
@@ -2142,7 +2143,6 @@ const DWC_CSS = `
   padding:calc(var(--s2) + var(--sa-t)) calc(var(--s3) + var(--sa-r))
           var(--s2) calc(var(--s3) + var(--sa-l));
   overflow:hidden;                    /* the TRACK scrolls, not the strip */
-  background:var(--surf-1);
   color:var(--dim); font-size:var(--fs-sm); letter-spacing:var(--ls-2);
 }
 /* the scrolling half: chips only */
@@ -2184,29 +2184,40 @@ const DWC_CSS = `
 #dwc-root #dwc-board svg{ width:100%; height:100%; display:block; }
 
 /* --- hud (overlay on the bottom of the board, respects the home indicator)
-   Column: the stat line above, the dock row below. --------------------------- */
+   ARPG bar (PoE / Diablo 2): the orbs flank the skill row. Four children in
+   one wrapping flex row -- .dwc-res-l (VITAE coil over a MOVEMENT pip
+   strip), #dwc-dock (banks | satchel), #dwc-gauge-r (MANA coil), #dwc-stat --
+   and the media blocks reorder them:
+     wide (>=600px)   stat line on its own line, then  [VITAE+MOVE] dock [MANA]
+     portrait phone   dock on its own line, then       [VITAE+MOVE] stat [MANA]
+   The band is only as wide as its content and centred; the stat line
+   shrinks (and ellipsises) before anything else does. Four banks plus the
+   ampoule need 465px beside two 68px orbs, so under 600 the dock wraps. -- */
 #dwc-root #dwc-hud{
   position:absolute; left:0; right:0; bottom:0; z-index:12;
   pointer-events:none;
-  display:flex; flex-direction:column; gap:var(--s1);
+  display:flex; flex-wrap:wrap; justify-content:center; align-items:flex-start;
+  row-gap:var(--s1); column-gap:var(--s2);
   padding:var(--s3) calc(var(--s3) + var(--sa-r))
           calc(var(--s2) + var(--sa-b)) calc(var(--s3) + var(--sa-l));
   background:linear-gradient(180deg, transparent 0, #04090bd9 30%, #04090bf5 100%);
 }
-/* the lip: a hairline where the void goes opaque, and the silkscreen grid
-   (8px cyan at 3% -- reads as etched board, not texture) confined to the
-   opaque part below it. z-index:-1 keeps it under the stat line and dock
-   inside the hud's own stacking context. */
-#dwc-root #dwc-hud::before{
-  content:""; position:absolute; left:0; right:0; top:30%; bottom:0; z-index:-1;
-  pointer-events:none;
-  background-image:
-    linear-gradient(#39c8c108 var(--hair), transparent var(--hair)),
-    linear-gradient(90deg, #39c8c108 var(--hair), transparent var(--hair));
-  background-size:8px 8px;
-}
+#dwc-root #dwc-dock,
 #dwc-root #dwc-stat,
-#dwc-root #dwc-dock{ pointer-events:auto; }
+#dwc-root .dwc-res-l,
+#dwc-root #dwc-gauge-r{ pointer-events:auto; }
+#dwc-root .dwc-res-l{ display:flex; flex-direction:column; gap:var(--s1); flex:0 0 auto; order:2; }
+#dwc-root #dwc-dock{ order:3; }
+#dwc-root #dwc-gauge-r{ order:4; }
+#dwc-root #dwc-stat{ order:1; flex:0 1 100%; }
+/* portrait phone: the dock takes the first line, the stat sits between the
+   orbs on the second with a one-gauge line-height so it centres on them
+   (placement has no gauges: back to a normal line) */
+@media (max-width:599px){
+  #dwc-root #dwc-dock{ order:1; flex:0 0 100%; }
+  #dwc-root #dwc-stat{ order:3; flex:0 1 auto; line-height:var(--gauge); }
+  #dwc-root #dwc-dock.dwc-empty ~ #dwc-stat{ line-height:var(--lh); }
+}
 
 
 /* ==========================================================================
@@ -2342,7 +2353,7 @@ const DWC_CSS = `
    (the touch minimum) before the track scrolls. aspect-ratio keeps it square.
    -------------------------------------------------------------------------- */
 #dwc-root .op{
-  position:relative; overflow:hidden;
+  position:relative; overflow:visible;   /* the caption hangs below the box */
   flex:0 1 var(--slot); min-width:44px;
   width:var(--slot); height:auto; aspect-ratio:1/1; min-height:44px;
   padding:0; margin:0;
@@ -2363,7 +2374,8 @@ const DWC_CSS = `
 /* icon: fills the slot; the glyph is (slot - 14px) square. drawHud emits
    every icon at one size and this rule wins over the width/height attrs. */
 #dwc-root .op-ic{
-  position:absolute; inset:0;
+  position:absolute; inset:0; overflow:hidden;   /* clips the state overlays */
+  border-radius:calc(var(--r1) - 1px);
   display:flex; align-items:center; justify-content:center;
   color:currentColor; opacity:.9;
 }
@@ -2385,6 +2397,17 @@ const DWC_CSS = `
   font-size:10px; font-weight:700; line-height:1; letter-spacing:0;
   color:var(--dim); text-shadow:0 1px 0 #000;
 }
+/* caption: the bank name, hung 2px under the box and centred on it. It may
+   run a little wider than the slot (AMPVLLA VITAE) but never past the gap. */
+#dwc-root .op-cap{
+  position:absolute; left:50%; top:100%; z-index:3; pointer-events:none;
+  transform:translateX(-50%); margin-top:2px;
+  max-width:calc(var(--slot) + var(--s2));
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:8px; font-weight:400; line-height:1; letter-spacing:0;
+  color:var(--dim); text-shadow:0 1px 0 #000, 0 0 3px #000;
+}
+#dwc-root .op.sel .op-cap{ color:var(--gold); }
 /* state number: positioned by the st-* rules below; empty = gone */
 #dwc-root .op-badge{
   position:absolute; z-index:4; pointer-events:none;
@@ -2472,29 +2495,36 @@ const DWC_CSS = `
 #dwc-root .op.item.sel .op-cost,
 #dwc-root .op.item.sel .op-dose{ color:#e28a76; }
 
-/* --- the dock: [gauge] banks | satchel [gauge], centred (END TVRN is a
-   board-anchored plaque, see section 6) --------------------------------------
+/* --- the dock: banks | satchel, centred: row 1 of the hud (END TVRN is a
+   board-anchored plaque, see section 6; the gauges flank the stat line in
+   row 2) ----------------------------------------------------------------------
    width:max-content + max-width:100% keeps the row only as wide as its
    content (so the board stays tappable either side of it) while still
    letting the tracks shrink and then scroll when the banks overflow. */
 #dwc-root #dwc-dock{
   display:flex; align-items:center; justify-content:center; gap:var(--s2);
-  width:max-content; max-width:100%; min-width:0; margin:0 auto;
+  width:max-content; max-width:100%; min-width:0;   /* no auto margins: they would push the orbs to the edges */
   min-height:var(--dock-h);
 }
-/* gauges: CYCLES pips left, PNEUMA coil right, for the CURRENT unit
-   (drawGauges, next to drawHud). Each is one --slot square holding an inline
-   56x56 svg; the label lives inside the svg so the box stays square.
+/* gauges: MOVEMENT pips left, MANA coil right, for the CURRENT unit
+   (drawGauges, next to drawHud). Each is one --gauge square (PoE: the orbs
+   outsize the skill slots) holding an inline 56x56 svg; the label lives
+   inside the svg so the box stays square.
    hidden = reserve nothing -- the author display:flex would beat the UA
    [hidden] rule, so restate it. */
 #dwc-root .dwc-gauge{
-  width:var(--slot); height:var(--slot); flex:0 0 auto;
+  width:var(--gauge); height:var(--gauge); flex:0 0 auto;
   display:flex; align-items:center; justify-content:center;
   color:var(--teal);
 }
 #dwc-root .dwc-gauge[hidden]{ display:none; }
+/* MOVEMENT: a gauge-wide strip (56x20 viewBox) hung under the VITAE coil */
+#dwc-root #dwc-gauge-l{ height:auto; aspect-ratio:56/20; }
+#dwc-root #dwc-gauge-l .dwc-g-lbl{ font-size:6px; }
 #dwc-root .dwc-gauge svg{ width:100%; height:100%; display:block; overflow:visible; }
-/* svg text: sizes are viewBox units (7 -> 6px at the 48px slot, 7px at 56) */
+/* svg text: sizes are viewBox units (label 7 -> 8.5px at the 68px gauge,
+   11.25px at 90; numeral 12 -> 14.6px at 68, 19.3px at 90; the MOVEMENT
+   strip label 6 -> 7.3px at 68, 9.6px at 90) */
 #dwc-root .dwc-g-lbl{
   font-size:7px; font-weight:700; letter-spacing:var(--ls-2);
   fill:var(--dim); text-anchor:middle;
@@ -2512,12 +2542,18 @@ const DWC_CSS = `
   font-size:12px; font-weight:700; fill:var(--white); text-anchor:middle;
   paint-order:stroke; stroke:#04090b; stroke-width:3px; stroke-linejoin:round;
 }
+/* the VITAE coil is the MANA coil in oxblood */
+#dwc-root #dwc-gauge-h{ color:var(--ox-hi); }
+#dwc-root #dwc-gauge-h .dwc-g-fill{ fill:var(--ox); opacity:.7; }
+#dwc-root #dwc-gauge-h .dwc-g-fill-top{ stroke:var(--ox-hi); }
+#dwc-root #dwc-gauge-h .dwc-g-rung{ stroke:var(--bd-ox); }
+#dwc-root #dwc-gauge-h .dwc-g-cap{ fill:var(--bd-ox); }
 #dwc-root #dwc-banks,
 #dwc-root #dwc-satchel{
   display:flex; gap:var(--s2); align-items:center;
   flex:0 1 auto; min-width:0;
   overflow-x:auto; overflow-y:hidden;
-  padding:var(--s2) var(--s1);        /* vertical room for the armed glow */
+  padding:var(--s2) var(--s1) calc(var(--s2) + 10px);   /* glow room + the caption row */
   scrollbar-width:thin; scrollbar-color:var(--tealdim) transparent;
 }
 /* the satchel is one slot wide: it never gives up width to the banks track
@@ -2786,7 +2822,7 @@ const DWC_CSS = `
 
 /* --- wide / desktop: bigger slots, wider gutters ------------------------- */
 @media (min-width:760px){
-  #dwc-root{ --slot:56px; }
+  #dwc-root{ --slot:56px; --gauge:90px; }
   #dwc-root #dwc-hud{
     padding-left:calc(var(--s4) + var(--sa-l));
     padding-right:calc(var(--s4) + var(--sa-r));
@@ -2812,33 +2848,18 @@ const DWC_CSS = `
   /* Chips shrink: they are display-only (no handler), so the 44px rule does
      not bind them. Buttons keep the full 44px -- measured, that costs the
      board 10px of height here (294 -> 284), which is cheap for a real tap. */
-  #dwc-root{ --chip:34px; --hit:44px; --slot:48px; }   /* phone slots even at 844 wide */
+  #dwc-root{ --chip:34px; --hit:44px; --slot:48px; --gauge:68px; }   /* phone slots and gauges even at 844 wide */
   #dwc-root #dwc-tl{
     gap:var(--s1);
     padding-top:calc(var(--s1) + var(--sa-t)); padding-bottom:var(--s1);
     font-size:var(--fs-xs);
   }
   #dwc-root .dwc-chip{ font-size:var(--fs-md); }
-  /* stat line INLINE left of the dock to save height: three columns so the
-     dock stays centred in the viewport with the stat in the left gutter */
+  /* the two hud rows keep their shape; only the vertical padding tightens */
   #dwc-root #dwc-hud{
-    display:grid;
-    grid-template-columns:minmax(150px,26%) 1fr minmax(0,26%);
-    align-items:center;
-    gap:var(--s1) var(--s2);
     padding-top:var(--s1);
     padding-bottom:calc(var(--s1) + var(--sa-b));
   }
-  /* two short lines beat one ellipsised one */
-  #dwc-root #dwc-stat{
-    grid-column:1; text-align:left;
-    white-space:normal; max-height:2.6em;
-    font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3;
-  }
-  #dwc-root #dwc-stat::before{ height:9px; }
-  #dwc-root #dwc-dock{ grid-column:2; }
-  /* On portrait and desktop the viewBox's own bottom margin absorbs the
-     overlay; on landscape it does not, so the board gives up the dock's row. */
   /* phone-sized plaque even at 844 wide (this block follows min-width:760) */
   #dwc-root #dwc-endbtn{ width:64px; height:76px; }
   #dwc-root .end-plq{ width:52px; height:52px; }
@@ -2908,7 +2929,7 @@ const DWC_CSS = `
   #dwc-root .tile{ stroke-width:1.25; }
 }
 `;
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-dock">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg><button id="dwc-endbtn" class="end" aria-label="END TVRN"><span class="end-plq"></span><span class="end-lbl">END TVRN</span></button></div>\n  <div id="dwc-hud">\n    <div id="dwc-dock">\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n    </div>\n    <div class="dwc-res-l">\n      <div id="dwc-gauge-h" class="dwc-gauge" hidden></div>\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n    </div>\n    <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n    <div id="dwc-stat">—</div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -3786,10 +3807,6 @@ const ICO=(id,o)=>window.iconHTML?window.iconHTML(id,o):"";
 const SLOT_ICON=34;
 // Numeric range for the aria-label and the stat line: "3", "1–4", sweep "0".
 const rangeText=bk=>bk.kind==="sweep"?"0":(bk.min===bk.max?String(bk.min):bk.min+"–"+bk.max);
-// Learnability guard (UI only): dock slots carry no names, so until a unit
-// has armed something this fight the stat line lists its bank names.
-// Cleared in apiStart next to the fight state.
-let hudArmed=new Set();
 
 // Which selection the track was last scrolled for. drawHud runs on every
 // draw(); scrolling on every pass would yank the row back under the thumb.
@@ -3824,40 +3841,21 @@ window.addEventListener("resize",placeEndBtn);   // once: initLogic runs once pe
 // no ids inside (the markup is per gauge), no handlers.
 // Gauge labels are an open ruling (PNEUMA/CYCLES vs MANA/MOVEMENT): two
 // strings, nothing else in the vocabulary depends on them.
-const GAUGE_LABEL_L="MOVEMENT", GAUGE_LABEL_R="MANA";
+const GAUGE_LABEL_L="MOVEMENT", GAUGE_LABEL_R="MANA", GAUGE_LABEL_H="VITAE";
 const DWC_GAUGES=true;    // ruling C: CYCLES left, PNEUMA right, current unit
 function drawGauges(u){
-  const L=document.getElementById("dwc-gauge-l"), R=document.getElementById("dwc-gauge-r");
-  if(!L||!R) return;
-  if(!DWC_GAUGES||!u){ L.hidden=true; R.hidden=true; L.innerHTML=""; R.innerHTML=""; return; }
+  const L=document.getElementById("dwc-gauge-l"), R=document.getElementById("dwc-gauge-r"),
+        H=document.getElementById("dwc-gauge-h");
+  if(!L||!R||!H) return;
+  if(!DWC_GAUGES||!u){ for(const g of [L,R,H]){ g.hidden=true; g.innerHTML=""; } return; }
   const clamp=(n,m)=>Math.max(0,Math.min(m,n|0));
   const open='<svg viewBox="0 0 56 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
-  // -- left: CYCLES as pips in a circuit-trace frame. Notched (PCB-edge)
-  //    corners on the OUTER side, traces running in from the frame to the
-  //    pip group. Spent pips are the ones from the RIGHT.
-  {
-    const max=clamp(u.maxCycles,8), n=clamp(u.cycles,max);
-    const pw=8, pg=4, ph=22, py=8, tot=max*pw+(max-1)*pg, x0=28-tot/2;
-    let s=open;
-    s+='<path class="dwc-g-frame" d="M8,2 H51 Q54,2 54,5 V51 Q54,54 51,54 H8 L2,48 V8 Z"/>';
-    // traces: mid-height from each frame edge to the group, pads at the ends
-    const ty=py+ph/2;
-    s+='<path class="dwc-g-trace" d="M2,'+ty+' H'+(x0-3)+' M'+(x0+tot+3)+','+ty+' H54 M'+(x0+pw/2)+',2 V'+(py-2)+' M'+(x0+tot-pw/2)+',54 V'+(py+ph+2)+'"/>';
-    s+='<rect x="'+(x0-4.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
-    s+='<rect x="'+(x0+tot+1.5)+'" y="'+(ty-1.5)+'" width="3" height="3" fill="currentColor" opacity=".7"/>';
-    for(let i=0;i<max;i++){
-      s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg))+'" y="'+py+'" width="'+pw+'" height="'+ph+'" rx="1.5"/>';
-    }
-    s+='<text class="dwc-g-lbl" x="28" y="45">'+GAUGE_LABEL_L+'</text></svg>';
-    L.innerHTML=s; L.setAttribute("role","img");
-    L.setAttribute("aria-label",GAUGE_LABEL_L+" "+n+" of "+max);
-    L.hidden=false;
-  }
-  // -- right: PNEUMA as a capacitor/coil. Vessel outline, fill from the
-  //    bottom, five rungs drawn OVER the fill so it reads as windings, then
-  //    the numeral with a dark stroke so it survives the half-fill.
-  {
-    const max=Math.max(1,u.maxPneuma|0), n=clamp(u.pneuma,max), frac=n/max;
+  // -- a pool as a capacitor/coil (VITAE and MANA share it; colour is the
+  //    sheet's). Vessel outline, fill from the bottom, five rungs drawn OVER
+  //    the fill so it reads as windings, then the numeral with a dark stroke
+  //    so it survives the half-fill.
+  const coil=(el,n,max,label)=>{
+    max=Math.max(1,max|0); n=clamp(n,max); const frac=n/max;
     const vx=10, vy=4, vw=36, vh=36, ix=vx+1, iy=vy+1, iw=vw-2, ih=vh-2;
     const fh=Math.round(ih*frac*2)/2, fy=iy+ih-fh;
     let s=open;
@@ -3872,11 +3870,31 @@ function drawGauges(u){
     for(let k=1;k<=5;k++){ const ry=(iy+ih*k/6).toFixed(1); rungs+='M'+(vx-2)+','+ry+' H'+(vx+vw+2)+' '; }
     s+='<path class="dwc-g-rung" d="'+rungs.trim()+'"/>';
     s+='<text class="dwc-g-num" x="28" y="26.5">'+n+'/'+max+'</text>';
-    s+='<text class="dwc-g-lbl" x="28" y="52">'+GAUGE_LABEL_R+'</text></svg>';
-    R.innerHTML=s; R.setAttribute("role","img");
-    R.setAttribute("aria-label",GAUGE_LABEL_R+" "+n+" of "+max);
-    R.hidden=false;
+    s+='<text class="dwc-g-lbl" x="28" y="52">'+label+'</text></svg>';
+    el.innerHTML=s; el.setAttribute("role","img");
+    el.setAttribute("aria-label",label+" "+n+" of "+max);
+    el.hidden=false;
+  };
+  coil(H,u.vitae,u.maxVitae,GAUGE_LABEL_H);
+  // -- left: CYCLES as pips in a 56x20 strip under the VITAE coil, notched
+  //    (PCB-edge) corners on the outer side. The pips share 48 units of
+  //    width whatever the max (the old 8x4 layout escaped the frame past
+  //    max 4). Spent pips are the ones from the RIGHT.
+  {
+    const max=clamp(u.maxCycles,8), n=clamp(u.cycles,max);
+    const pg=3, pw=Math.min(10,(48-(max-1)*pg)/max), ph=8, py=3, tot=max*pw+(max-1)*pg, x0=28-tot/2;
+    let s='<svg viewBox="0 0 56 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
+    s+='<path class="dwc-g-frame" d="M4,.5 H53.5 Q55.5,.5 55.5,2.5 V17.5 Q55.5,19.5 53.5,19.5 H4 L.5,16 V4 Z"/>';
+    for(let i=0;i<max;i++){
+      s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg)).toFixed(2)+'" y="'+py+'" width="'+pw.toFixed(2)+'" height="'+ph+'" rx="1"/>';
+    }
+    s+='<text class="dwc-g-lbl" x="28" y="18">'+GAUGE_LABEL_L+'</text></svg>';
+    L.innerHTML=s; L.setAttribute("role","img");
+    L.setAttribute("aria-label",GAUGE_LABEL_L+" "+n+" of "+max);
+    L.hidden=false;
   }
+  // -- right: PNEUMA coil
+  coil(R,u.pneuma,u.maxPneuma,GAUGE_LABEL_R);
 }
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
@@ -3908,13 +3926,12 @@ function drawHud(){
   endb.style.display="";
   placeEndBtn();
   const u=cur(); if(!u){ drawGauges(null); return; }
-  stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
+  // the name only: VITAE, CYCLES and PNEUMA are the gauges
+  stat.innerHTML=`<b>${u.name}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
-    const names=[];   // for the learnability line: the slots carry no names
     for(const id of u.banks){
       const bk=bankFor(u,id), b=document.createElement("button");
       const off=!canCast(u,id), r=rangeText(bk);
-      names.push(bk.name);
       // One state per slot, hardest first: burnt > recharge > spent > need > strain.
       // st = class suffix, num = badge number, p = overlay fraction, sfx = aria suffix.
       let st="", num="", p=0, sfx="";
@@ -3930,10 +3947,10 @@ function drawHud(){
       b.innerHTML=`<span class="op-key">${u.banks.indexOf(id)+1}</span>`+
         `<span class="op-ic">${ICO(bk.icon||bk.name,{size:SLOT_ICON})}</span>`+
         `<span class="op-cost">${bk.cost}◆</span>`+
-        `<span class="op-badge">${num}</span>`;
+        `<span class="op-badge">${num}</span>`+
+        `<span class="op-cap">${bk.name}</span>`;
       b.onclick=()=>{
         if(off&&state.sel!==id){ flashStat(whyNot(u,id)); return; }  // answered, not eaten
-        hudArmed.add(u.id);
         state.sel=state.sel===id?null:id; draw();
       };
       banks.appendChild(b);
@@ -3943,7 +3960,6 @@ function drawHud(){
       if(!state.items[id]) continue;        // empty satchel: no button, no noise
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
       const ioff=!canUseItem(u,id)&&state.sel!==sid, r=rangeText(it);
-      names.push(id);
       b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"")+(u.cast[sid]?" st-spent":"");
       b.setAttribute("aria-label",it.name+", "+it.cost+" PNEUMA, RANGE "+r+", "+n+" LEFT"+(u.cast[sid]?", SPENT":""));
       b.title=it.desc;
@@ -3951,7 +3967,8 @@ function drawHud(){
         `<span class="op-ic">${ICO(it.icon||id,{size:SLOT_ICON})}</span>`+
         `<span class="op-dose">${n}</span>`+
         `<span class="op-cost">${it.cost}◆</span>`+
-        `<span class="op-badge"></span>`;
+        `<span class="op-badge"></span>`+
+        `<span class="op-cap">${it.name}</span>`;
       b.onclick=()=>{
         if(ioff){
           flashStat(u.cast[sid]?it.name+" IS SPENT \u2014 ONE VSE PER TVRN"
@@ -3959,7 +3976,6 @@ function drawHud(){
             :"SATCHEL EMPTY"));
           return;
         }
-        hudArmed.add(u.id);
         state.sel=state.sel===sid?null:sid; draw();
       };
       satchel.appendChild(b);
@@ -3967,7 +3983,6 @@ function drawHud(){
       if(state.sel===sid) stat.innerHTML=`<b>${it.name}</b> · <b>${it.cost}◆</b> · <b>${r}</b> · <b>${n}</b> LEFT`;
     }
     // Nothing armed yet this fight: name the slots, since the slots do not.
-    if(!state.sel&&!hudArmed.has(u.id)) stat.innerHTML=`<b>${u.name}</b> — ${names.join(" · ")}`;
     endb.disabled=false;
     // Bring a NEWLY selected bank into the track; leave the thumb alone
     // otherwise. Banks only -- the satchel track is one slot wide.
@@ -4045,11 +4060,11 @@ document.addEventListener("keydown",e=>{ if(!active) return;
   if(e.key>="1"&&e.key<="4"){
     const slot=+e.key-1;
     const id=u.banks[slot];
-    if(id&&canCast(u,id)){ hudArmed.add(u.id); state.sel=state.sel===id?null:id; draw(); }
+    if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
     else if(id){ flashStat(whyNot(u,id)); }
     else if(slot===u.banks.length&&u.id==="op"){
       const iid=Object.keys(ITEMS)[0], sid="item:"+iid;
-      if(canUseItem(u,iid)||state.sel===sid){ hudArmed.add(u.id); state.sel=state.sel===sid?null:sid; draw(); }
+      if(canUseItem(u,iid)||state.sel===sid){ state.sel=state.sel===sid?null:sid; draw(); }
     }
   } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
   else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
@@ -4082,7 +4097,6 @@ function finish(won){
   if(cfg&&cfg.onEnd) cfg.onEnd(res);
 }
 apiStart=function(){
-  hudArmed.clear();   // the learnability line resets with the fight state
   setupFight(cfg.fight||1);
   applyParty();
   draw(); drawTimeline(); drawHud();
