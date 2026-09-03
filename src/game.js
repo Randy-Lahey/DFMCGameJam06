@@ -27,6 +27,8 @@
   const missing = [];
   if (!window.FLOOR01) missing.push('data/floor01.js');
   if (!window.FLOOR02) missing.push('data/floor02.js');
+  if (!window.FACE_NIGREDO) missing.push('data/face.js');
+  if (!window.FLOOR_REFVGE) missing.push('data/town.js');
   if (!window.BALANCE) missing.push('data/balance.js');
   if (!window.SPRITES) missing.push('src/sprites.js');
   if (missing.length) {
@@ -36,10 +38,13 @@
     return;
   }
 
-  // The dungeon is an ordered stack of floors; F is ALWAYS the current one.
-  // Everything geometric (walkable, camera bounds, backdrop) derives from F
-  // and is rebuilt by loadFloor(), so F and walkable are lets, not consts.
+  // The tutorial is an ordered stack of two floors; after the Cube the run
+  // moves through THE REFVGE and the NIGREDO face's tiles (data/face.js).
+  // F is ALWAYS the current floor. Everything geometric (walkable, camera
+  // bounds, backdrop) derives from F and is rebuilt by loadFloor(), so F and
+  // walkable are lets, not consts.
   const FLOORS = [window.FLOOR01, window.FLOOR02];
+  const FACE = window.FACE_NIGREDO;
   let F = FLOORS[0];
   const B = window.BALANCE;
   const S = window.SPRITES;
@@ -122,7 +127,12 @@
         ({ bank: b, fluxes: Array(B.banks[b].bays).fill(null) }))])),
     over: null,                    // null | 'SEVERED' | 'CLEARED' | 'WIN'
     modal: null,                   // null | 'exit' | 'controls' | 'inv' | 'hermit' | 'cube'
-    hasCube: false,                // THE CVBE granted (inventory flag; cube UI is post-jam-beat work)
+    hasCube: false,                // THE CVBE granted; the tutorial ends and THE REFVGE loads
+    // Which NIGREDO tile the circle stands on: null in the tutorial and in
+    // THE REFVGE, else a tile id from FACE.tiles. The face itself is run
+    // state: ids cleared this day, id -> affix label, Archon down.
+    tile: null,
+    face: { cleared: [], affix: {}, sealed: false },
     hermitMet: false,              // bargain done; the NPC goes quiet afterwards
     ampoules: 0,                   // AMPVLLA VITAE doses; carried across floors, spent in the chamber (cap 3, mirrors combat SATCHEL_MAX)
     hermitGone: false,             // sacrifice beat fired; it fires exactly once per run
@@ -147,7 +157,6 @@
     // descent, and everything downstream (ops, roster panel, inventory rig)
     // reads this list, never B.party directly.
     roster: ['OPERATOR'],
-    floor: 0,
     // Members carry their OWN tiles now. There is deliberately no circle.c/r
     // any more — a stale read of it must fail loudly, not silently target one
     // ghost tile. Spawns are in command order: OPERATOR leads.
@@ -364,6 +373,11 @@
   // fluxes by weight; DATA rolls the remaining bank pool (no duplicates) and
   // degrades to FLUX once the pool is exhausted.
   function rollItem(kind) {
+    if (kind === 'AMPVLLA') {
+      const e = B.drops.items.find(i => i.kind === 'AMPVLLA') || {};
+      return { kind: 'AMPVLLA', label: e.label || 'AMPVLLA VITAE',
+               sprite: e.sprite || 'ampvlla', rarity: 'COMMON' };
+    }
     if (kind === 'DATA') {
       const owned = ownedBanks();
       const pool = B.drops.bankPool.filter(b => !owned.has(b));
@@ -415,6 +429,10 @@
   const spoilArt = frag =>
     '<svg viewBox="0 0 64 64" width="44" height="44">' + frag + '</svg>';
   function spoilCard(it) {
+    if (it.kind === 'AMPVLLA') {
+      return { name: it.label, kind: 'AMPVLLA', rarity: it.rarity, art: spoilArt(S.ampvlla()),
+               note: 'DRINK OR HVRL MID-FIGHT. +8 VITAE. THE SATCHEL HOLDS 3.' };
+    }
     if (it.kind === 'DATA') {
       const bk = B.banks[it.bank] || {};
       return { name: it.bank, kind: 'DATA BANK', rarity: it.rarity, art: spoilArt(S.databank()),
@@ -435,6 +453,13 @@
     state.drops = state.drops.filter(d => !here.includes(d));
     here.forEach(d => {
       const cls = 'f-' + d.kind.toLowerCase();
+      if (d.kind === 'AMPVLLA') {
+        // Doses go to the satchel, not the bag. A full satchel leaves the
+        // dose lying where it is, so it can be fetched after a fight.
+        if (!giveAmpoules(1, d)) { state.drops.push(d); return; }
+        burst(d.c, d.r, 'pickup');
+        return;
+      }
       burst(d.c, d.r, 'pickup');
       if (d.kind === 'ARGENT') {
         state.bag.argent += d.amount;
@@ -893,18 +918,58 @@
   }
 
   // Leaving is a choice, not a state you fall into: CLEARED means the floor is
-  // empty, WIN means you actually took the descent.
+  // empty, WIN means you actually took the descent. On a face tile the same
+  // prop is the EXTRACT back to THE REFVGE.
   function answerExit(yes) {
     if (state.modal !== 'exit') return;
     state.modal = null;
-    if (!yes) { log('THE CIRCLE STEPS BACK FROM THE DESCENT.'); return; }
-    if (state.floor + 1 < FLOORS.length) {
+    if (!yes) {
+      log(state.tile ? 'THE CIRCLE STAYS ON THE TILE.' : 'THE CIRCLE STEPS BACK FROM THE DESCENT.');
+      return;
+    }
+    if (state.tile) { extract(); return; }
+    const i = FLOORS.indexOf(F);
+    if (i >= 0 && i + 1 < FLOORS.length) {
       log(`THE CIRCLE TAKES THE DESCENT. ${F.name} IS BEHIND YOU.`, 'good');
-      loadFloor(state.floor + 1);
+      loadFloor(FLOORS[i + 1]);
       return;
     }
     state.over = 'WIN';
     log('THE SEAL HOLDS BEHIND YOV. THE CIRCLE BREAKS BACK TOWARD THE REAL.', 'good');
+  }
+
+  // Extract: the tile is banked as cleared and the circle walks back to THE
+  // REFVGE. No heal -- AMPVLLAE are the only healing -- except once: when
+  // the third ordinary tile clears, the Cube opens and the whole party is
+  // restored (severed members included) before the Archon.
+  function extract() {
+    const id = state.tile;
+    if (!id) return;
+    if (!state.face.cleared.includes(id)) state.face.cleared.push(id);
+    log(`${id} EXTRACTED.`, 'good');
+    const plain = FACE.tiles.filter(t => !t.archon);
+    if (plain.every(t => state.face.cleared.includes(t.id)) &&
+        state.face.cleared.length === plain.length) {
+      state.circle.members.forEach(m => { m.hp = m.vitae; });
+      log('THE CVBE OPENS. VITAE RESTORED. THRONVS VNSEALS.', 'good');
+    }
+    loadTown();
+  }
+
+  // Party wipe past the tutorial: the day ends, not the run. Everyone wakes
+  // whole in THE REFVGE, every tile is OPEN again under a new label, the
+  // cleared count is back to 0. ARGENT, bag, loadout and ampoules are kept.
+  // A tutorial wipe (no Cube yet) keeps today's behaviour: the run ends.
+  const canWipe = () => state.over === 'SEVERED' && state.hasCube;
+  function wipe() {
+    if (!canWipe()) return;
+    state.face.cleared = [];
+    state.face.sealed = false;
+    rerollAffixes();
+    state.circle.members.forEach(m => { m.hp = m.vitae; });
+    state.over = null;
+    log('THE DAY ENDS. THE FACE TVRNS. NEW SEALS.', 'bad');
+    loadTown();
   }
 
   function checkEnd() {
@@ -913,22 +978,55 @@
       log('THE OPERATOR IS SEVERED. THE WORK ENDS.', 'bad');
       return;
     }
-    if (!liveFoes().length && !state.over) {
+    // A floor that never had foes (THE REFVGE) is not "cleared", it is home.
+    if (state.foes.length && !liveFoes().length && !state.over) {
+      const t = state.tile && tileOf(state.tile);
+      if (t && t.archon) {
+        // The Archon down IS the face: no extract on THRONVS, the fight is
+        // the way off it.
+        state.face.sealed = true;
+        state.over = 'WIN';
+        log('THE ARCHON FALLS. NIGREDO SEALED.', 'good');
+        return;
+      }
       state.over = 'CLEARED';
-      log(`${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.`, 'good');
+      log(state.tile
+        ? `${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE EXTRACT VNSEALS.`
+        : `${F.name} IS QUIET. ALL ENEMIES SEVERED \u2014 THE DESCENT OPENS.`, 'good');
+    }
+  }
+
+  // ---------------------------------------------------------- the face
+  // NIGREDO is four tiles. The three ordinary tiles are open from the first
+  // day; the Archon's THRONVS unseals only once all three are cleared.
+  const tileOf = id => FACE.tiles.find(t => t.id === id);
+  function tileUnlocked(id) {
+    const t = tileOf(id);
+    if (!t) return false;
+    if (!t.archon) return true;
+    return FACE.tiles.every(o => o.archon || state.face.cleared.includes(o.id));
+  }
+  // Display-only labels for now: each tile draws one name from the pool, no
+  // two tiles the same. Rolled on the first town load and again on a wipe.
+  function rerollAffixes() {
+    const pool = FACE.affixPool.slice();
+    state.face.affix = {};
+    for (const t of FACE.tiles) {
+      const i = Math.floor(Math.random() * pool.length);
+      state.face.affix[t.id] = pool.splice(i, 1)[0];
     }
   }
 
   // ---------------------------------------------------------- floor loader
-  // Descending is the ONLY way floors change, and this is the only function
-  // that swaps F. Carries across floors: roster, VITAE (a severed
-  // daemon limps back at half VITAE -- the descent knits, it does not heal),
-  // bag, argent, loadout, the turn counter. Resets: foes, drops, fog, wards,
-  // cooldowns, camera, props (caches close again on THEIR floor -- each
-  // floor object keeps its own).
-  function loadFloor(i) {
-    state.floor = i;
-    F = FLOORS[i];
+  // This is the only function that swaps F: the tutorial descent, the walk
+  // back to THE REFVGE, and stepping onto a tile all come through here.
+  // Carries across floors: roster, VITAE (a severed daemon limps back at
+  // half VITAE -- the descent knits, it does not heal), bag, argent,
+  // loadout, the turn counter. Resets: foes, drops, fog, wards, cooldowns,
+  // camera, props (caches close again on THEIR floor -- each floor object
+  // keeps its own).
+  function loadFloor(floor) {
+    F = floor;
     walkable = new Set(F.tiles.map(t => key(t[0], t[1])));
     F.props.forEach(p => { p.opened = false; });
     state.escort = null;                 // the escort does not descend ahead of the beat
@@ -974,7 +1072,10 @@
 
     // Header floor label is floor-scoped UI too.
     const brandSub = document.querySelector('.brand small');
-    if (brandSub) brandSub.textContent = `${F.name} // VERTICAL SLICE`;
+    if (brandSub) brandSub.textContent =
+      state.tile ? `${FACE.name} // ${state.tile} · ${state.face.affix[state.tile] || ''}`
+      : F === window.FLOOR_REFVGE ? F.name
+      : `${F.name} // VERTICAL SLICE`;
 
     buildRoster();
     renderFanChips();
@@ -1021,7 +1122,7 @@
     enterCombat(pack, { sacrifice: true, archon: true });
   }
   function maybeAmbush() {
-    if (state.floor !== 1 || state.ambushDone ||
+    if (F !== FLOORS[1] || state.ambushDone ||
         !state.hermitMet || state.hermitGone) return;
     const L = lead();
     if (!L || L.c < AMBUSH_ROOM.c0 || L.c > AMBUSH_ROOM.c1 ||
@@ -1054,6 +1155,40 @@
     state.modal = null;
     state.hasCube = true;
     log('THE CVBE IS YOVRS. IT IS THE ONLY DOOR.', 'good');
+    // The tutorial ends here: whatever is left of FLOOR 02 is abandoned and
+    // the circle stands in THE REFVGE with the Cube.
+    loadTown();
+  }
+
+  // ---------------------------------------------------------- the refuge
+  // THE REFVGE is a walkable floor with one prop, THE CVBE. Every return --
+  // the Cube handoff, an extract, a wipe -- comes through here.
+  function loadTown() {
+    state.tile = null;
+    if (!Object.keys(state.face.affix).length) rerollAffixes();
+    loadFloor(window.FLOOR_REFVGE);
+  }
+  function openFace() {
+    if (state.modal || finished()) return;
+    state.modal = 'face';
+    log('THE CVBE TVRNS. FOVR SEALS.', 'good');
+  }
+  function closeFace() {
+    if (state.modal !== 'face') return;
+    state.modal = null;
+  }
+  // Pick a tile off the face. CLEARED and SEALED rows are inert: nothing
+  // happens, the modal stays up.
+  function chooseTile(id) {
+    if (state.modal !== 'face') return;
+    const t = tileOf(id);
+    if (!t || !tileUnlocked(id) || state.face.cleared.includes(id)) return;
+    const floor = window[t.floor];
+    if (!floor) { warn(`${id} IS NOT COMPILED.`, 'bad'); return; }
+    state.modal = null;
+    state.tile = id;
+    log(`THE CIRCLE ENTERS ${id} · ${state.face.affix[id] || ''}.`, 'good');
+    loadFloor(floor);
   }
 
   // The Hermit's bargain: one daemon joins, the choice is final, and the
@@ -1073,12 +1208,12 @@
     log('THE HERMIT FALLS IN AT THE REAR. THE WAY EAST OPENS.', 'dim');
   }
 
-  // NPCs are props that BLOCK their tile and talk when bumped. Only the
-  // Hermit for now; the helper keeps every walkability check honest. Once
-  // the bargain is done he steps into the static: no body, no block --
-  // keyed off state so a fresh run brings him back.
-  const npcAt = (c, r) => !state.hermitMet &&
-    F.props.find(p => p.kind === 'hermit' && p.c === c && p.r === r);
+  // NPCs are props that BLOCK their tile and talk when bumped: the Hermit
+  // and THE CVBE. The helper keeps every walkability check honest. Once the
+  // bargain is done the Hermit steps into the static: no body, no block --
+  // keyed off state so a fresh run brings him back. The Cube always blocks.
+  const npcAt = (c, r) => F.props.find(p => p.c === c && p.r === r &&
+    ((p.kind === 'hermit' && !state.hermitMet) || p.kind === 'cube'));
 
   // Naming a key to a player who has no keyboard is worse than saying nothing.
   const isCoarse = () => window.matchMedia('(pointer:coarse)').matches;
@@ -1088,15 +1223,19 @@
   function interactable() {
     if (blocked() || state.mode !== 'move' || !lead()) return null;
     const p = propAt(lead().c, lead().r);
-    if (!p) return null;
+    if (!p) {
+      // THE CVBE blocks its tile, so it is acted on from beside it.
+      const cube = F.props.find(q => q.kind === 'cube' && adjacent(q, lead()));
+      return cube ? { prop: cube, text: 'ENTER ' + cube.label } : null;
+    }
     if (p.kind === 'chest' && !p.opened) return { prop: p, text: 'OPEN ' + p.label };
     if (p.kind === 'stairs') {
-      const left = state.hasCube ? 0 : liveFoes().length;
+      const left = exitLeft();
       // Sealed is a STATE, not a keybind. E still opens the act round here —
       // stealing that key at the exit while enemies close would be cruel.
       if (left) return { prop: p, locked: true,
-                         text: 'DESCENT SEALED \u00b7 ' + left + ' ENEM' + (left > 1 ? 'IES' : 'Y') + ' LEFT' };
-      return { prop: p, text: 'LEAVE THE FLOOR' };
+                         text: p.label + ' SEALED \u00b7 ' + left + ' ENEM' + (left > 1 ? 'IES' : 'Y') + ' LEFT' };
+      return { prop: p, text: state.tile ? 'EXTRACT TO THE REFVGE' : 'LEAVE THE FLOOR' };
     }
     return null;
   }
@@ -1120,22 +1259,29 @@
     log(`${p.label} OPENED \u2014 ${argent} ARGENT, ${pick.label}.`, 'good');
 
     // Prop-carried ampoules: the first healing of the run, so the pickup IS
-    // the tutorial -- brief, and on the warn banner so phones (no record
-    // panel) see it too.
-    if (p.ampoules) {
-      const room = 3 - state.ampoules;                 // cap mirrors combat SATCHEL_MAX
-      const got = Math.max(0, Math.min(p.ampoules, room));
-      if (got > 0) {
-        state.ampoules += got;
-        float(p.c, p.r, `+${got} AMPVLLA`, 'f-argent');
-        warn(`AMPVLLA VITAE \u00d7${got} \u2014 HEALS +8 IN THE CHAMBER.`);
-        log(`AMPVLLA VITAE \u00d7${got}: DRINK OR HVRL MID-FIGHT \u2014 +8 VITAE. ONE VSE EACH.`, 'good');
-        log('THE SATCHEL HOLDS 3. SPARES STAY WHERE THEY LIE.', 'dim');
-      } else {
-        log('THE SATCHEL IS FVLL \u2014 3 AMPVLLAE HELD. THE SPARES STAY.', 'dim');
-      }
-    }
+    // the tutorial -- see giveAmpoules.
+    if (p.ampoules) giveAmpoules(p.ampoules, p);
     resolveRound(null);
+  }
+
+  // Credit AMPVLLAE against the satchel cap (3, mirrors combat SATCHEL_MAX).
+  // ONE place for the cap and the pickup lines -- brief, and on the warn
+  // banner so phones (no record panel) see it too -- shared by cache
+  // pickups, floor drops and fight-end spoils. `at` is an optional {c, r}
+  // for the float. Returns the doses actually taken.
+  function giveAmpoules(n, at) {
+    const room = 3 - state.ampoules;
+    const got = Math.max(0, Math.min(n | 0, room));
+    if (got > 0) {
+      state.ampoules += got;
+      if (at) float(at.c, at.r, `+${got} AMPVLLA`, 'f-argent');
+      warn(`AMPVLLA VITAE \u00d7${got} \u2014 HEALS +8 IN THE CHAMBER.`);
+      log(`AMPVLLA VITAE \u00d7${got}: DRINK OR HVRL MID-FIGHT \u2014 +8 VITAE. ONE VSE EACH.`, 'good');
+      log('THE SATCHEL HOLDS 3. SPARES STAY WHERE THEY LIE.', 'dim');
+    } else {
+      log('THE SATCHEL IS FVLL \u2014 3 AMPVLLAE HELD. THE SPARES STAY.', 'dim');
+    }
+    return got;
   }
 
   function onEnter() {
@@ -1148,12 +1294,18 @@
     }
     if (p.kind === 'chest' && !p.opened) log('A ' + p.label + ' SITS HERE. ' + actHint() + '.', 'good');
     if (p.kind === 'stairs') {
-      // The Cube IS the key: once granted, the descent ignores the seal.
-      const left = state.hasCube ? 0 : liveFoes().length;
+      const left = exitLeft();
       if (left) log('THE ' + p.label + ' IS SEALED. ' + left + ' STILL STAND.', 'bad');
+      else if (state.tile) log('THE ' + p.label + ' IS OPEN. ' + actHint() + '.', 'good');
       else log('THE ' + p.label + ' OPENS BELOW. ' + actHint() + '.', 'good');
     }
   }
+
+  // Foes still standing between the circle and the exit prop. In the
+  // tutorial the Cube IS the key (the descent ignores the seal once it is
+  // granted); on a face tile the seal is the rule -- a tile is CLEARED when
+  // every foe is dead, and the EXTRACT unseals then and only then.
+  const exitLeft = () => (state.hasCube && !state.tile) ? 0 : liveFoes().length;
 
   // ---------------------------------------------------------- act round
   // Any member who has not acted may act, in any order. The round resolves
@@ -1215,6 +1367,7 @@
     const it = interactable();
     if (it && !it.locked && it.prop.kind === 'chest') { openCache(it.prop); return; }
     if (it && !it.locked && it.prop.kind === 'stairs') { state.modal = 'exit'; return; }
+    if (it && it.prop.kind === 'cube') { openFace(); return; }
     state.mode = 'act';
     const first = pendingMembers()[0];
     state.sel = first ? first.name : null;
@@ -1348,9 +1501,11 @@
       resolveRound({ kind: 'hold' });
       return;
     }
-    if (npcAt(nc, nr)) {
+    const npc = npcAt(nc, nr);
+    if (npc) {
       // Bump-to-talk, the same verb as bump-to-engage. Talking is free:
       // no step spent, no round resolved.
+      if (npc.kind === 'cube') { openFace(); return; }
       state.modal = 'hermit';
       log('A HOODED PROCESS RESOLVES OVT OF THE STATIC.', 'good');
       return;
@@ -1724,7 +1879,7 @@
       const k = key(p.c, p.r);
       if (!state.seen.has(k)) continue;
       if (p.hidden && !state.revealed.has(k)) continue;
-      const col = p.kind === 'stairs' ? 'var(--gold)'
+      const col = p.kind === 'stairs' || p.kind === 'cube' ? 'var(--gold)'
                 : p.kind === 'chest' ? 'var(--shell)' : 'var(--blood)';
       g += `<rect x="${p.c + .22}" y="${p.r + .22}" width=".56" height=".56"
                   fill="${col}" opacity=".95"/>`;
@@ -2068,6 +2223,41 @@
   const cubeEl = document.getElementById('cube');
   const cubeTakeEl = document.getElementById('cube-take');
   if (cubeTakeEl) cubeTakeEl.addEventListener('click', () => { takeCube(); draw(); });
+  const faceEl = document.getElementById('face');
+  const faceRowsEl = document.getElementById('face-rows');
+  if (faceRowsEl) faceRowsEl.addEventListener('click', e => {
+    const row = e.target.closest('[data-tile]');
+    if (!row || row.disabled || !tapOk()) return;
+    chooseTile(row.dataset.tile);
+    draw();
+  });
+  // Tap outside the card closes the face, same as ESC. The card itself
+  // swallows the click, so only the dim backdrop dismisses.
+  if (faceEl) faceEl.addEventListener('click', e => {
+    if (e.target !== faceEl || !tapOk()) return;
+    closeFace(); draw();
+  });
+
+  // Four rows: ID, affix label, state. Rebuilt on open; the buttons carry
+  // their own disabled flag so the click handler never has to re-derive it.
+  function renderFace() {
+    if (!faceRowsEl) return;
+    faceRowsEl.innerHTML = FACE.tiles.map((t, i) => {
+      const cleared = state.face.cleared.includes(t.id);
+      const sealed = !tileUnlocked(t.id);
+      const st = cleared ? 'CLEARED' : sealed ? 'SEALED' : 'OPEN';
+      const tint = t.archon ? 'blood' : 'cyan';
+      return `<button class="starter${cleared ? ' cleared' : ''}${sealed ? ' sealed' : ''}"
+                      data-tile="${t.id}" style="--tint:var(--${tint})"
+                      ${cleared || sealed ? 'disabled' : ''}
+                      aria-label="${t.id}, ${state.face.affix[t.id] || ''}, ${st}">
+                <span class="st-key">${i + 1}</span>
+                <span class="st-name">${t.id}</span>
+                <span class="st-role">${state.face.affix[t.id] || '—'}</span>
+                <span class="st-state">${st}</span>
+              </button>`;
+    }).join('');
+  }
   const startersEl = document.getElementById('starters');
 
   // Starter cards, built once from the numbers bible. Presentation-layer
@@ -2135,12 +2325,27 @@
     draw();
   });
   document.getElementById('again').addEventListener('click', () => window.location.reload());
+  // The face is sealed; the walk back to town keeps everything. What comes
+  // after a sealed face is a later order.
+  document.getElementById('win-return').addEventListener('click', () => {
+    if (!tapOk() || state.over !== 'WIN') return;
+    loadTown(); draw();
+  });
   document.getElementById('sever-again').addEventListener('click', () => window.location.reload());
+  document.getElementById('sever-return').addEventListener('click', () => {
+    if (!tapOk()) return;
+    wipe(); draw();
+  });
 
   function syncOverlays() {
     modalEl.classList.toggle('open', state.modal === 'exit');
     hermitEl.classList.toggle('open', state.modal === 'hermit');
     cubeEl.classList.toggle('open', state.modal === 'cube');
+    if (faceEl) {
+      const faceOpen = state.modal === 'face';
+      if (faceOpen && !faceEl.classList.contains('open')) renderFace();
+      faceEl.classList.toggle('open', faceOpen);
+    }
     winEl.classList.toggle('open', state.over === 'WIN');
     severEl.classList.toggle('open', state.over === 'SEVERED');
 
@@ -2158,6 +2363,10 @@
 
     if (state.modal === 'exit') {
       const onFloor = state.drops.length;
+      // Same prop, two verbs: the tutorial descends, a face tile extracts.
+      document.getElementById('dlg-eyebrow').textContent = state.tile ? 'EXTRACT' : 'DESCENT';
+      document.getElementById('dlg-title').textContent = state.tile
+        ? 'EXTRACT TO THE REFVGE?' : 'Would you like to leave this floor?';
       document.getElementById('dlg-note').textContent = onFloor
         ? 'THE FLOOR IS QUIET. ' + onFloor + ' DROP' + (onFloor > 1 ? 'S' : '')
           + ' STILL LYING THERE.'
@@ -2165,6 +2374,7 @@
     }
 
     if (state.over === 'SEVERED') {
+      document.getElementById('sever-return').hidden = !canWipe();
       const dead = state.foes.filter(f => f.hp <= 0).length;
       document.getElementById('sever-stats').innerHTML = [
         ['SVRVIVED TO TVRN', state.turn],
@@ -2175,6 +2385,13 @@
     }
 
     if (state.over === 'WIN') {
+      // Two wins share the box: the tutorial descent (RECOMPILE reloads) and
+      // the Archon down (NIGREDO SEALED, RETVRN walks back to town).
+      const sealed = state.face.sealed;
+      document.getElementById('win-title').textContent =
+        sealed ? 'NIGREDO SEALED.' : "YOU'RE WINNER!!!";
+      document.getElementById('again').hidden = sealed;
+      document.getElementById('win-return').hidden = !sealed;
       const flux = state.bag.items.filter(i => i.kind === 'FLUX').length;
       const data = state.bag.items.filter(i => i.kind === 'DATA').length;
       const dead = state.foes.filter(f => f.hp <= 0).length;
@@ -2232,9 +2449,10 @@
       : liveFoes().length + ' / ' + state.foes.length + ' ENEMIES';
 
     const prompt = document.getElementById('prompt');
-    if (state.over === 'WIN') prompt.textContent = 'FLOOR 01 COMPLETE.';
+    if (state.over === 'WIN') prompt.textContent = state.face.sealed ? 'NIGREDO SEALED.' : 'FLOOR 01 COMPLETE.';
     else if (state.over === 'SEVERED') prompt.textContent = 'THE WORK ENDS.';
-    else if (state.over === 'CLEARED') prompt.textContent = 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
+    else if (state.over === 'CLEARED') prompt.textContent = state.tile
+      ? 'TILE QUIET \u2014 THE EXTRACT IS OPEN.' : 'FLOOR QUIET \u2014 THE DESCENT IS OPEN.';
     else if (state.pending)
       prompt.textContent = state.pending.member.name + (isCoarse()
         ? ' \u2014 TAP AN ENEMY IN THE WASH \u00b7 CANCEL BACKS OUT'
@@ -2289,7 +2507,7 @@
   // Crawl and tactical combat use different VITAE scales, so state crosses
   // the seam as a FRACTION of max: hp/vitae out, vitae/maxVitae back in.
   const COMBAT_ID = { OPERATOR: 'op', CALX: 'calx', CINIS: 'cinis', GVTTA: 'gvtta' };
-  const COMBAT_TPL = { TESTA: 't', SILIQVA: 's' };
+  const COMBAT_TPL = { TESTA: 't', SILIQVA: 's', ARCHON: 'a' };
 
   // Placeholder crawl -> tactical transition. Full-screen flash: void black,
   // gold rule lines, ENGAGED wordmark. Holds ~0.8s, then hands off to the
@@ -2359,15 +2577,20 @@
         (mods[cid] = mods[cid] || {})[slot.bank] = d;
       }
     }
-    // Floor 2+ chambers field 2-3 foes. The crawl pack is honest -- only
-    // touched foes are severed on the board -- so the shortfall is made up
-    // with srcId-less reinforcements the write-back already ignores.
-    if (state.floor >= 1 && foes.length) {
+    // Every chamber past floor 1 fields 2-3 foes. The crawl pack is honest
+    // -- only touched foes are severed on the board -- so the shortfall is
+    // made up with srcId-less reinforcements the write-back already ignores.
+    if (F !== FLOORS[0] && foes.length) {
       const want = Math.min(3, Math.max(foes.length, 2 + (Math.random() < 0.5 ? 1 : 0)));
       while (foes.length < want)
         foes.push({ tpl: Math.random() < 0.5 ? 't' : 's', frac: 1 });
     }
     if (window.DW_SFX) DW_SFX.play('combatStart');
+    // AMPVLLA spoils are shown on the victory screen but credited in onEnd,
+    // AFTER the chamber writes back the doses it drank: crediting them at
+    // roll time would be clobbered by that write-back, and the cap must be
+    // measured against the post-fight satchel.
+    let spoilAmps = 0;
     combatTransition(() => window.DW_COMBAT.start({
       fight: 1,
       party,
@@ -2385,6 +2608,11 @@
           const k = rollKill();
           haul.argent += k.argent;
           if (!k.item) continue;
+          if (k.item.kind === 'AMPVLLA') {
+            spoilAmps++;
+            haul.items.push(spoilCard(k.item));
+            continue;
+          }
           state.bag.items.push({ kind: k.item.kind, label: k.item.label, flux: k.item.flux,
                                  bank: k.item.bank, sprite: k.item.sprite, rarity: k.item.rarity });
           haul.items.push(spoilCard(k.item));
@@ -2427,6 +2655,7 @@
           log('DRIVEN BACK. THE CRAWL RESVMES.', 'bad');
         }
         if (res.items) state.ampoules = Math.max(0, res.items.AMPVLLA | 0);
+        if (spoilAmps) { giveAmpoules(spoilAmps); spoilAmps = 0; }
         if (res.won && opts.sacrifice) hermitSacrifice();
         checkEnd();
         draw();
@@ -2475,6 +2704,15 @@
       if (k === 'enter' || k === ' ' || k === 'escape' || k === '1') { takeCube(); draw(); }
       return;
     }
+    // The face: 1-4 enters a tile, ESC steps back from the Cube.
+    if (state.modal === 'face') {
+      e.preventDefault();
+      const idx = ['1', '2', '3', '4'].indexOf(k);
+      if (idx >= 0) chooseTile(FACE.tiles[idx].id);
+      else if (k === 'escape') closeFace();
+      draw();
+      return;
+    }
     // The Hermit's bargain has no escape key: the choice is the only door.
     if (state.modal === 'hermit') {
       e.preventDefault();
@@ -2492,6 +2730,12 @@
     // screen: reading your haul after the descent is half the reward.
     if (k === 'i') { e.preventDefault(); openInv(); draw(); return; }
     if (k === 'm' && window.DW_SFX) { e.preventDefault(); log(DW_SFX.toggle() ? 'AVDIO MVTED.' : 'AVDIO LIVE.', 'good'); draw(); return; }
+    // The sever screen's RETVRN answers to ENTER / SPACE as well as a tap.
+    if (canWipe() && (k === 'enter' || k === ' ')) { e.preventDefault(); wipe(); draw(); return; }
+    // So does the sealed win's RETVRN (the tutorial win keeps RECOMPILE only).
+    if (state.over === 'WIN' && state.face.sealed && (k === 'enter' || k === ' ')) {
+      e.preventDefault(); loadTown(); draw(); return;
+    }
     if (finished()) return;
 
     // ? is a reference lookup, so it stays available mid-round.
@@ -3189,7 +3433,10 @@
                   lead, memberAt, foeTarget, validTargets, resolveRound,
                   previewIntent, canAct, actionsLeft, stepsMax, applyOp, rollKill,
                   loadFloor, recruit, chooseStarter, recomputeFOV,
-                  hermitSacrifice, takeCube, enterCombat, debugSacrifice };
+                  hermitSacrifice, takeCube, enterCombat, debugSacrifice,
+                  tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile, extract, wipe,
+                  giveAmpoules, collectDrops,
+                  get F() { return F; } };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
   // at boot so the modal cannot drift from data/balance.js.

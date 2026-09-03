@@ -70,7 +70,7 @@ const stage = document.getElementById('stage');
 stage.setAttribute = (k, v) => { if (k === 'viewBox') viewBoxes.push(v); };
 
 const root = path.join(__dirname, '..');
-for (const f of ['data/floor01.js', 'data/floor02.js', 'data/balance.js', 'data/fxsheets.js',
+for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/town.js', 'data/balance.js', 'data/fxsheets.js',
                  'src/sprites.js', 'src/game.js']) {
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
@@ -90,7 +90,7 @@ const bootVB = viewBoxes[viewBoxes.length - 1];
 
 // Descend. loadFloor must rewrite the frame for the NEW geometry.
 viewBoxes.length = 0;
-T.loadFloor(1);
+T.loadFloor(F2);
 ok(viewBoxes.length > 0, 'descent rewrites the stage viewBox');
 const [x, y, w, h] = (viewBoxes[viewBoxes.length - 1] || '0 0 0 0').split(' ').map(Number);
 // 800x600 box, 44px min tiles -> fits 18x13 tiles: floor 2 (17x12) fits whole.

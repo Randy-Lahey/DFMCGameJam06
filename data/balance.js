@@ -78,8 +78,11 @@
       argentMax: 12,
       itemChance: 0.5,
       items: [
-        { kind: 'FLUX', label: 'FLUX CELL', sprite: 'flux',     weight: 60 },
-        { kind: 'DATA', label: 'DATA BANK', sprite: 'databank', weight: 30 },
+        { kind: 'FLUX',    label: 'FLUX CELL',     sprite: 'flux',     weight: 55 },
+        { kind: 'DATA',    label: 'DATA BANK',     sprite: 'databank', weight: 30 },
+        // ~5% of kills net (itemChance x weight): about 0.9 doses per full
+        // face pass against a satchel of 3. Survival-horror tight by design.
+        { kind: 'AMPVLLA', label: 'AMPVLLA VITAE', sprite: 'ampvlla',  weight: 10 },
       ],
       // DATA BANK sub-roll pool. Found banks leave the pool permanently
       // (no duplicate drops); once empty, a DATA roll pays out as FLUX.
@@ -107,6 +110,11 @@
     foes: {
       TESTA:   { vitae: 6, atk: 7, def: 2, aggro: 5, ai: 'flank',    type: 'QLIPHOTH', sprite: 'testa' },
       SILIQVA: { vitae: 4, atk: 8, def: 0, aggro: 6, ai: 'skirmish', type: 'QLIPHOTH', sprite: 'siliqva' },
+      // THE ARCHON OF NIGREDO, THRONVS only. Placeholder: the chamber fights
+      // it with the sacrifice-fight template (combat.js FOE_TPL.a: 40 VITAE,
+      // ATK 9, DEF 3). Crawl VITAE is that on the crawl's ~1/3 scale, same
+      // as TESTA 20 -> 6. Ward asymmetry is a later order.
+      ARCHON:  { vitae: 12, atk: 9, def: 3, aggro: 6, ai: 'flank',    type: 'ARCHON',   sprite: 'archon' },
     },
 
     // OPERATIONS.
