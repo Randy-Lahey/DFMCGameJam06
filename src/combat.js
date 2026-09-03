@@ -1857,7 +1857,7 @@ window.addEventListener("resize",placeEndBtn);   // once: initLogic runs once pe
 // no ids inside (the markup is per gauge), no handlers.
 // Gauge labels are an open ruling (PNEUMA/CYCLES vs MANA/MOVEMENT): two
 // strings, nothing else in the vocabulary depends on them.
-const GAUGE_LABEL_L="CYCLES", GAUGE_LABEL_R="PNEUMA";
+const GAUGE_LABEL_L="MOVEMENT", GAUGE_LABEL_R="MANA";
 const DWC_GAUGES=true;    // ruling C: CYCLES left, PNEUMA right, current unit
 function drawGauges(u){
   const L=document.getElementById("dwc-gauge-l"), R=document.getElementById("dwc-gauge-r");

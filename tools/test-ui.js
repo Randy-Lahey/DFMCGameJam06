@@ -339,7 +339,7 @@ console.log('-- END TVRN plaque');
 // Round-2 ruling C: CYCLES pips left, PNEUMA coil right, for the current unit.
 console.log('-- gauges');
 {
-  ok(/const GAUGE_LABEL_L="CYCLES", GAUGE_LABEL_R="PNEUMA";/.test(code), 'gauge labels are the two constants (rename = two strings)');
+  ok(/const GAUGE_LABEL_L="MOVEMENT", GAUGE_LABEL_R="MANA";/.test(code), 'gauge labels are the two constants (rename = two strings)');
   ok(/const DWC_GAUGES=true;/.test(code), 'gauges are switched on');
   ok(code.includes('function drawGauges('), 'drawGauges exists');
   ok(bare.includes('.dwc-gauge[hidden]') && bare.includes('.dwc-g-pip') && bare.includes('.dwc-g-fill'), 'sheet styles the gauge, its pips and its fill');
@@ -372,15 +372,15 @@ console.log('-- gauges');
   const u = T.cur(); u.maxCycles = 4; u.cycles = 3; u.maxPneuma = 14; u.pneuma = 7; T.drawHud();
   const L = byId['dwc-gauge-l'], R = byId['dwc-gauge-r'];
   ok(L.hidden === false && R.hidden === false, 'battle: both gauges shown');
-  ok(L.attrs['aria-label'] === 'CYCLES 3 of 4' && L.attrs['role'] === 'img', 'left gauge aria: ' + L.attrs['aria-label']);
-  ok(R.attrs['aria-label'] === 'PNEUMA 7 of 14' && R.attrs['role'] === 'img', 'right gauge aria: ' + R.attrs['aria-label']);
+  ok(L.attrs['aria-label'] === 'MOVEMENT 3 of 4' && L.attrs['role'] === 'img', 'left gauge aria: ' + L.attrs['aria-label']);
+  ok(R.attrs['aria-label'] === 'MANA 7 of 14' && R.attrs['role'] === 'img', 'right gauge aria: ' + R.attrs['aria-label']);
   const pips = L.innerHTML.match(/class="dwc-g-pip[^"]*"/g) || [];
   ok(pips.length === 4 && pips.filter(p => /dwc-spent/.test(p)).length === 1 && !/dwc-spent/.test(pips[2]) && /dwc-spent/.test(pips[3]),
      'four pips, exactly the last one spent (' + pips.join(' ') + ')');
   ok(R.innerHTML.includes(">7/14<"), 'coil shows the 7/14 numeral');
-  ok(/CYCLES/.test(L.innerHTML) && /PNEUMA/.test(R.innerHTML), 'labels rendered from the constants');
+  ok(/MOVEMENT/.test(L.innerHTML) && /MANA/.test(R.innerHTML), 'labels rendered from the constants');
   u.pneuma = 0; T.drawHud();
-  ok(R.attrs['aria-label'] === 'PNEUMA 0 of 14', 'drains: aria follows the pool (' + R.attrs['aria-label'] + ')');
+  ok(R.attrs['aria-label'] === 'MANA 0 of 14', 'drains: aria follows the pool (' + R.attrs['aria-label'] + ')');
 }
 
 console.log(fail ? '\n' + fail + ' FAILED (' + pass + ' passed)' : '\nall ' + pass + ' checks passed');
