@@ -192,5 +192,123 @@ console.log('-- build wiring');
   ok(/^[a-z0-9]+\.js$/.test('icons.js'), 'icons.js matches the build tag regex');
 }
 
+// ------------------------------------------------------------ ability dock
+// Round-2 HUD: square icon slots, state as an overlay class, satchel segment.
+// Source checks first, then a stubbed-DOM run of drawHud with every state
+// forced at once -- the same ten states the Playwright sweep screenshots.
+console.log('-- dock');
+{
+  const hud = html ? html[1] : '';
+  for (const id of ['dwc-dock', 'dwc-banks', 'dwc-satchel', 'dwc-gauge-l', 'dwc-gauge-r', 'dwc-endbtn']) {
+    ok(hud.includes('id="' + id + '"'), 'DWC_HTML has #' + id);
+  }
+  ok(hud.includes('class="dwc-sep"'), 'DWC_HTML has the satchel divider');
+  ok(/id="dwc-gauge-l" class="dwc-gauge" hidden/.test(hud) && /id="dwc-gauge-r" class="dwc-gauge" hidden/.test(hud),
+     'gauge placeholders ship hidden until their own phase');
+  ok(!code.includes('op-nm'), 'no .op-nm anywhere: the slot carries no name');
+  ok(!bare.includes('.op-nm') && !bare.includes('.op-meta') && !bare.includes('.b-recharge'),
+     'old two-row anatomy rules are gone from the sheet');
+  for (const st of ['st-burnt', 'st-recharge', 'st-spent', 'st-need', 'st-strain']) {
+    ok(bare.includes('.' + st), 'sheet styles .' + st);
+  }
+  ok(bare.includes('conic-gradient('), 'recharge sweep is a CSS conic-gradient');
+  ok(/--slot\s*:\s*48px/.test(bare) && /--slot\s*:\s*56px/.test(bare), 'slot size tokens: 48px phone, 56px desktop');
+  ok(/min-width\s*:\s*44px/.test(bare), 'slots never shrink below the 44px tap floor');
+  // Offline rule extended: data: URLs are fine, but only inline SVG art.
+  const datas = bare.match(/url\(\s*["']?data:[^;,)]*/g) || [];
+  ok(datas.length > 0 && datas.every(d => /data:image\/svg\+xml/.test(d)), 'every data: url() in the sheet is inline SVG (' + datas.length + ')');
+  ok(/#dwc-root #dwc-hud\{[^}]*position:absolute/.test(bare), '#dwc-hud overlays the board (position:absolute)');
+  ok(/#dwc-root #dwc-hud\{[^}]*pointer-events:none/.test(bare), '#dwc-hud fade zone passes taps through to the board');
+  ok(/@media \(max-height:460px\)\{[\s\S]*?#dwc-root #dwc-board\{[^}]*padding-bottom:var\(--dock-h\)/.test(bare),
+     'landscape phone insets the board so the dock never covers a tile');
+  ok(code.includes('PNEUMA, RANGE'), 'slot aria-labels spell PNEUMA as the stat line does');
+  ok(/const rangeText=/.test(code), 'rangeText helper exists (numeric range for aria + stat line)');
+  ok(code.includes('hudArmed.clear()') && code.includes('hudArmed.add(u.id)'), 'learnability set is reset per fight and marked on arming');
+
+  // ---- stubbed-DOM run: force all states at once
+  const vm = require('vm');
+  function el(tag) {
+    const t = { tag, attrs: {}, style: {}, children: [], className: '', innerHTML: '', textContent: '', disabled: false,
+      classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } } };
+    t.style.setProperty = (k, v) => { t.style[k] = String(v); };
+    t.style.removeProperty = () => {};
+    t.setAttribute = (k, v) => { t.attrs[k] = String(v); };
+    t.getAttribute = k => (k in t.attrs ? t.attrs[k] : null);
+    t.appendChild = c => { t.children.push(c); return c; };
+    t.removeChild = () => {}; t.insertBefore = () => {}; t.remove = () => {};
+    t.addEventListener = () => {}; t.removeEventListener = () => {}; t.focus = () => {};
+    t.querySelector = () => el('div'); t.querySelectorAll = () => [];
+    t.getBoundingClientRect = () => ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 });
+    t.getBBox = () => ({ x: 0, y: 0, width: 10, height: 10 });
+    t.childNodes = []; t.firstChild = null;
+    return t;
+  }
+  const byId = {};
+  const doc = {
+    getElementById: id => (byId[id] = byId[id] || el('div')),
+    createElement: el, createElementNS: (ns, tag) => el(tag),
+    querySelector: () => el('div'), querySelectorAll: () => [],
+    addEventListener() {}, removeEventListener() {},
+    activeElement: null, body: el('body'), documentElement: el('html'), head: el('head'),
+  };
+  // Timers are parked, not run: flashStat's redraw must not wipe the warn we assert on.
+  const timers = [];
+  const ctx = { document: doc, console, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {},
+    requestAnimationFrame: () => 0, matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
+    innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, navigator: { maxTouchPoints: 0 },
+    addEventListener() {}, removeEventListener() {} };
+  ctx.window = ctx; ctx.self = ctx;
+  vm.createContext(ctx);
+  for (const f of ['data/balance.js', 'src/icons.js', 'src/combat.js']) vm.runInContext(src(f), ctx, { filename: f });
+  ctx.DW_COMBAT.start({ fight: 1, party: [{ id: 'op', frac: 1 }], items: { AMPVLLA: 2 } });
+  const T = ctx.__DWC_TEST, s = T.state;
+  // seat, then start round 1 (OPERATOR acts first on fight 1)
+  const free = [];
+  for (let x = 0; x < 2; x++) for (let y = 0; y < 12; y++) if (!s.units.some(u => u.alive && u.x === x && u.y === y)) free.push([x, y]);
+  while (s.toPlace.length) { const u = s.units.find(v => v.id === s.toPlace.shift()); [u.x, u.y] = free.shift(); }
+  s.phase = 'battle'; T.newRound();
+  const u = T.cur();
+  ok(!!u && u.id === 'op', 'OPERATOR has the first turn in the stub fight');
+  const stat = byId['dwc-stat'];
+  ok(/<b>OPERATOR<\/b> — PERCVSSIO/.test(stat.innerHTML), 'first turn, nothing armed: stat line lists the banks by name -- ' + stat.innerHTML);
+  ok(/· AMPVLLA$/.test(stat.innerHTML), 'OPERATOR with a satchel also lists AMPVLLA');
+
+  u.banks = ['PERCVSSIO', 'ABRASIO', 'CONCRETIO', 'IMPVLSVS', 'IMMOLATIO', 'IACVLVM'];
+  u.burnt = { CONCRETIO: true }; u.cds = { IMPVLSVS: 1 }; u.cast = { ABRASIO: true, 'item:AMPVLLA': true };
+  u.pneuma = 4; u.strain = { IACVLVM: 7 };
+  s.sel = 'PERCVSSIO';
+  byId['dwc-banks'].children.length = 0; byId['dwc-satchel'].children.length = 0;
+  T.drawHud();
+  const slots = byId['dwc-banks'].children, items = byId['dwc-satchel'].children;
+  ok(slots.length === 6, 'one slot per bank (' + slots.length + ')');
+  ok(items.length === 1, 'one satchel slot for the ampoule');
+  const cls = slots.map(b => b.className);
+  const stOf = c => (c.match(/\bst-[a-z]+/g) || []);
+  ok(cls.every(c => stOf(c).length <= 1), 'never more than one st-* class on a slot');
+  ok(/\bsel\b/.test(cls[0]) && stOf(cls[0]).length === 0, 'armed PERCVSSIO: .sel, no state overlay');
+  ok(stOf(cls[1])[0] === 'st-spent', 'ABRASIO cast this turn: st-spent');
+  ok(stOf(cls[2])[0] === 'st-burnt', 'CONCRETIO burnt: st-burnt');
+  ok(stOf(cls[3])[0] === 'st-recharge' && slots[3].style['--p'] === '0.5', 'IMPVLSVS cd 1 of 2: st-recharge, --p 0.5 (' + slots[3].style['--p'] + ')');
+  ok(stOf(cls[4])[0] === 'st-need', 'IMMOLATIO costs 5 with 4 pneuma: st-need');
+  ok(stOf(cls[5])[0] === 'st-strain' && slots[5].style['--p'] === '0.7', 'IACVLVM strain 7/10: st-strain, --p 0.7 (' + slots[5].style['--p'] + ')');
+  ok(/RECHARGE 1$/.test(slots[3].attrs['aria-label']) && /STRAIN 7 OF 10$/.test(slots[5].attrs['aria-label']),
+     'aria-labels carry the state: ' + slots[3].attrs['aria-label'] + ' | ' + slots[5].attrs['aria-label']);
+  ok(/^PERCVSSIO, 4 PNEUMA, RANGE 1$/.test(slots[0].attrs['aria-label']), 'ready slot aria: name, cost, numeric range');
+  ok(/RANGE 0/.test(slots[1].attrs['aria-label']), 'sweep range reads 0');
+  ok(/RANGE 2–4/.test(slots[5].attrs['aria-label']), 'ranged reads min–max');
+  ok(slots.every(b => !/op-nm/.test(b.innerHTML)), 'no name span inside any slot');
+  ok(slots.every(b => /class="op-key"/.test(b.innerHTML) && /class="op-cost"/.test(b.innerHTML)), 'every slot has a hotkey plaque and a cost');
+  ok(/class="op-badge"[^>]*>1</.test(slots[3].innerHTML), 'recharge slot shows the remaining count as its badge');
+  ok(/class="op-badge"[^>]*>7</.test(slots[5].innerHTML), 'strain slot shows the strain count as its badge');
+  ok(/st-spent/.test(items[0].className) && /class="op-dose"[^>]*>2</.test(items[0].innerHTML), 'spent ampoule: st-spent, dose 2 in the corner');
+  ok(/<b>PERCVSSIO<\/b> · <b>4◆<\/b> · <b>1<\/b>/.test(stat.innerHTML), 'armed: stat line reads NAME · COST · RANGE -- ' + stat.innerHTML);
+  s.sel = 'item:AMPVLLA'; T.drawHud();
+  ok(/AMPVLLA VITAE<\/b> · <b>2◆<\/b> · <b>0–5<\/b>/.test(stat.innerHTML), 'armed item: stat line reads name, cost, range -- ' + stat.innerHTML);
+  // Tapping an unavailable slot still answers via flashStat (whyNot).
+  s.sel = null; T.drawHud();
+  byId['dwc-banks'].children[2].onclick();
+  ok(/BVRNT/.test(stat.innerHTML) && /class="warn"/.test(stat.innerHTML), 'tapping the burnt slot flashes whyNot in the stat line');
+}
+
 console.log(fail ? '\n' + fail + ' FAILED (' + pass + ' passed)' : '\nall ' + pass + ' checks passed');
 process.exit(fail ? 1 : 0);

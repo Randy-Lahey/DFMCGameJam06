@@ -80,7 +80,8 @@ const DWC_CSS = `
   /* --- controls ----------------------------------------------------------- */
   --hit:44px;             /* minimum touch target                            */
   --chip:44px;            /* timeline chip edge                              */
-  --op-w:208px;           /* ability button track width (widest name + badge) */
+  --slot:48px;            /* dock slot edge: 48 phone, 56 desktop (media)    */
+  --dock-h:calc(var(--slot) + 16px);   /* dock row: slot + 8px glow room each side */
 
   /* --- focus ring (keyboard only) ---------------------------------------- */
   --focus:var(--teal-hi);
@@ -154,11 +155,15 @@ const DWC_CSS = `
 
 /* ==========================================================================
    3. LAYOUT   timeline strip / board / hud
-   Column flex. The board takes the slack; the HUD is in normal flow at the
-   bottom, so it can NEVER cover the board.
+   Column flex. The board takes ALL the slack, down to the bottom of the wrap.
+   The HUD is an OVERLAY pinned to that bottom edge over a translucent void
+   gradient, so the board reads through it (ruling: overlay, not in-flow).
+   The HUD itself lets pointer events fall through to the board; only the
+   stat line and the dock catch them.
    ========================================================================== */
 
 #dwc-root #dwc-wrap{
+  position:relative;
   display:flex; flex-direction:column;
   height:100%; min-height:0;
 }
@@ -213,28 +218,32 @@ const DWC_CSS = `
 }
 #dwc-root #dwc-board svg{ width:100%; height:100%; display:block; }
 
-/* --- hud (bottom, respects the home indicator) --------------------------- */
+/* --- hud (overlay on the bottom of the board, respects the home indicator)
+   Column: the stat line above, the dock row below. --------------------------- */
 #dwc-root #dwc-hud{
-  flex:0 0 auto;
-  display:grid;
-  grid-template-columns:1fr auto;
-  grid-template-areas:
-    "stat stat"
-    "ops  end";
-  gap:var(--s2);
-  align-items:stretch;
-  padding:var(--s2) calc(var(--s3) + var(--sa-r))
+  position:absolute; left:0; right:0; bottom:0; z-index:12;
+  pointer-events:none;
+  display:flex; flex-direction:column; gap:var(--s1);
+  padding:var(--s3) calc(var(--s3) + var(--sa-r))
           calc(var(--s2) + var(--sa-b)) calc(var(--s3) + var(--sa-l));
-  min-height:56px;
+  background:linear-gradient(180deg, transparent 0, #04090bd9 30%, #04090bf5 100%);
+}
+/* the lip: a hairline where the void goes opaque, and the silkscreen grid
+   (8px cyan at 3% -- reads as etched board, not texture) confined to the
+   opaque part below it. z-index:-1 keeps it under the stat line and dock
+   inside the hud's own stacking context. */
+#dwc-root #dwc-hud::before{
+  content:""; position:absolute; left:0; right:0; top:30%; bottom:0; z-index:-1;
+  pointer-events:none;
   border-top:var(--hair) solid var(--bd);
-  background-color:var(--surf-1);
-  /* silkscreen: a 8px cyan grid at 3% -- reads as etched board, not texture */
+  box-shadow:var(--panel-lip);
   background-image:
     linear-gradient(#39c8c108 var(--hair), transparent var(--hair)),
     linear-gradient(90deg, #39c8c108 var(--hair), transparent var(--hair));
   background-size:8px 8px;
-  box-shadow:var(--panel-lip);
 }
+#dwc-root #dwc-stat,
+#dwc-root #dwc-dock{ pointer-events:auto; }
 
 
 /* ==========================================================================
@@ -244,11 +253,12 @@ const DWC_CSS = `
 /* NOTE: block, not flex -- the stat line is mixed text + <b> runs, and a flex
    container would shatter them into anonymous items and kill the ellipsis. */
 #dwc-root #dwc-stat{
-  grid-area:stat; min-width:0;
+  min-width:0;
   color:var(--dim);
   font-size:var(--fs-sm); letter-spacing:var(--ls-2);
-  text-transform:uppercase;
-  white-space:normal; overflow:hidden;
+  text-transform:uppercase; text-align:center;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  text-shadow:0 1px 2px #000, 0 0 6px #04090b;   /* it sits over the board */
 }
 /* silkscreen tick: the house mark that opens every label */
 #dwc-root #dwc-stat::before{
@@ -354,154 +364,198 @@ const DWC_CSS = `
 }
 #dwc-root button:disabled:hover{ background:var(--surf-1); border-color:var(--bd); }
 
-/* --- ability button ------------------------------------------------------
-   ANATOMY (two grid rows, four columns):
-     .op-key | .op-ic | .op-nm    | .op-badge
-     .op-key | .op-ic | .op-meta  | .op-badge
-   Key + icon + badge span both rows.
+/* --- ability slot ----------------------------------------------------------
+   ANATOMY (Diablo-II dock slot: one square, NO name -- the name goes to the
+   stat line when the slot is armed):
+     .op-key    top-left hotkey plaque
+     .op-ic     the icon, filling the slot; state overlays paint on its
+                ::before (wash) and ::after (cracks / recharge sweep)
+     .op-cost   bottom-right pneuma cost
+     .op-dose   top-right dose count (satchel items only)
+     .op-badge  state number (recharge turns / strain), placed per state
+   State is ONE st-* class per slot, hardest first:
+     burnt > recharge > spent > need > strain.
+   The slot is flex:0 1 var(--slot): with too many banks it shrinks to 44px
+   (the touch minimum) before the track scrolls. aspect-ratio keeps it square.
    -------------------------------------------------------------------------- */
 #dwc-root .op{
-  flex:0 0 auto;
-  display:grid;
-  grid-template-columns:auto auto minmax(0,1fr) auto;
-  grid-template-areas:
-    "key ic nm   nm"
-    "key ic meta badge";
-  align-items:center;
-  column-gap:var(--s2); row-gap:0;
-  width:var(--op-w); max-width:70vw;
-  padding:var(--s1) var(--s2);
-  text-align:left;
+  position:relative; overflow:hidden;
+  flex:0 1 var(--slot); min-width:44px;
+  width:var(--slot); height:auto; aspect-ratio:1/1; min-height:44px;
+  padding:0; margin:0;
+  border:var(--hair) solid var(--st-ready); border-radius:var(--r1);
+  background:var(--surf-2);
+  color:var(--white);
 }
 
-/* hotkey plaque: 1-4, stencilled */
+/* hotkey plaque: 1-4, gold on ink, top-left */
 #dwc-root .op-key{
-  grid-area:key;
+  position:absolute; left:2px; top:2px; z-index:3;
   display:flex; align-items:center; justify-content:center;
-  width:16px; height:16px;
-  border:var(--hair) solid var(--bd-live); border-radius:var(--r1);
-  color:var(--dim); background:#020809;
-  font-size:var(--fs-micro); line-height:1; letter-spacing:0;
+  min-width:14px; height:14px; padding:0 2px;
+  border:var(--hair) solid var(--gold-dim); border-radius:var(--r1);
+  color:var(--gold); background:#0b1518;
+  font-size:11px; font-weight:700; line-height:1; letter-spacing:0;
 }
-/* icon slot: holds an inline svg, an img, or a single glyph */
+/* icon: fills the slot; the glyph is (slot - 14px) square. drawHud emits
+   every icon at one size and this rule wins over the width/height attrs. */
 #dwc-root .op-ic{
-  grid-area:ic;
+  position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
-  width:20px; height:20px; flex:0 0 auto;
   color:currentColor; opacity:.9;
 }
 #dwc-root .op-ic svg,
-#dwc-root .op-ic img{ width:100%; height:100%; display:block; }
-/* name */
-#dwc-root .op-nm{
-  grid-area:nm; min-width:0;
-  font-size:var(--fs-md); font-weight:700;
-  text-transform:uppercase; letter-spacing:var(--ls-2);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+#dwc-root .op-ic img{
+  width:calc(var(--slot) - 14px); height:calc(var(--slot) - 14px);
+  max-width:calc(100% - 14px); max-height:calc(100% - 14px);
+  display:block;
 }
-/* cost + range meta */
-#dwc-root .op-meta{
-  grid-area:meta; min-width:0;
-  font-size:var(--fs-xs); letter-spacing:var(--ls-1);
-  color:var(--dim); text-transform:uppercase;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+/* pneuma cost: bottom-right */
+#dwc-root .op-cost{
+  position:absolute; right:3px; bottom:2px; z-index:3;
+  font-size:10px; font-weight:700; line-height:1; letter-spacing:0;
+  color:var(--dim); text-shadow:0 1px 0 #000, 0 0 3px #000;
 }
-#dwc-root .op-meta b{ color:var(--white); font-weight:700; }
+/* dose count: top-right (satchel items) */
+#dwc-root .op-dose{
+  position:absolute; right:3px; top:2px; z-index:3;
+  font-size:10px; font-weight:700; line-height:1; letter-spacing:0;
+  color:var(--dim); text-shadow:0 1px 0 #000;
+}
+/* state number: positioned by the st-* rules below; empty = gone */
+#dwc-root .op-badge{
+  position:absolute; z-index:4; pointer-events:none;
+  font-weight:700; line-height:1; letter-spacing:0;
+}
 
 /* --- icon slot contents (registry output: svg | img | glyph span) ----- */
 #dwc-root .dwi{ display:inline-block; vertical-align:middle;
   pointer-events:none; flex:0 0 auto; }
 #dwc-root .dwi-glyph{ opacity:.7; }
 
-/* --- ability button states ----------------------------------------------- */
-#dwc-root .op{ border-color:var(--st-ready); }
+/* --- ability slot states --------------------------------------------------- */
 #dwc-root .op:hover{ border-color:var(--teal); }
 
-/* selected / armed: gold frame + a solid gold rail down the left edge.
-   The rail is what separates SELECTED from merely UNAVAILABLE at a glance. */
+/* selected / armed: gold frame (doubled by an inset ring) + glow */
 #dwc-root .op.sel{
   border-color:var(--st-sel); color:var(--gold);
-  background:linear-gradient(90deg, var(--gold-ink), var(--surf-2) 60%);
-  box-shadow:inset 3px 0 0 var(--gold), var(--glow-gold);
+  background:var(--gold-ink);
+  box-shadow:inset 0 0 0 1px var(--gold), var(--glow-gold);
 }
-#dwc-root .op.sel .op-key{ border-color:var(--gold-dim); color:var(--gold); }
-#dwc-root .op.sel .op-meta{ color:var(--warn-fg); }
+#dwc-root .op.sel .op-key{ border-color:var(--gold); }
+#dwc-root .op.sel .op-cost{ color:var(--gold); }
 #dwc-root .op.sel:hover{ border-color:var(--gold); }
 
 /* unavailable but still tappable (tapping answers WHY -- keep the pointer) */
 #dwc-root .op.off{
   color:var(--white); border-color:var(--st-off);
   background:var(--surf-1); box-shadow:none;
-  opacity:.72; cursor:pointer;   /* .55 on --dim measured 2.0:1; this clears 4.5 */
+  opacity:.75; cursor:pointer;
 }
-#dwc-root .op.off:hover{ background:var(--surf-2); border-color:var(--bd-live); opacity:.75; }
-#dwc-root .op.off .op-nm{ font-weight:400; }
+#dwc-root .op.off:hover{ background:var(--surf-2); border-color:var(--bd-live); }
 /* selected wins over off (an armed-but-blocked spell still reads as armed) */
-#dwc-root .op.off.sel{ opacity:.8; color:var(--gold); border-color:var(--st-sel);
-  box-shadow:inset 3px 0 0 var(--gold);    /* .off zeroes it later in the cascade */
-  background:linear-gradient(90deg, var(--gold-ink), var(--surf-1) 60%); }
+#dwc-root .op.off.sel{ opacity:.85; color:var(--gold); border-color:var(--st-sel);
+  background:var(--gold-ink);
+  box-shadow:inset 0 0 0 1px var(--gold); }   /* .off zeroes it later in the cascade */
 
-/* --- state badge --------------------------------------------------------- */
-#dwc-root .op-badge{
-  grid-area:badge; justify-self:end; align-self:center;
-  display:inline-flex; align-items:center; gap:3px;
-  padding:1px 3px;
-  max-width:82px; overflow:hidden;
-  border:var(--hair) solid currentColor; border-radius:var(--r1);
-  font-size:var(--fs-micro); line-height:1.5;
-  letter-spacing:0; text-transform:uppercase; white-space:nowrap;
-  text-overflow:ellipsis;
-  color:var(--dim); background:#02080999;
+/* burnt: oxblood wash + hand-drawn cracks over the icon */
+#dwc-root .op.st-burnt{ border-color:var(--st-burnt); }
+#dwc-root .st-burnt .op-ic::before{
+  content:""; position:absolute; inset:0; background:#9e1b2e99;
+}
+#dwc-root .st-burnt .op-ic::after{
+  content:""; position:absolute; inset:0; opacity:.8;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffd3d9' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 2l4 6-2 4 5 5-1 5'/%3E%3Cpath d='M21 4l-5 5 1 4-4 3'/%3E%3Cpath d='M7 8l-4 3'/%3E%3Cpath d='M12 17l5 2 2 3'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+/* recharge: clockwise void sweep; --p = remaining fraction (drawHud sets it) */
+#dwc-root .st-recharge .op-ic{ color:var(--teal); }   /* the un-swept part stays lit */
+#dwc-root .st-recharge .op-ic::after{
+  content:""; position:absolute; inset:0;
+  background:conic-gradient(#04090be6 calc(var(--p) * 1turn), transparent 0);
+}
+#dwc-root .st-recharge .op-badge{
+  inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:16px; color:var(--st-recharge);
+  text-shadow:0 0 4px #000, 0 1px 2px #000, 0 0 8px #000;
+}
+/* spent: icon greyed */
+#dwc-root .st-spent .op-ic{ color:var(--st-off); opacity:.55; }
+#dwc-root .st-spent .op-cost{ color:var(--st-off); }
+/* need: the cost is the problem, so the cost turns danger red */
+#dwc-root .st-need .op-cost{ color:var(--danger-fg); }
+/* strain: dashed gold ring that thickens with --p = strain / BURN_AT */
+#dwc-root .st-strain::before{
+  content:""; position:absolute; inset:-1px; z-index:2; pointer-events:none;   /* sits ON the frame, thickens inward */
+  border:calc(1px + 3px * var(--p)) dashed var(--gold); border-radius:inherit;
+  opacity:.9;
+}
+#dwc-root .st-strain .op-badge{
+  top:5px; right:5px; padding:1px 2px;           /* inside the ring, not on it */
+  border-radius:var(--r1); background:#0b1518cc;
+  font-size:10px; color:var(--gold); text-shadow:0 1px 0 #000;
 }
 #dwc-root .op-badge:empty{ display:none; }
-/* variants */
-#dwc-root .b-recharge{ color:var(--st-recharge); background:#062023cc; }
-#dwc-root .b-spent{    color:#8fb3b0;            border-style:dotted; }
-#dwc-root .b-burnt{    color:#ffd3d9; background:var(--ox); border-color:var(--ox); }
-#dwc-root .b-strain{   color:var(--st-strain);   border-style:dashed; background:#1c160899; }
-#dwc-root .b-need{     color:var(--st-need);     background:var(--gold-ink); }
-#dwc-root .b-dose{     color:var(--dim);         border-color:var(--bd-live); }
 
 /* --- satchel item variant ------------------------------------------------- */
 #dwc-root .op.item{ border-color:var(--st-item); }
 #dwc-root .op.item .op-ic{ color:var(--st-item-sel); }
+#dwc-root .op.item.st-spent .op-ic{ color:var(--st-off); }
 #dwc-root .op.item:hover{ border-color:#a03a2c; }
 #dwc-root .op.item.sel{
   border-color:var(--st-item-sel); color:#e28a76;
-  background:linear-gradient(90deg,#2a0f0a,var(--surf-2) 60%);
-  box-shadow:inset 3px 0 0 var(--st-item-sel), 0 0 8px #d6402a55;
+  background:#2a0f0a;
+  box-shadow:inset 0 0 0 1px var(--st-item-sel), 0 0 8px #d6402a55;
 }
-#dwc-root .op.item.sel .op-meta{ color:#c0806f; }
+#dwc-root .op.item.sel .op-cost,
+#dwc-root .op.item.sel .op-dose{ color:#e28a76; }
 
-/* --- action row: ONE horizontally scrolling track, never a 3-row mess ----- */
-#dwc-root #dwc-banks{
-  grid-area:ops; min-width:0;
-  display:flex; align-items:stretch; gap:var(--s2);
+/* --- the dock: [gauge] banks | satchel [gauge] END TVRN, centred ------------
+   width:max-content + max-width:100% keeps the row only as wide as its
+   content (so the board stays tappable either side of it) while still
+   letting the tracks shrink and then scroll when the banks overflow. */
+#dwc-root #dwc-dock{
+  display:flex; align-items:center; justify-content:center; gap:var(--s2);
+  width:max-content; max-width:100%; min-width:0; margin:0 auto;
+  min-height:var(--dock-h);
+}
+/* gauge placeholders (a later phase fills them); hidden = reserve nothing */
+#dwc-root .dwc-gauge{ width:var(--slot); height:var(--slot); flex:0 0 auto; }
+#dwc-root #dwc-banks,
+#dwc-root #dwc-satchel{
+  display:flex; gap:var(--s2); align-items:center;
+  flex:0 1 auto; min-width:0;
   overflow-x:auto; overflow-y:hidden;
-  padding-bottom:var(--s1);           /* room for the scrollbar */
-  scrollbar-width:thin; scrollbar-color:var(--tealdim) var(--surf-sunk);
+  padding:var(--s2) var(--s1);        /* vertical room for the armed glow */
+  scrollbar-width:thin; scrollbar-color:var(--tealdim) transparent;
 }
-/* Visible affordance #1: the track fades out at both edges, so a clipped
-   button always reads as "there is more this way". */
-#dwc-root #dwc-banks{
-  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 10px,
-                     #000 calc(100% - 20px), transparent 100%);
-          mask-image:linear-gradient(90deg, transparent 0, #000 10px,
-                     #000 calc(100% - 20px), transparent 100%);
+/* the satchel is one slot wide: it never gives up width to the banks track
+   (measured at 390: both shrinking left the ampoule clipped to 41px) */
+#dwc-root #dwc-satchel{ flex-shrink:0; }
+#dwc-root #dwc-banks::-webkit-scrollbar,
+#dwc-root #dwc-satchel::-webkit-scrollbar{ height:3px; }
+#dwc-root #dwc-banks::-webkit-scrollbar-track,
+#dwc-root #dwc-satchel::-webkit-scrollbar-track{ background:transparent; }
+#dwc-root #dwc-banks::-webkit-scrollbar-thumb,
+#dwc-root #dwc-satchel::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
+/* banks | satchel divider: an oxblood hairline that fades at both ends */
+#dwc-root .dwc-sep{
+  flex:0 0 auto; width:1px; align-self:stretch;
+  margin:var(--s1) var(--s1);
+  background:linear-gradient(180deg, transparent, var(--bd-ox), transparent);
 }
-/* visible affordance #2: a thin in-palette rail under the track */
-#dwc-root #dwc-banks::-webkit-scrollbar{ height:4px; }
-#dwc-root #dwc-banks::-webkit-scrollbar-track{ background:var(--surf-sunk); border-radius:2px; }
-#dwc-root #dwc-banks::-webkit-scrollbar-thumb{ background:var(--tealdim); border-radius:2px; }
-#dwc-root #dwc-banks::-webkit-scrollbar-thumb:hover{ background:var(--teal); }
+/* empty satchel: no divider, no empty track eating a gap */
+#dwc-root #dwc-dock.dwc-nosat .dwc-sep,
+#dwc-root #dwc-dock.dwc-nosat #dwc-satchel{ display:none; }
+/* placement: no slots at all, so the row reserves nothing over the board */
+#dwc-root #dwc-dock.dwc-empty{ min-height:0; }
 
-/* --- end turn ------------------------------------------------------------- */
+/* --- end turn: compact oxblood, slot-high, at the dock's right ------------- */
 #dwc-root #dwc-endbtn,
 #dwc-root button.end{
-  grid-area:end; align-self:stretch;
+  flex:0 0 auto; align-self:center;
   display:flex; align-items:center; justify-content:center;
-  flex:0 0 auto;
-  padding:var(--s2) var(--s3);
+  height:var(--slot); min-height:0;
+  padding:0 var(--s3); margin-left:var(--s1);
   border-color:var(--ox); color:var(--danger-fg);
   background:linear-gradient(180deg,#160a0e,#0a1214);
   font-size:var(--fs-sm); font-weight:700;
@@ -699,24 +753,20 @@ const DWC_CSS = `
    10. RESPONSIVE
    ========================================================================== */
 
-/* --- wide / desktop: one HUD row, stat line inline --------------------- */
+/* --- wide / desktop: bigger slots, wider gutters ------------------------- */
 @media (min-width:760px){
+  #dwc-root{ --slot:56px; }
   #dwc-root #dwc-hud{
-    grid-template-columns:minmax(190px,24%) minmax(0,1fr) auto;
-    grid-template-areas:"stat ops end";
-    align-items:center;
     padding-left:calc(var(--s4) + var(--sa-l));
     padding-right:calc(var(--s4) + var(--sa-r));
   }
-  #dwc-root #dwc-stat{ font-size:var(--fs-sm); }
-  #dwc-root .op{ width:220px; max-width:none; }
   #dwc-root #dwc-tl{ padding-left:calc(var(--s4) + var(--sa-l));
                      padding-right:calc(var(--s4) + var(--sa-r)); }
 }
 
 /* --- very narrow phones (<=360px): tighten, never wrap the track ------- */
 @media (max-width:360px){
-  #dwc-root{ --op-w:200px; --chip:40px; }
+  #dwc-root{ --chip:40px; }
   #dwc-root #dwc-hud{ padding-left:calc(var(--s2) + var(--sa-l));
                       padding-right:calc(var(--s2) + var(--sa-r)); }
   #dwc-root #dwc-endbtn{ padding:var(--s2); letter-spacing:var(--ls-2); }
@@ -728,33 +778,34 @@ const DWC_CSS = `
   /* Chips shrink: they are display-only (no handler), so the 44px rule does
      not bind them. Buttons keep the full 44px -- measured, that costs the
      board 10px of height here (294 -> 284), which is cheap for a real tap. */
-  #dwc-root{ --chip:34px; --hit:44px; }
+  #dwc-root{ --chip:34px; --hit:44px; --slot:48px; }   /* phone slots even at 844 wide */
   #dwc-root #dwc-tl{
     gap:var(--s1);
     padding-top:calc(var(--s1) + var(--sa-t)); padding-bottom:var(--s1);
     font-size:var(--fs-xs);
   }
   #dwc-root .dwc-chip{ font-size:var(--fs-md); }
+  /* stat line INLINE left of the dock to save height: three columns so the
+     dock stays centred in the viewport with the stat in the left gutter */
   #dwc-root #dwc-hud{
-    grid-template-columns:minmax(176px,26%) minmax(0,1fr) auto;
-    grid-template-areas:"stat ops end";
+    display:grid;
+    grid-template-columns:minmax(150px,26%) 1fr minmax(0,26%);
     align-items:center;
     gap:var(--s1) var(--s2);
     padding-top:var(--s1);
     padding-bottom:calc(var(--s1) + var(--sa-b));
-    min-height:0;
-    max-height:38vh;
   }
-  /* two short lines beat one ellipsised one: PNEUMA was never visible here */
-  #dwc-root #dwc-stat{ font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3; }
+  /* two short lines beat one ellipsised one */
+  #dwc-root #dwc-stat{
+    grid-column:1; text-align:left;
+    white-space:normal; max-height:2.6em;
+    font-size:var(--fs-xs); letter-spacing:var(--ls-1); line-height:1.3;
+  }
   #dwc-root #dwc-stat::before{ height:9px; }
-  #dwc-root .op{
-    width:188px; padding:2px var(--s2);
-    column-gap:var(--s1);
-  }
-  #dwc-root .op-nm{ font-size:var(--fs-sm); }
-  #dwc-root .op-meta{ font-size:var(--fs-micro); }
-  #dwc-root #dwc-banks{ padding-bottom:2px; }
+  #dwc-root #dwc-dock{ grid-column:2; }
+  /* On portrait and desktop the viewBox's own bottom margin absorbs the
+     overlay; on landscape it does not, so the board gives up the dock's row. */
+  #dwc-root #dwc-board{ padding-bottom:var(--dock-h); }
   #dwc-root #dwc-endbtn{ font-size:var(--fs-xs); }
   #dwc-root #dwc-engage{
     bottom:calc(22% + var(--sa-b)); padding:var(--s2) var(--s5);
@@ -813,12 +864,11 @@ const DWC_CSS = `
   #dwc-root .dwc-chip{ opacity:.8; border-width:2px; }
   #dwc-root .op{ border-width:2px; }
   #dwc-root .op.off{ opacity:.8; }
-  #dwc-root .op-badge{ border-width:2px; }
   #dwc-root button:focus-visible{ outline-width:3px; }
   #dwc-root .tile{ stroke-width:1.25; }
 }
 `;
-const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-banks"></div>\n    <button id="dwc-endbtn" class="end">END TVRN</button>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
+const DWC_HTML = '<div id="dwc-wrap">\n  <div id="dwc-tl"></div>\n  <div id="dwc-board"><svg id="dwc-svg" xmlns="http://www.w3.org/2000/svg"></svg></div>\n  <div id="dwc-hud">\n    <div id="dwc-stat">—</div>\n    <div id="dwc-dock">\n      <div id="dwc-gauge-l" class="dwc-gauge" hidden></div>\n      <div id="dwc-banks"></div>\n      <div class="dwc-sep"></div>\n      <div id="dwc-satchel"></div>\n      <div id="dwc-gauge-r" class="dwc-gauge" hidden></div>\n      <button id="dwc-endbtn" class="end">END TVRN</button>\n    </div>\n  </div>\n</div>\n<div id="dwc-over"><h1 id="dwc-overmsg"></h1><div id="dwc-overinfo"></div><button id="dwc-overbtn">RESTART</button></div>';
 let root=null, cfg=null, active=false, apiStart=null;
 function ensureDom(){
   if(root) return;
@@ -1686,14 +1736,26 @@ function drawTimeline(){
 // stale index.html (or a headless test that skips it) must degrade to a bare
 // button rather than throw on every redraw.
 const ICO=(id,o)=>window.iconHTML?window.iconHTML(id,o):"";
+// Slot icons are emitted at ONE size; the sheet resizes them from --slot
+// (.op-ic svg), so phone and desktop share a markup path.
+const SLOT_ICON=34;
+// Numeric range for the aria-label and the stat line: "3", "1–4", sweep "0".
+const rangeText=bk=>bk.kind==="sweep"?"0":(bk.min===bk.max?String(bk.min):bk.min+"–"+bk.max);
+// Learnability guard (UI only): dock slots carry no names, so until a unit
+// has armed something this fight the stat line lists its bank names.
+// Cleared in apiStart next to the fight state.
+let hudArmed=new Set();
 
 // Which selection the track was last scrolled for. drawHud runs on every
 // draw(); scrolling on every pass would yank the row back under the thumb.
 let scrolledSel=null;
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
+        satchel=document.getElementById("dwc-satchel"), dock=document.getElementById("dwc-dock"),
         endb=document.getElementById("dwc-endbtn");
-  banks.innerHTML="";
+  banks.innerHTML=""; satchel.innerHTML="";
+  dock.classList.add("dwc-nosat");   // lifted below once an item slot is built
+  dock.classList.toggle("dwc-empty", state.phase==="place");   // no slots during placement
   let selBtn=null;
   // ENGAGE moved to #dwc-board: it is position:fixed anyway, and inside the
   // scrolling track it ate a flex slot and forced a :has() guard on the
@@ -1717,42 +1779,48 @@ function drawHud(){
   const u=cur(); if(!u) return;
   stat.innerHTML=`<b>${u.name}</b> · VITAE <b>${u.vitae}/${u.maxVitae}</b> · CYCLES <b>${u.cycles}</b> · PNEUMA <b>${u.pneuma}</b>`;
   if(u.side==="party"&&u.control!=="ai"){
+    const names=[];   // for the learnability line: the slots carry no names
     for(const id of u.banks){
       const bk=bankFor(u,id), b=document.createElement("button");
-      const off=!canCast(u,id);
-      b.className="op"+(state.sel===id?" sel":"")+(off?" off":"");
-      if(state.sel===id) selBtn=b;
-      const rng=bk.kind==="sweep"?"SELF":(bk.min===bk.max?bk.min:bk.min+"-"+bk.max);
-      // One badge only, hardest state first: burnt > recharge > spent > need > strain.
-      const bd=u.burnt&&u.burnt[id]?["b-burnt","BVRNT"]
-        :u.cds[id]>0?["b-recharge",`RECHARGE ${u.cds[id]}`]
-        :(!bk.repeat&&u.cast[id]?["b-spent","SPENT"]
-        :(u.pneuma<bk.cost?["b-need",`NEED ${bk.cost}◆`]
-        :(u.strain&&u.strain[id]?["b-strain",`STRAIN ${u.strain[id]}/${BURN_AT}`]:["",""])));
-      b.innerHTML=`<span class="op-key">${u.banks.indexOf(id)+1}</span>`+
-        `<span class="op-ic">${ICO(bk.icon||bk.name,{size:20})}</span>`+
-        `<span class="op-nm">${bk.name}</span>`+
-        `<span class="op-meta">${bk.cost}◆ · ${rng}</span>`+
-        `<span class="op-badge ${bd[0]}">${bd[1]}</span>`;
+      const off=!canCast(u,id), r=rangeText(bk);
+      names.push(bk.name);
+      // One state per slot, hardest first: burnt > recharge > spent > need > strain.
+      // st = class suffix, num = badge number, p = overlay fraction, sfx = aria suffix.
+      let st="", num="", p=0, sfx="";
+      if(u.burnt&&u.burnt[id]){ st="burnt"; sfx=", BVRNT"; }
+      else if(u.cds[id]>0){ st="recharge"; num=String(u.cds[id]); p=u.cds[id]/(bk.cd||1); sfx=", RECHARGE "+num; }
+      else if(!bk.repeat&&u.cast[id]){ st="spent"; sfx=", SPENT"; }
+      else if(u.pneuma<bk.cost){ st="need"; sfx=", NEED "+bk.cost; }
+      else if(u.strain&&u.strain[id]){ st="strain"; num=String(u.strain[id]); p=u.strain[id]/BURN_AT; sfx=", STRAIN "+num+" OF "+BURN_AT; }
+      b.className="op"+(state.sel===id?" sel":"")+(off?" off":"")+(st?" st-"+st:"");
+      if(st==="recharge"||st==="strain") b.style.setProperty("--p",Math.max(0,Math.min(1,p)));
+      b.setAttribute("aria-label",bk.name+", "+bk.cost+" PNEUMA, RANGE "+r+sfx);
       b.title=bk.desc;
+      b.innerHTML=`<span class="op-key">${u.banks.indexOf(id)+1}</span>`+
+        `<span class="op-ic">${ICO(bk.icon||bk.name,{size:SLOT_ICON})}</span>`+
+        `<span class="op-cost">${bk.cost}◆</span>`+
+        `<span class="op-badge">${num}</span>`;
       b.onclick=()=>{
         if(off&&state.sel!==id){ flashStat(whyNot(u,id)); return; }  // answered, not eaten
+        hudArmed.add(u.id);
         state.sel=state.sel===id?null:id; draw();
       };
       banks.appendChild(b);
+      if(state.sel===id){ selBtn=b; stat.innerHTML=`<b>${bk.name}</b> · <b>${bk.cost}◆</b> · <b>${r}</b>`; }
     }
     if(u.id==="op") for(const id in ITEMS){ // items are OPERATOR-only
       if(!state.items[id]) continue;        // empty satchel: no button, no noise
       const it=ITEMS[id], n=state.items[id], sid="item:"+id, b=document.createElement("button");
-      const ioff=!canUseItem(u,id)&&state.sel!==sid;
-      b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"");
-      if(state.sel===sid) selBtn=b;
+      const ioff=!canUseItem(u,id)&&state.sel!==sid, r=rangeText(it);
+      names.push(id);
+      b.className="op item"+(state.sel===sid?" sel":"")+(ioff?" off":"")+(u.cast[sid]?" st-spent":"");
+      b.setAttribute("aria-label",it.name+", "+it.cost+" PNEUMA, RANGE "+r+", "+n+" LEFT"+(u.cast[sid]?", SPENT":""));
       b.title=it.desc;
       b.innerHTML=`<span class="op-key">${u.banks.length+1}</span>`+
-        `<span class="op-ic">${ICO(it.icon||id,{size:20})}</span>`+
-        `<span class="op-nm">${it.name}</span>`+
-        `<span class="op-meta">${it.cost}◆ · ${it.min}-${it.max}</span>`+
-        `<span class="op-badge ${u.cast[sid]?"b-spent":"b-dose"}">${u.cast[sid]?"SPENT":n+"/"+SATCHEL_MAX}</span>`;
+        `<span class="op-ic">${ICO(it.icon||id,{size:SLOT_ICON})}</span>`+
+        `<span class="op-dose">${n}</span>`+
+        `<span class="op-cost">${it.cost}◆</span>`+
+        `<span class="op-badge"></span>`;
       b.onclick=()=>{
         if(ioff){
           flashStat(u.cast[sid]?it.name+" IS SPENT \u2014 ONE VSE PER TVRN"
@@ -1760,13 +1828,18 @@ function drawHud(){
             :"SATCHEL EMPTY"));
           return;
         }
+        hudArmed.add(u.id);
         state.sel=state.sel===sid?null:sid; draw();
       };
-      banks.appendChild(b);
+      satchel.appendChild(b);
+      dock.classList.remove("dwc-nosat");
+      if(state.sel===sid) stat.innerHTML=`<b>${it.name}</b> · <b>${it.cost}◆</b> · <b>${r}</b> · <b>${n}</b> LEFT`;
     }
+    // Nothing armed yet this fight: name the slots, since the slots do not.
+    if(!state.sel&&!hudArmed.has(u.id)) stat.innerHTML=`<b>${u.name}</b> — ${names.join(" · ")}`;
     endb.disabled=false;
-    // Hotkey 2 armed ABRASIO with 137 of its 196px behind the edge fade. Bring
-    // a NEWLY selected button into the track; leave the thumb alone otherwise.
+    // Bring a NEWLY selected bank into the track; leave the thumb alone
+    // otherwise. Banks only -- the satchel track is one slot wide.
     if(!state.sel) scrolledSel=null;
     else if(selBtn&&state.sel!==scrolledSel){
       scrolledSel=state.sel;
@@ -1840,11 +1913,11 @@ document.addEventListener("keydown",e=>{ if(!active) return;
   if(e.key>="1"&&e.key<="4"){
     const slot=+e.key-1;
     const id=u.banks[slot];
-    if(id&&canCast(u,id)){ state.sel=state.sel===id?null:id; draw(); }
+    if(id&&canCast(u,id)){ hudArmed.add(u.id); state.sel=state.sel===id?null:id; draw(); }
     else if(id){ flashStat(whyNot(u,id)); }
     else if(slot===u.banks.length&&u.id==="op"){
       const iid=Object.keys(ITEMS)[0], sid="item:"+iid;
-      if(canUseItem(u,iid)||state.sel===sid){ state.sel=state.sel===sid?null:sid; draw(); }
+      if(canUseItem(u,iid)||state.sel===sid){ hudArmed.add(u.id); state.sel=state.sel===sid?null:sid; draw(); }
     }
   } else if(e.key==="Enter"||e.key===" "){ e.preventDefault(); endTurn(); }
   else if(e.key==="Escape"&&state.sel){ state.sel=null; draw(); }
@@ -1877,13 +1950,14 @@ function finish(won){
   if(cfg&&cfg.onEnd) cfg.onEnd(res);
 }
 apiStart=function(){
+  hudArmed.clear();   // the learnability line resets with the fight state
   setupFight(cfg.fight||1);
   applyParty();
   draw(); drawTimeline(); drawHud();
 };
 // Headless-test seam: live references into the closure so node tests can
 // drive placement/rounds. The game itself never reads this.
-window.__DWC_TEST={ get state(){return state;}, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, canCast, whyNot, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
+window.__DWC_TEST={ get state(){return state;}, draw, drawHud, tileClick, endTurn, newRound, cur, bankFor, checkOver, hitUnit, castAt, canCast, whyNot, finish, advanceBeat:()=>{ if(beatAdvance) beatAdvance(); } };
 }
 window.DW_COMBAT={
   start(config){
