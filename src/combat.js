@@ -232,9 +232,11 @@ const DWC_CSS = `
 #dwc-root #dwc-dock,
 #dwc-root .dwc-res{ pointer-events:auto; }
 /* resource row: the stat line shrinks (and ellipsises) before the gauges do.
-   Left of it a column: VITAE coil over MOVEMENT pips. */
+   Left of it a column: VITAE coil over MOVEMENT pips. Top-aligned so the
+   VITAE and MANA coils share a y; the stat line's line-height is one gauge
+   so it centres on that coil row. */
 #dwc-root .dwc-res{
-  display:flex; align-items:center; gap:var(--s2);
+  display:flex; align-items:flex-start; gap:var(--s2);
   max-width:100%; min-width:0;
 }
 #dwc-root .dwc-res-l{ display:flex; flex-direction:column; gap:var(--s1); flex:0 0 auto; }
@@ -247,7 +249,7 @@ const DWC_CSS = `
 /* NOTE: block, not flex -- the stat line is mixed text + <b> runs, and a flex
    container would shatter them into anonymous items and kill the ellipsis. */
 #dwc-root #dwc-stat{
-  flex:0 1 auto; min-width:0;
+  flex:0 1 auto; min-width:0; line-height:var(--gauge);
   color:var(--dim);
   font-size:var(--fs-sm); letter-spacing:var(--ls-2);
   text-transform:uppercase; text-align:center;
