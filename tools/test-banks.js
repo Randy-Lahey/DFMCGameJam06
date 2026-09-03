@@ -74,7 +74,8 @@ for (const f of ['data/floor01.js', 'data/floor02.js', 'data/face.js', 'data/tow
   new Function(fs.readFileSync(path.join(root, f), 'utf8'))();
 }
 
-const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, rollKill } = window.__DW;
+const { state, opsFor, allOps, fold, openInv, closeInv, rollItem, payRefit, rollKill,
+        giveAmpoules, collectDrops } = window.__DW;
 
 // The run now starts SOLO (tutorial); these assertions were written for the
 // full 4-member board. Recruit everyone and reload floor 01 first.
@@ -138,19 +139,51 @@ ok(B.strain.burnAt === 10, 'strain burns a bank offline at 10');
 
 // ------------------------------------------------------- hybrid drop table
 ok(B.drops.itemChance === 0.5 && !B.drops.table, 'hybrid table: itemChance 0.5, old single-roll table gone');
-ok(B.drops.items.length === 2 && B.drops.items.every(e => e.kind !== 'ARGENT'),
-   'items table is FLUX/DATA only -- ARGENT is guaranteed, not rolled');
-ok(B.drops.items[0].weight === 60 && B.drops.items[1].weight === 30,
-   'item weights are the ruled 60/30 (reagent 10 gated behind affixes)');
+ok(B.drops.items.length === 3 && B.drops.items.every(e => e.kind !== 'ARGENT'),
+   'items table is FLUX/DATA/AMPVLLA -- ARGENT is guaranteed, not rolled');
+ok(B.drops.items[0].weight === 55 && B.drops.items[1].weight === 30 && B.drops.items[2].weight === 10 &&
+   B.drops.items[2].kind === 'AMPVLLA',
+   'item weights are the ruled 55/30/10 (reagent still gated behind affixes)');
 for (let i = 0; i < 200; i++) {
   const k = rollKill();
   if (!(k.argent >= B.drops.argentMin && k.argent <= B.drops.argentMax)) {
     ok(false, 'rollKill argent within min/max'); break;
   }
-  if (k.item && k.item.kind !== 'FLUX' && k.item.kind !== 'DATA') {
-    ok(false, 'rollKill item kinds are FLUX/DATA'); break;
+  if (k.item && k.item.kind !== 'FLUX' && k.item.kind !== 'DATA' && k.item.kind !== 'AMPVLLA') {
+    ok(false, 'rollKill item kinds are FLUX/DATA/AMPVLLA'); break;
   }
   if (i === 199) ok(true, 'rollKill: 200 rolls in range, item kinds sane');
+}
+
+// ------------------------------------------------------- AMPVLLA as loot
+// itemChance 0.5 x weight 10/95 = 5.26% of kills. 10 000 draws: the 4-6%
+// window is ~11 sigma wide, so a miss is a table change, not noise.
+{
+  let amps = 0;
+  for (let i = 0; i < 10000; i++) { const k = rollKill(); if (k.item && k.item.kind === 'AMPVLLA') amps++; }
+  ok(amps >= 400 && amps <= 600, `AMPVLLA in 4-6% of 10 000 kills (got ${amps})`);
+  const it = rollItem('AMPVLLA');
+  ok(it.kind === 'AMPVLLA' && it.label === 'AMPVLLA VITAE' && it.sprite === 'ampvlla' && it.rarity === 'COMMON',
+     'rollItem(AMPVLLA) yields the labelled COMMON dose');
+  ok(typeof window.SPRITES.ampvlla === 'function', 'the ampvlla drop sprite exists');
+  // giveAmpoules owns the cap for caches, floor drops and spoils alike.
+  state.ampoules = 0;
+  ok(giveAmpoules(2) === 2 && state.ampoules === 2, 'giveAmpoules credits up to the cap');
+  ok(giveAmpoules(5) === 1 && state.ampoules === 3, 'giveAmpoules clamps at 3, returns the doses taken');
+  ok(giveAmpoules(1) === 0 && state.ampoules === 3, 'a full satchel takes nothing');
+  // Floor-drop pickup credits the satchel, never the bag; a full satchel
+  // leaves the dose on the floor.
+  const L = state.circle.members[0], bagN = state.bag.items.length;
+  state.drops.push({ id: 9001, kind: 'AMPVLLA', label: 'AMPVLLA VITAE', sprite: 'ampvlla',
+                     rarity: 'COMMON', c: L.c, r: L.r });
+  collectDrops();
+  ok(state.drops.length === 1 && state.ampoules === 3 && state.bag.items.length === bagN,
+     'full satchel: the floor dose stays put and never enters the bag');
+  state.ampoules = 1;
+  collectDrops();
+  ok(state.drops.length === 0 && state.ampoules === 2 && state.bag.items.length === bagN,
+     'with room, the floor dose credits state.ampoules');
+  state.ampoules = 0;
 }
 
 ok(B.drops.bankPool.length === 2 &&

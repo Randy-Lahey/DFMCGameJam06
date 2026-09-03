@@ -78,8 +78,11 @@
       argentMax: 12,
       itemChance: 0.5,
       items: [
-        { kind: 'FLUX', label: 'FLUX CELL', sprite: 'flux',     weight: 60 },
-        { kind: 'DATA', label: 'DATA BANK', sprite: 'databank', weight: 30 },
+        { kind: 'FLUX',    label: 'FLUX CELL',     sprite: 'flux',     weight: 55 },
+        { kind: 'DATA',    label: 'DATA BANK',     sprite: 'databank', weight: 30 },
+        // ~5% of kills net (itemChance x weight): about 0.9 doses per full
+        // face pass against a satchel of 3. Survival-horror tight by design.
+        { kind: 'AMPVLLA', label: 'AMPVLLA VITAE', sprite: 'ampvlla',  weight: 10 },
       ],
       // DATA BANK sub-roll pool. Found banks leave the pool permanently
       // (no duplicate drops); once empty, a DATA roll pays out as FLUX.

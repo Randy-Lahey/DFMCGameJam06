@@ -373,6 +373,11 @@
   // fluxes by weight; DATA rolls the remaining bank pool (no duplicates) and
   // degrades to FLUX once the pool is exhausted.
   function rollItem(kind) {
+    if (kind === 'AMPVLLA') {
+      const e = B.drops.items.find(i => i.kind === 'AMPVLLA') || {};
+      return { kind: 'AMPVLLA', label: e.label || 'AMPVLLA VITAE',
+               sprite: e.sprite || 'ampvlla', rarity: 'COMMON' };
+    }
     if (kind === 'DATA') {
       const owned = ownedBanks();
       const pool = B.drops.bankPool.filter(b => !owned.has(b));
@@ -424,6 +429,10 @@
   const spoilArt = frag =>
     '<svg viewBox="0 0 64 64" width="44" height="44">' + frag + '</svg>';
   function spoilCard(it) {
+    if (it.kind === 'AMPVLLA') {
+      return { name: it.label, kind: 'AMPVLLA', rarity: it.rarity, art: spoilArt(S.ampvlla()),
+               note: 'DRINK OR HVRL MID-FIGHT. +8 VITAE. THE SATCHEL HOLDS 3.' };
+    }
     if (it.kind === 'DATA') {
       const bk = B.banks[it.bank] || {};
       return { name: it.bank, kind: 'DATA BANK', rarity: it.rarity, art: spoilArt(S.databank()),
@@ -444,6 +453,13 @@
     state.drops = state.drops.filter(d => !here.includes(d));
     here.forEach(d => {
       const cls = 'f-' + d.kind.toLowerCase();
+      if (d.kind === 'AMPVLLA') {
+        // Doses go to the satchel, not the bag. A full satchel leaves the
+        // dose lying where it is, so it can be fetched after a fight.
+        if (!giveAmpoules(1, d)) { state.drops.push(d); return; }
+        burst(d.c, d.r, 'pickup');
+        return;
+      }
       burst(d.c, d.r, 'pickup');
       if (d.kind === 'ARGENT') {
         state.bag.argent += d.amount;
@@ -1243,22 +1259,29 @@
     log(`${p.label} OPENED \u2014 ${argent} ARGENT, ${pick.label}.`, 'good');
 
     // Prop-carried ampoules: the first healing of the run, so the pickup IS
-    // the tutorial -- brief, and on the warn banner so phones (no record
-    // panel) see it too.
-    if (p.ampoules) {
-      const room = 3 - state.ampoules;                 // cap mirrors combat SATCHEL_MAX
-      const got = Math.max(0, Math.min(p.ampoules, room));
-      if (got > 0) {
-        state.ampoules += got;
-        float(p.c, p.r, `+${got} AMPVLLA`, 'f-argent');
-        warn(`AMPVLLA VITAE \u00d7${got} \u2014 HEALS +8 IN THE CHAMBER.`);
-        log(`AMPVLLA VITAE \u00d7${got}: DRINK OR HVRL MID-FIGHT \u2014 +8 VITAE. ONE VSE EACH.`, 'good');
-        log('THE SATCHEL HOLDS 3. SPARES STAY WHERE THEY LIE.', 'dim');
-      } else {
-        log('THE SATCHEL IS FVLL \u2014 3 AMPVLLAE HELD. THE SPARES STAY.', 'dim');
-      }
-    }
+    // the tutorial -- see giveAmpoules.
+    if (p.ampoules) giveAmpoules(p.ampoules, p);
     resolveRound(null);
+  }
+
+  // Credit AMPVLLAE against the satchel cap (3, mirrors combat SATCHEL_MAX).
+  // ONE place for the cap and the pickup lines -- brief, and on the warn
+  // banner so phones (no record panel) see it too -- shared by cache
+  // pickups, floor drops and fight-end spoils. `at` is an optional {c, r}
+  // for the float. Returns the doses actually taken.
+  function giveAmpoules(n, at) {
+    const room = 3 - state.ampoules;
+    const got = Math.max(0, Math.min(n | 0, room));
+    if (got > 0) {
+      state.ampoules += got;
+      if (at) float(at.c, at.r, `+${got} AMPVLLA`, 'f-argent');
+      warn(`AMPVLLA VITAE \u00d7${got} \u2014 HEALS +8 IN THE CHAMBER.`);
+      log(`AMPVLLA VITAE \u00d7${got}: DRINK OR HVRL MID-FIGHT \u2014 +8 VITAE. ONE VSE EACH.`, 'good');
+      log('THE SATCHEL HOLDS 3. SPARES STAY WHERE THEY LIE.', 'dim');
+    } else {
+      log('THE SATCHEL IS FVLL \u2014 3 AMPVLLAE HELD. THE SPARES STAY.', 'dim');
+    }
+    return got;
   }
 
   function onEnter() {
@@ -2563,6 +2586,11 @@
         foes.push({ tpl: Math.random() < 0.5 ? 't' : 's', frac: 1 });
     }
     if (window.DW_SFX) DW_SFX.play('combatStart');
+    // AMPVLLA spoils are shown on the victory screen but credited in onEnd,
+    // AFTER the chamber writes back the doses it drank: crediting them at
+    // roll time would be clobbered by that write-back, and the cap must be
+    // measured against the post-fight satchel.
+    let spoilAmps = 0;
     combatTransition(() => window.DW_COMBAT.start({
       fight: 1,
       party,
@@ -2580,6 +2608,11 @@
           const k = rollKill();
           haul.argent += k.argent;
           if (!k.item) continue;
+          if (k.item.kind === 'AMPVLLA') {
+            spoilAmps++;
+            haul.items.push(spoilCard(k.item));
+            continue;
+          }
           state.bag.items.push({ kind: k.item.kind, label: k.item.label, flux: k.item.flux,
                                  bank: k.item.bank, sprite: k.item.sprite, rarity: k.item.rarity });
           haul.items.push(spoilCard(k.item));
@@ -2622,6 +2655,7 @@
           log('DRIVEN BACK. THE CRAWL RESVMES.', 'bad');
         }
         if (res.items) state.ampoules = Math.max(0, res.items.AMPVLLA | 0);
+        if (spoilAmps) { giveAmpoules(spoilAmps); spoilAmps = 0; }
         if (res.won && opts.sacrifice) hermitSacrifice();
         checkEnd();
         draw();
@@ -3397,6 +3431,7 @@
                   loadFloor, recruit, chooseStarter, recomputeFOV,
                   hermitSacrifice, takeCube, enterCombat, debugSacrifice,
                   tileUnlocked, rerollAffixes, loadTown, openFace, closeFace, chooseTile, extract, wipe,
+                  giveAmpoules, collectDrops,
                   get F() { return F; } };
 
   // The controls screen quotes the shared-pool size. Injected from the bible
