@@ -199,7 +199,7 @@ console.log('-- build wiring');
 console.log('-- dock');
 {
   const hud = html ? html[1] : '';
-  for (const id of ['dwc-dock', 'dwc-banks', 'dwc-satchel', 'dwc-gauge-l', 'dwc-gauge-r', 'dwc-endbtn']) {
+  for (const id of ['dwc-dock', 'dwc-banks', 'dwc-satchel', 'dwc-gauge-h', 'dwc-gauge-l', 'dwc-gauge-r', 'dwc-endbtn']) {
     ok(hud.includes('id="' + id + '"'), 'DWC_HTML has #' + id);
   }
   ok(hud.includes('class="dwc-sep"'), 'DWC_HTML has the satchel divider');
@@ -226,10 +226,12 @@ console.log('-- dock');
   ok(/--gauge\s*:\s*68px/.test(bare) && /--gauge\s*:\s*90px/.test(bare) && /\.dwc-gauge\{[^}]*width:var\(--gauge\)/.test(bare), 'gauge size tokens: 68px phone, 90px desktop');
   ok(hud.indexOf('id="dwc-dock"') < hud.indexOf('class="dwc-res"') && hud.indexOf('id="dwc-gauge-l"') < hud.indexOf('id="dwc-stat"') && hud.indexOf('id="dwc-stat"') < hud.indexOf('id="dwc-gauge-r"'),
      'ability row above the resource row; stat line between the gauges');
+  ok(/class="dwc-res-l">[^]*?id="dwc-gauge-h"[^]*?id="dwc-gauge-l"[^]*?<\/div>[^]*?id="dwc-stat"/.test(hud), 'VITAE coil over MOVEMENT pips, left of the stat line');
+  ok(/#dwc-gauge-h\{[^}]*color:var\(--ox-hi\)/.test(bare), 'VITAE coil is oxblood');
   ok(!/id="dwc-dock"[\s\S]*?dwc-gauge[\s\S]*?id="dwc-satchel"/.test(hud), 'gauges are out of the dock row');
   ok(code.includes('PNEUMA, RANGE'), 'slot aria-labels spell PNEUMA as the stat line does');
   ok(/const rangeText=/.test(code), 'rangeText helper exists (numeric range for aria + stat line)');
-  ok(code.includes('hudArmed.clear()') && code.includes('hudArmed.add(u.id)'), 'learnability set is reset per fight and marked on arming');
+  ok(!code.includes('hudArmed') && code.includes('class="op-cap"') && bare.includes('.op-cap'), 'bank names are captions under the slots, not a stat-line list');
 
   // ---- stubbed-DOM run: force all states at once
   const vm = require('vm');
@@ -276,8 +278,8 @@ console.log('-- dock');
   const u = T.cur();
   ok(!!u && u.id === 'op', 'OPERATOR has the first turn in the stub fight');
   const stat = byId['dwc-stat'];
-  ok(/<b>OPERATOR<\/b> — PERCVSSIO/.test(stat.innerHTML), 'first turn, nothing armed: stat line lists the banks by name -- ' + stat.innerHTML);
-  ok(/· AMPVLLA$/.test(stat.innerHTML), 'OPERATOR with a satchel also lists AMPVLLA');
+  ok(/<b>OPERATOR<\/b> · VITAE <b>\d+\/\d+<\/b>$/.test(stat.innerHTML), 'nothing armed: stat line is name · VITAE only -- ' + stat.innerHTML);
+  ok(/class="op-cap">PERCVSSIO</.test(byId['dwc-banks'].children[0].innerHTML) && /class="op-cap">AMPVLLA VITAE</.test(byId['dwc-satchel'].children[0].innerHTML), 'every slot carries its name as a caption');
 
   u.banks = ['PERCVSSIO', 'ABRASIO', 'CONCRETIO', 'IMPVLSVS', 'IMMOLATIO', 'IACVLVM'];
   u.burnt = { CONCRETIO: true }; u.cds = { IMPVLSVS: 1 }; u.cast = { ABRASIO: true, 'item:AMPVLLA': true };
@@ -345,7 +347,7 @@ console.log('-- END TVRN plaque');
 // Round-2 ruling C: CYCLES pips left, PNEUMA coil right, for the current unit.
 console.log('-- gauges');
 {
-  ok(/const GAUGE_LABEL_L="MOVEMENT", GAUGE_LABEL_R="MANA";/.test(code), 'gauge labels are the two constants (rename = two strings)');
+  ok(/const GAUGE_LABEL_L="MOVEMENT", GAUGE_LABEL_R="MANA", GAUGE_LABEL_H="VITAE";/.test(code), 'gauge labels are the three constants (rename = three strings)');
   ok(/const DWC_GAUGES=true;/.test(code), 'gauges are switched on');
   ok(code.includes('function drawGauges('), 'drawGauges exists');
   ok(bare.includes('.dwc-gauge[hidden]') && bare.includes('.dwc-g-pip') && bare.includes('.dwc-g-fill'), 'sheet styles the gauge, its pips and its fill');
@@ -370,14 +372,15 @@ console.log('-- gauges');
   for (const f of ['data/balance.js', 'src/icons.js', 'src/combat.js']) vm.runInContext(src(f), ctx, { filename: f });
   ctx.DW_COMBAT.start({ fight: 1, party: [{ id: 'op', frac: 1 }] });
   const T = ctx.__DWC_TEST, s = T.state;
-  ok(byId['dwc-gauge-l'].hidden === true && byId['dwc-gauge-r'].hidden === true, 'placement: both gauges hidden');
+  ok(byId['dwc-gauge-l'].hidden === true && byId['dwc-gauge-r'].hidden === true && byId['dwc-gauge-h'].hidden === true, 'placement: all gauges hidden');
   const free = [];
   for (let x = 0; x < 2; x++) for (let y = 0; y < 12; y++) if (!s.units.some(u => u.alive && u.x === x && u.y === y)) free.push([x, y]);
   while (s.toPlace.length) { const u = s.units.find(v => v.id === s.toPlace.shift()); [u.x, u.y] = free.shift(); }
   s.phase = 'battle'; T.newRound();
   const u = T.cur(); u.maxCycles = 4; u.cycles = 3; u.maxPneuma = 14; u.pneuma = 7; T.drawHud();
-  const L = byId['dwc-gauge-l'], R = byId['dwc-gauge-r'];
-  ok(L.hidden === false && R.hidden === false, 'battle: both gauges shown');
+  const L = byId['dwc-gauge-l'], R = byId['dwc-gauge-r'], H = byId['dwc-gauge-h'];
+  ok(L.hidden === false && R.hidden === false && H.hidden === false, 'battle: all gauges shown');
+  ok(H.attrs['aria-label'] === 'VITAE ' + u.vitae + ' of ' + u.maxVitae && H.innerHTML.includes('>' + u.vitae + '/' + u.maxVitae + '<') && /VITAE<\/text>/.test(H.innerHTML), 'vitae gauge aria + numeral: ' + H.attrs['aria-label']);
   ok(L.attrs['aria-label'] === 'MOVEMENT 3 of 4' && L.attrs['role'] === 'img', 'left gauge aria: ' + L.attrs['aria-label']);
   ok(R.attrs['aria-label'] === 'MANA 7 of 14' && R.attrs['role'] === 'img', 'right gauge aria: ' + R.attrs['aria-label']);
   const pips = L.innerHTML.match(/class="dwc-g-pip[^"]*"/g) || [];
