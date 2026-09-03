@@ -571,6 +571,18 @@ const DWC_CSS = `
 #dwc-root .dwc-g-fill-top{ stroke:var(--teal-hi); stroke-width:1; }
 #dwc-root .dwc-g-rung{ stroke:var(--tealdim); stroke-width:.75; }
 #dwc-root .dwc-g-cap{ fill:var(--tealdim); }
+/* orb collar: unlit gold PCB furniture, never a signal */
+#dwc-root .dwc-g-oct{ fill:none; stroke:var(--bd-gold); stroke-width:1; }
+#dwc-root .dwc-g-pad{ fill:var(--gold-ink); stroke:var(--bd-gold); stroke-width:1; }
+#dwc-root .dwc-g-tr{ stroke:var(--bd-gold); stroke-width:1; fill:var(--gold-ink); }
+#dwc-root .dwc-g-crack{ display:none; stroke:currentColor; stroke-width:1; fill:none; opacity:.6; }
+#dwc-root .dwc-orb.is-low .dwc-g-rung{ stroke:currentColor; opacity:.5; }
+#dwc-root .dwc-orb.is-crit .dwc-g-fill{ opacity:.85; }
+#dwc-root .dwc-orb.is-crit .dwc-g-vessel{ stroke:var(--teal-hi); }
+#dwc-root .dwc-orb.is-dead .dwc-g-crack{ display:block; }
+#dwc-root .dwc-orb.is-dead .dwc-g-num{ fill:var(--dim); }
+#dwc-root .dwc-orb .dwc-g-num{ font-size:17px; }
+#dwc-root .dwc-orb .dwc-g-lbl{ font-size:8px; fill:currentColor; letter-spacing:var(--ls-3); }
 #dwc-root .dwc-g-num{
   font-size:12px; font-weight:700; fill:var(--white); text-anchor:middle;
   paint-order:stroke; stroke:#04090b; stroke-width:3px; stroke-linejoin:round;
@@ -581,6 +593,7 @@ const DWC_CSS = `
 #dwc-root #dwc-gauge-h .dwc-g-fill-top{ stroke:var(--ox-hi); }
 #dwc-root #dwc-gauge-h .dwc-g-rung{ stroke:var(--bd-ox); }
 #dwc-root #dwc-gauge-h .dwc-g-cap{ fill:var(--bd-ox); }
+#dwc-root #dwc-gauge-h .dwc-orb.is-crit .dwc-g-vessel{ stroke:var(--ox-hi); }
 #dwc-root #dwc-banks,
 #dwc-root #dwc-satchel{
   display:flex; gap:var(--s2); align-items:center;
@@ -1887,47 +1900,73 @@ function drawGauges(u){
   //    sheet's). Vessel outline, fill from the bottom, five rungs drawn OVER
   //    the fill so it reads as windings, then the numeral with a dark stroke
   //    so it survives the half-fill.
-  const coil=(el,n,max,label)=>{
+  // -- a pool as an ALCHEMICAL VESSEL in a PCB collar (VITAE and MANA share
+  //    it; colour is the sheet's). 96x96 viewBox: octagonal frame with four
+  //    diagonal pads and two edge traces, a round flask with neck / cap /
+  //    terminal, flat fill clipped to the glass, one meniscus line, etched
+  //    graduation ticks OVER the fill, numeral, label. State classes on the
+  //    root svg (is-low / is-crit / is-dead) drive the sheet; the fill is one
+  //    number (rect y). Geometry is the contract final raster art must keep.
+  const orb=(el,n,max,label,cid)=>{
     max=Math.max(1,max|0); n=clamp(n,max); const frac=n/max;
-    const vx=10, vy=4, vw=36, vh=36, ix=vx+1, iy=vy+1, iw=vw-2, ih=vh-2;
-    const fh=Math.round(ih*frac*2)/2, fy=iy+ih-fh;
-    let s=open;
-    s+='<rect class="dwc-g-cap" x="22" y="1" width="12" height="3" rx="1"/>';
-    s+='<rect class="dwc-g-cap" x="22" y="40" width="12" height="3" rx="1"/>';
-    s+='<rect class="dwc-g-vessel" x="'+vx+'" y="'+vy+'" width="'+vw+'" height="'+vh+'" rx="3"/>';
-    if(fh>0){
-      s+='<rect class="dwc-g-fill" x="'+ix+'" y="'+fy+'" width="'+iw+'" height="'+fh+'" rx="2"/>';
-      s+='<line class="dwc-g-fill-top" x1="'+ix+'" y1="'+fy+'" x2="'+(ix+iw)+'" y2="'+fy+'"/>';
+    const cx=48, cy=54, r=30, ir=r-1.25;          // glass centre + radius
+    const top=cy-ir, ih=ir*2;
+    const fy=+(top+ih*(1-frac)).toFixed(1);
+    const cls=n===0?" is-dead":frac<.25?" is-crit":frac<=.5?" is-low":"";
+    let s='<svg viewBox="0 0 96 96" class="dwc-orb'+cls+'" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
+    s+='<defs><clipPath id="'+cid+'"><circle cx="'+cx+'" cy="'+cy+'" r="'+ir+'"/></clipPath></defs>';
+    // frame: octagon + 4 diagonal pads + 2 traces off-canvas
+    s+='<g class="dwc-g-oct">';
+    s+='<path d="M30,10 H66 L86,30 V78 L66,98 H30 L10,78 V30 Z" transform="translate(0,-2)"/>';
+    for(const [px,py,a] of [[20,20,-45],[76,20,45],[76,84,-45],[20,84,45]])
+      s+='<rect class="dwc-g-pad" x="-7" y="-3" width="14" height="6" rx="1.5" transform="translate('+px+','+py+') rotate('+a+')"/>';
+    s+='<path class="dwc-g-tr" d="M10,52 H0 M86,52 H96"/><circle class="dwc-g-tr" cx="3" cy="52" r="1.5"/><circle class="dwc-g-tr" cx="93" cy="52" r="1.5"/>';
+    s+='</g>';
+    // neck / cap / terminal
+    s+='<rect class="dwc-g-cap" x="45" y="2" width="6" height="5" rx="1" opacity=".7"/>';
+    s+='<rect class="dwc-g-vessel" x="42" y="12" width="12" height="18" rx="1.5"/>';
+    s+='<rect class="dwc-g-cap" x="39" y="9" width="18" height="4" rx="1"/>';
+    // glass
+    s+='<circle class="dwc-g-vessel" cx="'+cx+'" cy="'+cy+'" r="'+r+'"/>';
+    // fill + meniscus (chord across the circle at fy)
+    if(frac>0){
+      const d=fy-cy, hw=Math.sqrt(Math.max(0,ir*ir-d*d)).toFixed(1);
+      s+='<rect class="dwc-g-fill" clip-path="url(#'+cid+')" x="'+(cx-ir)+'" y="'+fy+'" width="'+(ir*2)+'" height="'+(cy+ir-fy).toFixed(1)+'"/>';
+      s+='<line class="dwc-g-fill-top" x1="'+(cx-hw)+'" y1="'+fy+'" x2="'+(cx+hw)+'" y2="'+fy+'"/>';
     }
-    let rungs="";
-    for(let k=1;k<=5;k++){ const ry=(iy+ih*k/6).toFixed(1); rungs+='M'+(vx-2)+','+ry+' H'+(vx+vw+2)+' '; }
-    s+='<path class="dwc-g-rung" d="'+rungs.trim()+'"/>';
-    s+='<text class="dwc-g-num" x="28" y="26.5">'+n+'/'+max+'</text>';
-    s+='<text class="dwc-g-lbl" x="28" y="52">'+label+'</text></svg>';
+    // graduation ticks over the fill, centred, long/short alternating
+    let ticks="";
+    for(let k=1;k<=7;k++){ const ty=(top+ih*k/8).toFixed(1), hl=k%2?5:3; ticks+='M'+(cx-hl)+','+ty+' H'+(cx+hl)+' '; }
+    s+='<path class="dwc-g-rung" d="'+ticks.trim()+'"/>';
+    // crack, shown only when dead
+    s+='<path class="dwc-g-crack" d="M34,40 L46,52 L42,62 L54,72"/>';
+    s+='<text class="dwc-g-num" x="'+cx+'" y="'+(cy+6)+'">'+n+'/'+max+'</text>';
+    s+='<text class="dwc-g-lbl" x="'+cx+'" y="91">'+label+'</text></svg>';
     el.innerHTML=s; el.setAttribute("role","img");
     el.setAttribute("aria-label",label+" "+n+" of "+max);
     el.hidden=false;
   };
-  coil(H,u.vitae,u.maxVitae,GAUGE_LABEL_H);
+  orb(H,u.vitae,u.maxVitae,GAUGE_LABEL_H,"dwc-clip-h");
   // -- left: CYCLES as pips in a 56x20 strip under the VITAE coil, notched
   //    (PCB-edge) corners on the outer side. The pips share 48 units of
   //    width whatever the max (the old 8x4 layout escaped the frame past
   //    max 4). Spent pips are the ones from the RIGHT.
   {
     const max=clamp(u.maxCycles,8), n=clamp(u.cycles,max);
-    const pg=3, pw=Math.min(10,(48-(max-1)*pg)/max), ph=8, py=3, tot=max*pw+(max-1)*pg, x0=28-tot/2;
+    const pg=3, pw=Math.min(10,(48-(max-1)*pg)/max), ph=8, py=9, tot=max*pw+(max-1)*pg, x0=28-tot/2;
     let s='<svg viewBox="0 0 56 20" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">';
-    s+='<path class="dwc-g-frame" d="M4,.5 H53.5 Q55.5,.5 55.5,2.5 V17.5 Q55.5,19.5 53.5,19.5 H4 L.5,16 V4 Z"/>';
+    s+='<path class="dwc-g-frame" d="M3.5,.5 H49.5 L55.5,6.5 V19.5 H6.5 L.5,13.5 V3.5 Z"/>';
+    s+='<path class="dwc-g-tr" d="M50.5,15.5 L54.5,19.5 M.5,10 H-4 M55.5,10 H60"/>';
     for(let i=0;i<max;i++){
       s+='<rect class="dwc-g-pip'+(i<n?'':' dwc-spent')+'" x="'+(x0+i*(pw+pg)).toFixed(2)+'" y="'+py+'" width="'+pw.toFixed(2)+'" height="'+ph+'" rx="1"/>';
     }
-    s+='<text class="dwc-g-lbl" x="28" y="18">'+GAUGE_LABEL_L+'</text></svg>';
+    s+='<text class="dwc-g-lbl" x="28" y="7">'+GAUGE_LABEL_L+'</text></svg>';
     L.innerHTML=s; L.setAttribute("role","img");
     L.setAttribute("aria-label",GAUGE_LABEL_L+" "+n+" of "+max);
     L.hidden=false;
   }
-  // -- right: PNEUMA coil
-  coil(R,u.pneuma,u.maxPneuma,GAUGE_LABEL_R);
+  // -- right: MANA orb
+  orb(R,u.pneuma,u.maxPneuma,GAUGE_LABEL_R,"dwc-clip-r");
 }
 function drawHud(){
   const stat=document.getElementById("dwc-stat"), banks=document.getElementById("dwc-banks"),
